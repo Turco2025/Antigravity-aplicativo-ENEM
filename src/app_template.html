@@ -100,6 +100,28 @@ header.topbar{display:flex;align-items:center;justify-content:space-between;gap:
 .card-step3{--accent-a:#f59e0b;--accent-b:#f97316;background:linear-gradient(150deg, #92400e, #7c2d12);border-color:rgba(253,186,116,.5);border-width:2px;}
 .card-step4{--accent-a:#ec4899;--accent-b:#db2777;background:linear-gradient(150deg, #9d174d, #701a3f);border-color:rgba(249,168,212,.5);border-width:2px;}
 .card-step5{--accent-a:#a855f7;--accent-b:#9333ea;background:linear-gradient(150deg, #6b21a8, #4c1d95);border-color:rgba(216,180,254,.5);border-width:2px;}
+/* v15 — Caixa "Solicitar simulados pelo WhatsApp" (pareamento do número; etapa A2).
+   Fundo grafite-petróleo de propósito: o passo 2 logo abaixo já é verde, e o verde do
+   WhatsApp fica só no ícone, na borda e no botão para a caixa não parecer parte do passo. */
+.card-wa{--accent-a:#25d366;--accent-b:#128c7e;background:linear-gradient(150deg, #0f2a3d, #0b1f2e);border-color:rgba(37,211,102,.55);border-width:2px;padding:20px 24px;}
+.card-wa .wa-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+.card-wa .wa-ico{width:34px;height:34px;border-radius:10px;background:#25d366;display:flex;align-items:center;justify-content:center;flex:none;box-shadow:0 8px 18px -8px rgba(37,211,102,.7);}
+.card-wa .wa-ico svg{width:20px;height:20px;fill:#052e16;}
+.card-wa .wa-title{font-size:16px;font-weight:700;color:var(--ink-0);margin:0;}
+.card-wa .wa-sub{color:var(--ink-2);font-size:13px;margin:10px 0 14px;max-width:70ch;line-height:1.5;}
+.card-wa .wa-sub b{color:var(--ink-0);}
+.card-wa .wa-estado{display:none;}
+.card-wa .wa-estado.sel{display:block;}
+.card-wa .wa-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+.card-wa .btn.wa{background:linear-gradient(135deg,#25d366,#128c7e);color:#052e16;box-shadow:0 10px 24px -10px rgba(37,211,102,.7);text-decoration:none;}
+.card-wa .btn.wa:hover{filter:brightness(1.06);}
+.card-wa .wa-codigo{font-family:ui-monospace,Consolas,"Courier New",monospace;font-size:36px;letter-spacing:.14em;font-weight:700;color:var(--ink-0);margin:6px 0 2px;font-variant-numeric:tabular-nums;}
+.card-wa .wa-expira{font-size:12px;color:var(--ink-2);margin:0 0 12px;}
+.card-wa .wa-pill{display:inline-flex;align-items:center;gap:6px;background:rgba(37,211,102,.16);border:1px solid rgba(37,211,102,.5);border-radius:999px;padding:3px 11px;font-size:12px;font-weight:600;color:#bbf7d0;}
+.card-wa .wa-vinc{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:14px;color:var(--ink-0);margin:12px 0 0;}
+.card-wa .wa-vinc .wa-tel{font-variant-numeric:tabular-nums;font-weight:600;}
+.card-wa .wa-vinc .wa-nome{color:var(--ink-2);}
+@media (max-width:760px){.card-wa .wa-codigo{font-size:28px;}}
 
 .section-title{display:flex;align-items:center;gap:10px;margin:0 0 6px;font-size:16px;font-weight:700;color:var(--ink-0);}
 .section-title .num{
@@ -376,6 +398,43 @@ body.mode-professor .qcard{box-shadow:0 25px 60px -25px rgba(0,0,0,.6), 0 0 0 1.
 
   <!-- FORM PANEL -->
   <div id="formPanel">
+
+    <!-- v15 — Caixa "Solicitar simulados pelo WhatsApp": vincula o número do professor à
+         conta (etapa A2). A lógica está em app.js, bloco "WhatsApp". Quatro estados,
+         controlados pela classe .sel em .wa-estado: inicial, codigo, vinculado, expirado. -->
+    <div class="card card-wa no-print" id="waBox">
+      <div class="wa-head">
+        <div class="wa-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91C21.95 6.45 17.5 2 12.04 2m.01 1.67c4.54 0 8.23 3.7 8.23 8.24 0 4.54-3.69 8.23-8.23 8.23-1.48 0-2.93-.39-4.19-1.15l-.3-.17-3.12.82.83-3.04-.2-.32a8.2 8.2 0 0 1-1.26-4.38c0-4.54 3.7-8.23 8.24-8.23M8.53 7.33c-.16 0-.43.06-.66.31-.22.25-.87.86-.87 2.07 0 1.22.89 2.39 1 2.56.14.17 1.76 2.67 4.25 3.73.59.27 1.05.42 1.41.53.59.19 1.13.16 1.56.1.48-.07 1.46-.6 1.67-1.18.21-.58.21-1.07.15-1.18-.07-.1-.23-.16-.48-.27-.25-.14-1.47-.74-1.69-.82-.23-.08-.37-.12-.56.12-.16.25-.64.81-.78.97-.15.17-.29.19-.53.07-.26-.13-1.06-.39-2-1.23-.74-.66-1.23-1.47-1.38-1.72-.12-.24-.01-.39.11-.5.11-.11.27-.29.37-.44.13-.14.17-.25.25-.41.08-.17.04-.31-.02-.43-.06-.11-.56-1.35-.77-1.84-.2-.48-.4-.42-.56-.43-.14 0-.3-.01-.47-.01"/></svg></div>
+        <h2 class="wa-title">Solicitar simulados pelo WhatsApp</h2>
+      </div>
+
+      <div class="wa-estado sel" id="waEstadoInicial">
+        <p class="wa-sub">Vincule seu WhatsApp à sua conta. Depois, basta mandar uma mensagem como <b>"10 questões de Biologia sobre fotossíntese"</b> e o simulado chega pronto em PDF.</p>
+        <div class="wa-row"><button class="btn wa" id="btnWaVincular" type="button">Vincular meu WhatsApp</button></div>
+      </div>
+
+      <div class="wa-estado" id="waEstadoCodigo">
+        <p class="wa-sub">Envie este código para o número <b id="waNumeroEmpresa">+55 62 9802-1556</b>. O botão abre o WhatsApp com a mensagem pronta; se preferir, digite <b>Vincular conta <span id="waCodigoInline">000000</span></b> na conversa.</p>
+        <div class="wa-codigo" id="waCodigo" aria-live="polite">000 000</div>
+        <p class="wa-expira" id="waExpira">Vale por 15 minutos · aguardando sua mensagem…</p>
+        <div class="wa-row">
+          <a class="btn wa" id="linkWaAbrir" href="#" target="_blank" rel="noopener">Abrir o WhatsApp</a>
+          <button class="btn ghost sm" id="btnWaNovoCodigo" type="button">Gerar outro código</button>
+          <button class="btn ghost sm" id="btnWaCancelar" type="button">Cancelar</button>
+        </div>
+      </div>
+
+      <div class="wa-estado" id="waEstadoVinculado">
+        <div class="wa-vinc"><span class="wa-pill">✓ vinculado</span><span class="wa-tel" id="waTelefone">+55 •• ••••-••••</span><span class="wa-nome" id="waNome"></span></div>
+        <p class="wa-sub" style="margin-top:12px;">Em breve: mande o pedido do simulado direto na conversa com o <b>Gerador ENEM</b> e receba os PDFs por lá. Aviso no WhatsApp quando estiver ativo.</p>
+        <div class="wa-row"><button class="btn ghost sm" id="btnWaDesvincular" type="button">Desvincular</button></div>
+      </div>
+
+      <div class="wa-estado" id="waEstadoExpirado">
+        <p class="wa-sub">O código venceu sem ser usado. Gere outro e envie em até 15 minutos.</p>
+        <div class="wa-row"><button class="btn wa" id="btnWaNovoCodigo2" type="button">Gerar novo código</button></div>
+      </div>
+    </div>
 
     <div class="card card-step1">
       <div class="section-title"><span class="num">1</span> Área do conhecimento</div>

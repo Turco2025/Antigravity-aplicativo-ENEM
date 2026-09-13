@@ -19,6 +19,10 @@ const IMAGE_BACKEND_URL = "https://gkceyrkdmnhgqimmrsre.supabase.co/functions/v1
 // segurança — a chave de API fica guardada só nos secrets do servidor, nunca no
 // navegador do professor, e nunca é pedida ao abrir o app.
 const QUESTION_BACKEND_URL = "https://gkceyrkdmnhgqimmrsre.supabase.co/functions/v1/generate-question";
+// v15 — Número oficial do Gerador ENEM no WhatsApp (só dígitos, com DDI). É para onde o
+// professor envia "Vincular conta 123456" (caixa "Solicitar simulados pelo WhatsApp").
+// Trocar de número = trocar esta constante (e o secret WHATSAPP_PHONE_NUMBER_ID no Supabase).
+const WHATSAPP_NUMERO_EMPRESA = "556298021556";
 
 // jsPDF e docx.js são bibliotecas pesadas (~1MB juntas) usadas só nos botões
 // "Exportar PDF"/"Exportar DOCX". Em vez de carregá-las sempre no <head> (o que
@@ -118,6 +122,9 @@ function atualizaHeaderAuth(){
   document.getElementById("btnEntrar").style.display = logado ? "none" : "";
   document.getElementById("btnSair").style.display = logado ? "" : "none";
   document.getElementById("btnMeusSimulados").style.display = logado ? "" : "none";
+  // v15: a caixa do WhatsApp acompanha a sessão (carrega o status ao logar, limpa ao sair).
+  // Protegida: um erro aqui nunca pode atrapalhar o login nem o formulário.
+  try{ waAtualizar(); }catch(e){ console.error("[wa] atualizar:", e); }
 }
 
 // Chama antes de qualquer ação que exija estar logado (selecionar área,
@@ -214,11 +221,246 @@ async function fazerLoginGoogle(){
 }
 
 async function fazerLogout(){
+  try{ waLimpar(true); }catch(e){ /* v15: nunca impede o logout */ }
   await supabaseClient.auth.signOut();
   toast("Você saiu da sua conta.", "info");
   document.getElementById("formPanel").style.display = "block";
   document.getElementById("resultsPanel").style.display = "none";
   document.getElementById("simuladosPanel").style.display = "none";
+}
+
+/* ---------------- WhatsApp: vincular número (v15, etapa A2) ----------------
+
+   Caixa "Solicitar simulados pelo WhatsApp" (card-wa no template). O professor
+   gera um código de 6 dígitos (RPC wa_gerar_codigo, só para usuário logado),
+   abre o WhatsApp com "Vincular conta 123456" pronto (link wa.me) e envia; o
+   webhook do servidor conclui o pareamento. Enquanto o código está na tela, a
+   caixa consulta wa_meu_status a cada WA_POLL_MS e, quando o telefone aparece,
+   passa ao estado "vinculado". O código pendente fica guardado no navegador
+   para sobreviver a um recarregamento (no celular, abrir o WhatsApp costuma
+   descarregar a aba). A validade vem do servidor (expira_em), não de um
+   cronômetro local — abas suspensas não a desalinham.
+
+   Estados (classe .sel em .wa-estado): Inicial · Codigo · Vinculado · Expirado.
+   Tudo aqui é isolado: falhas viram toast e a caixa volta ao estado inicial. */
+const WA_STORAGE_CODIGO = "enem_wa_codigo_pendente";
+const WA_POLL_MS = 4000;
+let waTimer = null;             // polling + verificação de validade
+let waStatusEmAndamento = null; // promessa de wa_meu_status em curso (nunca duas em paralelo)
+let waPendente = null;          // { codigo: "482134", expiraEm: <ms> }
+let waAtualizando = false;      // waAtualizar em curso (onAuthStateChange e getSession disparam quase juntos)
+
+function waEl(id){ return document.getElementById(id); }
+
+function waMostrar(estado){
+  ["Inicial", "Codigo", "Vinculado", "Expirado"].forEach(e => {
+    const el = waEl("waEstado" + e);
+    if(el) el.classList.toggle("sel", e === estado);
+  });
+}
+
+// "556296116652" → "+55 62 ••••-6652" (nunca mostra o número inteiro do professor)
+function waFormataTelefone(t){
+  const d = String(t || "").replace(/\D/g, "");
+  if(!/^55\d{10,11}$/.test(d)) return d ? "+" + d : "";
+  return `+55 ${d.slice(2, 4)} ••••-${d.slice(-4)}`;
+}
+
+// "556298021556" → "+55 62 9802-1556" (número da empresa, inteiro)
+function waFormataNumeroEmpresa(t){
+  const d = String(t || "").replace(/\D/g, "");
+  const m = /^55(\d{2})(\d{8,9})$/.exec(d);
+  if(!m) return "+" + d;
+  const r = m[2];
+  return `+55 ${m[1]} ${r.slice(0, r.length - 4)}-${r.slice(-4)}`;
+}
+
+function waLinkWhatsApp(codigo){
+  return `https://wa.me/${WHATSAPP_NUMERO_EMPRESA}?text=${encodeURIComponent("Vincular conta " + codigo)}`;
+}
+
+function waLerPendente(){
+  try{
+    const raw = safeStorageGet(WA_STORAGE_CODIGO);
+    if(!raw) return null;
+    const p = JSON.parse(raw);
+    if(!p || !/^\d{6}$/.test(String(p.codigo)) || !(Number(p.expiraEm) > 0)) return null;
+    return { codigo: String(p.codigo), expiraEm: Number(p.expiraEm) };
+  }catch(e){ return null; }
+}
+
+function waGuardarPendente(p){
+  if(p) safeStorageSet(WA_STORAGE_CODIGO, JSON.stringify(p)); else safeStorageRemove(WA_STORAGE_CODIGO);
+}
+
+// Consulta o status no servidor (uma chamada por vez). Devolve a linha ou null.
+function waConsultarStatus(){
+  if(waStatusEmAndamento) return waStatusEmAndamento;
+  waStatusEmAndamento = supabaseClient.rpc("wa_meu_status")
+    .then(({ data, error }) => {
+      if(error) throw error;
+      return (Array.isArray(data) ? data[0] : data) || null;
+    })
+    .finally(() => { waStatusEmAndamento = null; });
+  return waStatusEmAndamento;
+}
+
+function waMostrarVinculado(st){
+  waPararEspera();
+  waPendente = null;
+  waGuardarPendente(null);
+  waEl("waTelefone").textContent = waFormataTelefone(st.whatsapp);
+  waEl("waNome").textContent = st.whatsapp_nome ? "· " + st.whatsapp_nome : "";
+  waMostrar("Vinculado");
+}
+
+function waMostrarCodigo(){
+  const c = waPendente.codigo;
+  waEl("waCodigo").textContent = c.slice(0, 3) + " " + c.slice(3);
+  waEl("waCodigoInline").textContent = c;
+  waEl("waNumeroEmpresa").textContent = waFormataNumeroEmpresa(WHATSAPP_NUMERO_EMPRESA);
+  waEl("linkWaAbrir").href = waLinkWhatsApp(c);
+  waAtualizaExpira();
+  waMostrar("Codigo");
+}
+
+function waAtualizaExpira(){
+  if(!waPendente) return;
+  const hora = new Date(waPendente.expiraEm).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  waEl("waExpira").textContent = `Vale até ${hora} · aguardando sua mensagem…`;
+}
+
+// Chamado ao logar (via atualizaHeaderAuth) e ao voltar para a aba.
+async function waAtualizar(){
+  if(!waEl("waBox")) return;
+  if(!currentUser || !supabaseClient){ waLimpar(false); return; }
+  if(waAtualizando) return;      // a chamada em curso já vai deixar a caixa no estado certo
+  waAtualizando = true;
+  try{
+    const st = await waConsultarStatus();
+    if(st && st.whatsapp){ waMostrarVinculado(st); return; }
+    const pend = waLerPendente();
+    if(pend && pend.expiraEm > Date.now()){
+      waPendente = pend;
+      waMostrarCodigo();
+      waIniciarEspera();
+    }else if(pend){
+      waGuardarPendente(null);
+      waPendente = null;
+      waMostrar("Expirado");
+    }else if(!waTimer && !waEl("waEstadoExpirado").classList.contains("sel")){
+      waMostrar("Inicial");   // não apaga um "Expirado" que acabou de ser mostrado
+    }
+  }catch(err){
+    console.error("[wa] status:", err);
+    if(!waTimer && !waPendente) waMostrar("Inicial");
+  }finally{
+    waAtualizando = false;
+  }
+}
+
+async function waGerarCodigo(){
+  if(!exigirLogin()) return;
+  const botoes = ["btnWaVincular", "btnWaNovoCodigo", "btnWaNovoCodigo2"].map(waEl).filter(Boolean);
+  botoes.forEach(b => { b.disabled = true; });
+  try{
+    const { data, error } = await supabaseClient.rpc("wa_gerar_codigo");
+    if(error) throw error;
+    const row = (Array.isArray(data) ? data[0] : data) || null;
+    if(!row || !/^\d{6}$/.test(String(row.codigo))) throw new Error("Resposta inesperada do servidor.");
+    const exp = new Date(row.expira_em).getTime();
+    waPendente = { codigo: String(row.codigo), expiraEm: exp > 0 ? exp : Date.now() + 15 * 60 * 1000 };
+    waGuardarPendente(waPendente);
+    waMostrarCodigo();
+    waIniciarEspera();
+  }catch(err){
+    console.error("[wa] gerar código:", err);
+    toast("Não foi possível gerar o código agora: " + String(err && err.message || err), "err");
+    if(!waPendente) waMostrar("Inicial");
+  }finally{
+    botoes.forEach(b => { b.disabled = false; });
+  }
+}
+
+function waIniciarEspera(){
+  waPararEspera();
+  waTimer = setInterval(waTick, WA_POLL_MS);
+}
+
+function waPararEspera(){
+  if(waTimer){ clearInterval(waTimer); waTimer = null; }
+}
+
+async function waTick(){
+  if(!waPendente || !currentUser){ waPararEspera(); return; }
+  if(Date.now() > waPendente.expiraEm){ waExpirar(); return; }
+  waAtualizaExpira();
+  try{
+    const st = await waConsultarStatus();
+    if(st && st.whatsapp){
+      waMostrarVinculado(st);
+      toast("WhatsApp vinculado! Seu número já está ligado à sua conta.", "ok");
+    }
+  }catch(err){
+    // Sessão inválida (401/403): para de consultar e volta ao início; outros erros só tentam de novo.
+    const msg = String(err && err.message || err);
+    if(/jwt|401|403|not authenticated|permission/i.test(msg)){ console.error("[wa] polling:", err); waLimpar(false); }
+  }
+}
+
+function waExpirar(){
+  waPararEspera();
+  waPendente = null;
+  waGuardarPendente(null);
+  waMostrar("Expirado");
+}
+
+// Cancelar só esconde o código na tela (o servidor o invalida sozinho em 15 min).
+function waCancelar(){
+  waPararEspera();
+  waPendente = null;
+  waGuardarPendente(null);
+  waMostrar("Inicial");
+}
+
+async function waDesvincular(){
+  if(!exigirLogin()) return;
+  if(!window.confirm("Desvincular este WhatsApp da sua conta? Você poderá vincular de novo quando quiser.")) return;
+  const btn = waEl("btnWaDesvincular");
+  if(btn) btn.disabled = true;
+  try{
+    const { error } = await supabaseClient.rpc("wa_desvincular");
+    if(error) throw error;
+    toast("WhatsApp desvinculado.", "info");
+    waMostrar("Inicial");
+  }catch(err){
+    console.error("[wa] desvincular:", err);
+    toast("Não foi possível desvincular agora: " + String(err && err.message || err), "err");
+  }finally{
+    if(btn) btn.disabled = false;
+  }
+}
+
+// Ao sair da conta (apagaTudo=true) ou quando não há sessão: para tudo e volta ao início.
+function waLimpar(apagaTudo){
+  waPararEspera();
+  waPendente = null;
+  if(apagaTudo) waGuardarPendente(null);
+  if(waEl("waBox")) waMostrar("Inicial");
+}
+
+function waInit(){
+  if(!waEl("waBox")) return;
+  waEl("btnWaVincular").addEventListener("click", waGerarCodigo);
+  waEl("btnWaNovoCodigo").addEventListener("click", waGerarCodigo);
+  waEl("btnWaNovoCodigo2").addEventListener("click", waGerarCodigo);
+  waEl("btnWaCancelar").addEventListener("click", waCancelar);
+  waEl("btnWaDesvincular").addEventListener("click", waDesvincular);
+  waEl("waNumeroEmpresa").textContent = waFormataNumeroEmpresa(WHATSAPP_NUMERO_EMPRESA);
+  // Voltou para a aba (ex.: depois de enviar a mensagem no WhatsApp): confere na hora.
+  document.addEventListener("visibilitychange", () => {
+    if(document.visibilityState === "visible" && currentUser){ waAtualizar().catch(() => {}); }
+  });
 }
 
 /* ---------------- Arquivo "Meus Simulados" ---------------- */
@@ -5725,6 +5967,9 @@ function init(){
   document.getElementById("btnSair").addEventListener("click", fazerLogout);
   document.getElementById("btnMeusSimulados").addEventListener("click", abrirMeusSimulados);
   document.getElementById("btnFecharSimulados").addEventListener("click", fecharMeusSimulados);
+
+  // v15: caixa "Solicitar simulados pelo WhatsApp". Isolada: se falhar, o resto do app segue.
+  try{ waInit(); }catch(e){ console.error("[wa] init:", e); const wb = document.getElementById("waBox"); if(wb) wb.style.display = "none"; }
 
   setViewMode("professor");
 

@@ -23,8 +23,15 @@ duas Supabase Edge Functions próprias para gerar conteúdo com segurança:
   imagem de uma questão já pronta, mantendo o resto intacto.
 - **`generate-image`** — recebe uma descrição e chama a API de imagens da OpenAI
   (`gpt-image-2` por padrão) para gerar a ilustração usada nas questões do tipo "imagem".
+- **`whatsapp-webhook`** — recebe as mensagens do WhatsApp (Meta Cloud API) enviadas ao
+  número oficial do Gerador ENEM. Nesta fase faz o **pareamento**: o professor clica em
+  "Solicitar simulados pelo WhatsApp → Vincular meu WhatsApp" no app, recebe um código de
+  6 dígitos e o envia pelo WhatsApp; o webhook confere a assinatura da Meta, valida o código
+  e liga o telefone à conta. Pedir simulados pela conversa é a próxima fase.
 
-As chaves de API (`ANTHROPIC_API_KEY` e `OPENAI_API_KEY`) ficam guardadas só nos **secrets**
+As chaves de API (`ANTHROPIC_API_KEY` e `OPENAI_API_KEY`) e as credenciais do WhatsApp
+(`WHATSAPP_TOKEN`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`,
+`WHATSAPP_WABA_ID`) ficam guardadas só nos **secrets**
 do projeto Supabase que hospeda essas funções — nunca aparecem no navegador, neste
 repositório, ou em qualquer arquivo do projeto.
 
@@ -36,8 +43,18 @@ src/app_data.json                     → Matriz de Referência do ENEM + contex
 src/combine.py                        → script que combina os três arquivos acima em index.html
 supabase/functions/generate-question/ → Edge Function que gera as questões (Claude)
 supabase/functions/generate-image/    → Edge Function que gera as imagens (GPT Image)
+supabase/functions/whatsapp-webhook/  → Edge Function do WhatsApp (pareamento) + testes Deno
+supabase/migrations/                  → migrações do banco (tabelas perfis e wa_*, RLS)
 tests/                                → testes automatizados (Playwright) do app
 ```
+
+## Caixa "Solicitar simulados pelo WhatsApp" (v15)
+
+Logo abaixo do cabeçalho, para usuários logados. Gera um código de 6 dígitos (função
+`wa_gerar_codigo` do banco, só para o usuário autenticado), abre o WhatsApp com a mensagem
+"Vincular conta 123456" pronta (link `wa.me` para o número em `WHATSAPP_NUMERO_EMPRESA`, no
+topo de `src/app.js`) e acompanha o pareamento consultando `wa_meu_status` a cada 4 s. Teste
+sem rede: `node tests/verify_whatsapp_box.js` (o supabase-js é substituído por um stub).
 
 ## Reconstruindo o `index.html` após editar `src/`
 
