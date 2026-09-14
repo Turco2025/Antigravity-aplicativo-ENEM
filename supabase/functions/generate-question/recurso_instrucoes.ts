@@ -135,9 +135,20 @@ não existe sobrescrito para / e , — REESCREVA a lei, nunca use ^:
 MULTIPLICAÇÃO: × entre números (4,6 × 10⁹; 3 × 5 = 15) e · entre símbolos
 (Q₀ · 2ⁿ; π · r² · h; a · b). Nunca a letra x, nunca ponto final, nunca *.
 FRAÇÃO em linha com parênteses quando houver mais de um termo: (a + b)/(c + d);
-9/T = 3/2; 1/(2√2). RAIZ com √ e parênteses quando o radicando for composto:
-√2 · √(x² + 1) · ³√27 = 3 · √(2⁴ · 3²) = 2² · 3 = 12.
-SÍMBOLOS disponíveis: π ≤ ≥ ≠ ≈ ± ∞ ° % ‰ → ∑ ∏ ∆ ∂ ∫ √ ½ ¼ ¾ − (menos matemático,
+9/T = 3/2; 1/(2√2).
+RAIZ QUADRADA — REGRA DO RADICAL (obrigatória): em toda expressão com raiz
+quadrada, represente o radical matematicamente de forma correta. A barra
+horizontal superior deve começar após o símbolo √ e se estender exatamente até o
+final de todo o radicando. Exemplo correto: √1̅0̅0̅0̅. Nunca deixe a barra
+cobrindo apenas parte do número, como apenas 1, 10 ou 100, e nunca faça a barra
+ultrapassar o final do radicando. Como escrever: o radicando vem COLADO ao √
+(nunca √ espaço) — número ou letra diretamente (√2, √1000, √x, √1,44) e, quando
+tiver mais de um termo, entre parênteses (√(x² + 1), √(2⁴ · 3²)); a barra é
+aplicada automaticamente sobre TODO o radicando, e só sobre ele. Se você mesmo
+escrever a barra, use o combinante U+0305 depois de CADA caractere do
+radicando (√1̅0̅0̅0̅, √x̅²̅ ̅+̅ ̅1̅), sem parênteses. Raiz cúbica: ³√27 = 3.
+Ex.: √2 · √(x² + 1) · √(2⁴ · 3²) = 2² · 3 = 12 · √288 = 12√2.
+SÍMBOLOS disponíveis: π ≤ ≥ ≠ ≈ ± ∞ ° % ‰ → ∑ ∆ ∂ ∫ √ ½ ¼ ¾ − (menos matemático,
 U+2212, ou o hífen comum; nunca "–" travessão como sinal).
 NÃO EXISTEM na fonte do PDF (saem como □): ∈ ∉ ∪ ∩ ⊂ ⇒ ⇔ ∅ ℝ ℕ ℤ ∀ ∃ ∝ ∴ ∠ ⊥ ⋅ ∙ ∛.
 Escreva por palavras: "x pertence a A", "A união B", "o conjunto dos números reais",

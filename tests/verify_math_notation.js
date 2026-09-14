@@ -149,7 +149,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     const cob = new Set(Array.from(CARLITO_COBERTURA));
     const precisa = 'x²2ˣ10⁻³aₙSₙ2ⁿ⁻¹eᵏᵗ(1+i)ᵗQ₀xᵢAₜPₘₐₓvₒH₂SO₄⇌SO₄²⁻2ᴬvₖlog₂';
     const faltam = Array.from(new Set(Array.from(precisa).filter(ch => !cob.has(ch))));
-    let saneado = null, temJsPdf = !!(window.jspdf && window.jspdf.jsPDF), registrou = false, pdfB64 = null;
+    let saneado = null, radicalPua = null, temJsPdf = !!(window.jspdf && window.jspdf.jsPDF), registrou = false, pdfB64 = null;
     try{
       if(temJsPdf){
         const doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'a4' });
@@ -159,10 +159,14 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
         doc.setFont(ENEM.fonte, 'bold'); doc.text(saneado, 40, 80);
         doc.setFont(ENEM.fonte, 'italic'); doc.text(saneado, 40, 100);
         doc.setFont(ENEM.fonte, 'bolditalic'); doc.text(saneado, 40, 120);
+        // radical com barra: cada par "caractere + U+0305" vira o glifo pré-composto (U+E100…)
+        const rad = pdfSanitizeText('√1\u03050\u03050\u03050\u0305 = 10√1\u03050\u0305 e √x\u0305²\u0305 \u0305+\u0305 \u03051\u0305');
+        radicalPua = rad;
+        doc.setFont(ENEM.fonte, 'normal'); doc.text(rad, 40, 150);
         pdfB64 = doc.output('datauristring').split(',')[1];
       }
     }catch(e){ saneado = 'erro: ' + e.message; }
-    return { faltam, temJsPdf, registrou, saneado, pdfB64 };
+    return { faltam, temJsPdf, registrou, saneado, pdfB64, radicalPua, cobreU0305: cob.has('\u0305'), cobrePua: cob.has('\uE100') && cob.has('\uE15E') };
   });
   ok(resD.faltam.length === 0, 'D: CARLITO_COBERTURA cobre letras sobrescritas e subscritas', 'faltam: ' + resD.faltam.join(' '));
   if(resD.temJsPdf){
@@ -175,6 +179,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     try{ texto = execFileSync('pdftotext', ['-layout', pdfPath, '-']).toString('utf8'); }catch(e){ texto = 'pdftotext indisponível'; }
     const linhas = texto.split('\n').filter(l => l.trim());
     ok(linhas.length >= 4 && linhas.slice(0, 4).every(l => l.trim() === 'x² 2ˣ 10⁻³ aₙ Sₙ 2ⁿ⁻¹ eᵏᵗ (1 + i)ᵗ Q₀ H₂SO₄ ⇌ SO₄²⁻'), 'D: o texto extraído do PDF volta idêntico nas quatro faces', linhas.slice(0, 4).join(' / '));
+    ok(resD.cobreU0305 && resD.cobrePua, 'D: a fonte cobre o combinante U+0305 e os 95 glifos pré-compostos do radical');
+    ok(resD.radicalPua.startsWith('√' + String.fromCharCode(0xE101, 0xE100, 0xE100, 0xE100) + ' = 10√' + String.fromCharCode(0xE101, 0xE100)) && !/\u0305|\u25A1/.test(resD.radicalPua), 'D: pdfSanitizeText troca "dígito + U+0305" pelo glifo pré-composto, sem sobras nem □', JSON.stringify(resD.radicalPua));
   } else {
     console.log('SKIP D: jsPDF local não encontrado (fontwork/jstest/node_modules) — geração do PDF não testada');
   }

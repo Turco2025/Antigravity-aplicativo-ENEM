@@ -72,7 +72,10 @@ Expoentes, índices, raízes e sinais chegam ao estudante prontos — x², 2⁴,
    de Natureza só as neutras, sem gases nem íons) e `notacao_matematica.ts` (só padrões
    inequívocos: `x^2`→x², `10^-3`→10⁻³, `2^(n-1)`→2ⁿ⁻¹, `Q_0`→Q₀, `Q0`→Q₀ quando encostado em
    operador em oração com "=", `m2`→m², `4,6 x 10^9`→4,6 × 10⁹, `S0 . 1`→S₀ · 1). O que for
-   ambíguo (`2^(-t/T)`) fica e é apontado pela verificação do app. O núcleo JavaScript é o
+   ambíguo (`2^(-t/T)`) fica e é apontado pela verificação do app. Raiz quadrada sai com a
+   barra sobre todo o radicando (`√1000` → √1̅0̅0̅0̅, combinante U+0305 em cada caractere); no PDF
+   cada par vira um glifo pré-composto da fonte (U+E100…), para a barra ir exatamente do √ ao
+   fim do radicando. O núcleo JavaScript é o
    MESMO no backend e em `src/app.js` (entre as marcas `NM-INÍCIO`/`NM-FIM`), testado pelos
    mesmos casos: `node nm/testa_core_node.js` e `deno run --allow-read nm/testa_core_deno.ts`.
 3. **App**: a normalização roda em toda questão que entra (backend, arquivo, refazer visual) —

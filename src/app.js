@@ -2152,7 +2152,12 @@ function quiJuntaFormula(texto){
    5. Letra x como multiplicação: "4,6 x 10^9" sempre; "3 x 5" só em oração com
       "=" ou seguida de = ^ ) ou expoente. "Brasil 3 x 1 Argentina" fica.
    6. Ponto como multiplicação: "S0 . (1 + i)" → "S₀ · (1 + i)", só entre
-      operandos matemáticos.                                                   */
+      operandos matemáticos.
+   7. Radical com barra: "√1000" → √1̅0̅0̅0̅ e "√(x² + 1)" → √x̅²̅ ̅+̅ ̅1̅ — cada
+      caractere do radicando recebe o combinante U+0305, de modo que a barra
+      começa depois do √ e vai exatamente até o fim do radicando (pedido do
+      professor, 14/09/2026). No PDF, pdfSanitizeText troca cada par por um
+      glifo pré-composto da fonte (ver fontwork/ampliar_carlito.py).           */
 
 var NM_SUP = {
   "0": "⁰", "1": "¹", "2": "²", "3": "³", "4": "⁴", "5": "⁵", "6": "⁶", "7": "⁷", "8": "⁸", "9": "⁹",
@@ -2276,6 +2281,42 @@ function nmPontoMultiplicacao(texto) {
   });
 }
 
+// 7) radical com barra sobre o radicando inteiro
+var NM_SOBRELINHA = "\u0305";
+// radicando "nu": número (com decimal), letra ou letra grega, com expoente já em sobrescrito
+var NM_RE_RADICANDO_NU = /^(?:\d+(?:[,.]\d+)?|[A-Za-zπ])[⁰¹²³⁴⁵⁶⁷⁸⁹]*/u;
+function nmSobrelinha(radicando) {
+  var out = "";
+  for (var ch of radicando) out += ch + NM_SOBRELINHA;
+  return out;
+}
+function nmRadicais(texto) {
+  var out = "", i = 0;
+  while (i < texto.length) {
+    var k = texto.indexOf("√", i);
+    if (k < 0) { out += texto.slice(i); break; }
+    out += texto.slice(i, k + 1); i = k + 1;
+    if (nmEmUrl(texto.slice(0, k))) continue;
+    var resto = texto.slice(i);
+    if (resto.charAt(1) === NM_SOBRELINHA) continue;              // já tem barra (idempotente)
+    if (resto.charAt(0) === "(") {
+      // grupo balanceado, curto, sem quebra de linha: "√(x² + 1)" → barra sobre "x² + 1" (sem os parênteses)
+      var prof = 0, fim = -1;
+      for (var j = 0; j < resto.length && j < 60; j++) {
+        var c = resto.charAt(j);
+        if (c === "\n") break;
+        if (c === "(") prof++;
+        else if (c === ")") { prof--; if (prof === 0) { fim = j; break; } }
+      }
+      if (fim > 1) { out += nmSobrelinha(resto.slice(1, fim)); i += fim + 1; }
+      continue;
+    }
+    var m = NM_RE_RADICANDO_NU.exec(resto);
+    if (m && m[0]) { out += nmSobrelinha(m[0]); i += m[0].length; }
+  }
+  return out;
+}
+
 // Texto isolado (sem a regra 3, que precisa da questão inteira).
 function nmNormalizaTexto(texto) {
   if (typeof texto !== "string" || !texto) return texto;
@@ -2286,6 +2327,7 @@ function nmNormalizaTexto(texto) {
   t = nmExpoentes(t);
   t = nmLogaritmos(t);
   t = nmUnidades(t);
+  t = nmRadicais(t);      // por último: depois disto o radicando carrega U+0305 entre os caracteres
   return t;
 }
 
@@ -3604,16 +3646,37 @@ const PDF_EQUIVALENTES = {
   "\u2090": "a", "\u2091": "e", "\u2092": "o", "\u2099": "n", "\u2093": "x", "\u1D62": "i", "\u2095": "h", "\u2096": "k", "\u2098": "m", "\u209A": "p", "\u209B": "s", "\u209C": "t",  // letras subscritas: Kₐ → Ka
 };
 
+/* v16 — RADICAL COM BARRA NO PDF. Na tela, no Word e no HTML o radicando sai
+   com a barra por meio do combinante U+0305 (√1̅0̅0̅0̅): os motores de texto
+   posicionam a marca sobre o caractere anterior. O jsPDF não posiciona marcas
+   (não lê GPOS) — a barra cairia centrada na fronteira entre dois caracteres,
+   começando no meio do primeiro e passando do último. A fonte embarcada traz,
+   por isso, um glifo pré-composto "caractere + barra" para cada caractere
+   possível de radicando (fontwork/ampliar_carlito.py), na Área de Uso Privado
+   a partir de U+E100, na MESMA ordem desta string. Aqui cada par
+   "caractere + U+0305" vira esse glifo; barras vizinhas se encostam e formam
+   uma linha contínua exatamente do início ao fim do radicando. */
+const PDF_SOBRELINHA_BASES = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ ,.+-−·×/()⁰¹²³⁴⁵⁶⁷⁸⁹⁻π₀₁₂₃₄₅₆₇₈₉";
+const PDF_SOBRELINHA_PUA = 0xE100;
+function pdfRadicalComBarra(s){
+  if(s.indexOf("\u0305") < 0) return s;
+  const bases = Array.from(PDF_SOBRELINHA_BASES);
+  return s.replace(/([\s\S])\u0305/gu, (m, base) => {
+    const i = bases.indexOf(base);
+    return i >= 0 ? String.fromCharCode(PDF_SOBRELINHA_PUA + i) : base;   // sem glifo composto: fica o caractere, sem a barra
+  }).replace(/\u0305/g, "");
+}
+
 function pdfSanitizeText(text){
   if(text == null) return text;
   const s = quiJuntaFormula(String(text));
   if(!enemFonteEmbarcada){
     // Caminho degradado: sem a fonte embarcada, aproxima em ASCII.
-    return s.replace(PDF_SYMBOL_REGEX, ch => PDF_SYMBOL_MAP[ch]);
+    return s.replace(/\u0305/g, "").replace(PDF_SYMBOL_REGEX, ch => PDF_SYMBOL_MAP[ch]);
   }
   if(!CARLITO_SET) CARLITO_SET = new Set(Array.from(CARLITO_COBERTURA));
   let out = "";
-  for(const ch of s){
+  for(const ch of pdfRadicalComBarra(s)){
     if(ch === "\u2060") continue;                 // juntador: invisível, só serve ao Word e ao HTML
     if(ch === "\n" || ch === "\t" || ch === "\r" || CARLITO_SET.has(ch)) out += ch;
     else if(PDF_EQUIVALENTES[ch] !== undefined) out += PDF_EQUIVALENTES[ch];   // v14: equivalente com glifo

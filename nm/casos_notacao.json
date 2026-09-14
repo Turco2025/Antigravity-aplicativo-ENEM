@@ -325,6 +325,46 @@
       "n": "ponto com notação científica sem igual",
       "in": "massa de 1,5 . 10^3 kg",
       "out": "massa de 1,5 · 10³ kg"
+    },
+    {
+      "n": "radical: número inteiro",
+      "in": "√1000 = 10√10",
+      "out": "√1̅0̅0̅0̅ = 10√1̅0̅"
+    },
+    {
+      "n": "radical: sqrt(2^5 · 3^2) e 12√2",
+      "in": "√288 = √(2^5 · 3^2) = 12√2",
+      "out": "√2̅8̅8̅ = √2̅⁵̅ ̅·̅ ̅3̅²̅ = 12√2̅"
+    },
+    {
+      "n": "radical: letra e expoente",
+      "in": "√(x^2 + 1) e √x e √π e 2√x²",
+      "out": "√x̅²̅ ̅+̅ ̅1̅ e √x̅ e √π̅ e 2√x̅²̅"
+    },
+    {
+      "n": "radical: decimal e aninhado",
+      "in": "√1,44 = 1,2 e √((a+b)/2)",
+      "out": "√1̅,̅4̅4̅ = 1,2 e √(̅a̅+̅b̅)̅/̅2̅"
+    },
+    {
+      "n": "radical: já com barra é idempotente",
+      "in": "√1̅0̅0̅0̅",
+      "igual": true
+    },
+    {
+      "n": "radical: √ solto ou seguido de espaço fica",
+      "in": "o símbolo √ indica raiz; √ 2 não",
+      "igual": true
+    },
+    {
+      "n": "radical: ³√8",
+      "in": "³√8 = 2 e ³√27 = 3",
+      "out": "³√8̅ = 2 e ³√2̅7̅ = 3"
+    },
+    {
+      "n": "radical: grupo sem fechar fica",
+      "in": "√(x + 1 e mais",
+      "igual": true
     }
   ],
   "questao": [

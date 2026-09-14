@@ -33,6 +33,20 @@ SUB_EXISTENTES = {"a": 0x2090, "e": 0x2091, "o": 0x2092, "x": 0x2093, "i": 0x1D6
 SUB_FABRICADOS = {"h": 0x2095, "j": 0x2C7C, "k": 0x2096, "l": 0x2097, "m": 0x2098, "n": 0x2099, "p": 0x209A, "s": 0x209B, "t": 0x209C}
 DESLOCAMENTO_SUB = -1100   # o mesmo que a Carlito usa em ₐ = ᵃ deslocado
 
+# RADICAL COM BARRA (v16). Na tela, no Word e no HTML o radicando sai com a barra
+# superior por meio do combinante U+0305 (√1̅0̅0̅0̅) — os motores de texto posicionam
+# a marca sobre a letra anterior. O jsPDF não posiciona marcas (não lê GPOS): a
+# barra cairia centrada na FRONTEIRA entre dois caracteres, começando no meio do
+# primeiro e passando do último. Por isso o PDF usa glifos pré-compostos, um por
+# caractere possível de radicando, mapeados na Área de Uso Privado (U+E100…):
+# o próprio glifo mais um retângulo que vai de x = 0 até a largura de avanço,
+# na altura do U+0305 da face — barras vizinhas se encostam e formam uma linha
+# contínua exatamente do início ao fim do radicando. pdfSanitizeText (app.js)
+# troca cada par "caractere + U+0305" pelo glifo correspondente.
+BASES_SOBRELINHA = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ ,.+-−·×/()⁰¹²³⁴⁵⁶⁷⁸⁹⁻π₀₁₂₃₄₅₆₇₈₉"
+PUA_INICIO = 0xE100
+EXTRAS = [0x0305, 0x203E]   # combinante e sobrelinha espaçadora
+
 
 def desenha_achatado(fonte, nome, pen, dy=0):
     """Desenha o glifo `nome` da fonte (resolvendo componentes) no pen, deslocado dy."""
@@ -107,6 +121,40 @@ def amplia(face_bytes, caminho_sistema):
             ymin, ymax = bbox_de(origem, DESLOCAMENTO_SUB)
             assert ymax < 700 and ymin < 0, ("fabricação fora de posição", hex(cp), ymin, ymax)
             acrescenta_glifo(sub, full, cp, origem, dy=DESLOCAMENTO_SUB); novos.append(cp)
+    for cp in EXTRAS:
+        if cp not in sc:
+            acrescenta_glifo(sub, full, cp, fc[cp]); novos.append(cp)
+    # glifos pré-compostos "caractere + barra" (PUA)
+    cm_atual = sub.getBestCmap()
+    gb = full["glyf"][fc[0x0305]]
+    y0, y1 = gb.yMin, gb.yMax
+    for i, ch in enumerate(BASES_SOBRELINHA):
+        cp = PUA_INICIO + i
+        if cp in sc:
+            continue
+        base_cp = ord(ch)
+        assert base_cp in cm_atual, ("base fora do subconjunto", ch)
+        nome_base = cm_atual[base_cp]
+        adv, lsb = sub["hmtx"][nome_base]
+        pen = TTGlyphPen(None)
+        desenha_achatado(sub, nome_base, pen, 0)
+        # A barra começa ANTES da origem (cobre a emenda com a barra do caractere
+        # anterior e, no primeiro, encosta na ponta do √, que avança 83 unidades
+        # além da própria largura) e termina EXATAMENTE na largura de avanço — a
+        # barra do radicando nunca passa do último caractere.
+        # Sobreposição de 80 unidades à esquerda: mesmo em visualizadores com
+        # anti-serrilhado grosseiro (zoom baixo) a emenda entre dois glifos fica
+        # sólida, e a barra do primeiro caractere entra sob a ponta do √.
+        pen.moveTo((-80, y0)); pen.lineTo((-80, y1)); pen.lineTo((adv, y1)); pen.lineTo((adv, y0)); pen.closePath()
+        g = pen.glyph(); g.recalcBounds(sub["glyf"])
+        nome = "uni%04X" % cp
+        sub["glyf"][nome] = g
+        sub["hmtx"][nome] = (adv, min(g.xMin, 0))
+        ordem = list(sub["glyf"].glyphOrder)
+        if nome not in ordem: ordem.append(nome)
+        sub.setGlyphOrder(ordem); sub["glyf"].glyphOrder = ordem
+        for t in sub["cmap"].tables: t.cmap[cp] = nome
+        novos.append(cp)
     sub["maxp"].recalc(sub)
     out = io.BytesIO()
     sub.save(out, reorderTables=True)
@@ -115,7 +163,7 @@ def amplia(face_bytes, caminho_sistema):
     chk = TTFont(io.BytesIO(dados)); cm = chk.getBestCmap()
     for cp in novos:
         nome = cm[cp]; g = chk["glyf"][nome]; adv, _ = chk["hmtx"][nome]
-        assert g.numberOfContours > 0 and adv > 0, (hex(cp), g.numberOfContours, adv)
+        assert g.numberOfContours > 0 and (adv > 0 or cp == 0x0305), (hex(cp), g.numberOfContours, adv)   # o combinante tem avanço 0 de propósito
         assert not g.isComposite(), hex(cp)
     return dados, sorted(novos), chk
 

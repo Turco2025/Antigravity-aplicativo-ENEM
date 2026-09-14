@@ -35,7 +35,12 @@
    5. Letra x como multiplicação: "4,6 x 10^9" sempre; "3 x 5" só em oração com
       "=" ou seguida de = ^ ) ou expoente. "Brasil 3 x 1 Argentina" fica.
    6. Ponto como multiplicação: "S0 . (1 + i)" → "S₀ · (1 + i)", só entre
-      operandos matemáticos.                                                   */
+      operandos matemáticos.
+   7. Radical com barra: "√1000" → √1̅0̅0̅0̅ e "√(x² + 1)" → √x̅²̅ ̅+̅ ̅1̅ — cada
+      caractere do radicando recebe o combinante U+0305, de modo que a barra
+      começa depois do √ e vai exatamente até o fim do radicando (pedido do
+      professor, 14/09/2026). No PDF, pdfSanitizeText troca cada par por um
+      glifo pré-composto da fonte (ver fontwork/ampliar_carlito.py).           */
 
 var NM_SUP = {
   "0": "⁰", "1": "¹", "2": "²", "3": "³", "4": "⁴", "5": "⁵", "6": "⁶", "7": "⁷", "8": "⁸", "9": "⁹",
@@ -159,6 +164,42 @@ function nmPontoMultiplicacao(texto) {
   });
 }
 
+// 7) radical com barra sobre o radicando inteiro
+var NM_SOBRELINHA = "\u0305";
+// radicando "nu": número (com decimal), letra ou letra grega, com expoente já em sobrescrito
+var NM_RE_RADICANDO_NU = /^(?:\d+(?:[,.]\d+)?|[A-Za-zπ])[⁰¹²³⁴⁵⁶⁷⁸⁹]*/u;
+function nmSobrelinha(radicando) {
+  var out = "";
+  for (var ch of radicando) out += ch + NM_SOBRELINHA;
+  return out;
+}
+function nmRadicais(texto) {
+  var out = "", i = 0;
+  while (i < texto.length) {
+    var k = texto.indexOf("√", i);
+    if (k < 0) { out += texto.slice(i); break; }
+    out += texto.slice(i, k + 1); i = k + 1;
+    if (nmEmUrl(texto.slice(0, k))) continue;
+    var resto = texto.slice(i);
+    if (resto.charAt(1) === NM_SOBRELINHA) continue;              // já tem barra (idempotente)
+    if (resto.charAt(0) === "(") {
+      // grupo balanceado, curto, sem quebra de linha: "√(x² + 1)" → barra sobre "x² + 1" (sem os parênteses)
+      var prof = 0, fim = -1;
+      for (var j = 0; j < resto.length && j < 60; j++) {
+        var c = resto.charAt(j);
+        if (c === "\n") break;
+        if (c === "(") prof++;
+        else if (c === ")") { prof--; if (prof === 0) { fim = j; break; } }
+      }
+      if (fim > 1) { out += nmSobrelinha(resto.slice(1, fim)); i += fim + 1; }
+      continue;
+    }
+    var m = NM_RE_RADICANDO_NU.exec(resto);
+    if (m && m[0]) { out += nmSobrelinha(m[0]); i += m[0].length; }
+  }
+  return out;
+}
+
 // Texto isolado (sem a regra 3, que precisa da questão inteira).
 function nmNormalizaTexto(texto) {
   if (typeof texto !== "string" || !texto) return texto;
@@ -169,6 +210,7 @@ function nmNormalizaTexto(texto) {
   t = nmExpoentes(t);
   t = nmLogaritmos(t);
   t = nmUnidades(t);
+  t = nmRadicais(t);      // por último: depois disto o radicando carrega U+0305 entre os caracteres
   return t;
 }
 
