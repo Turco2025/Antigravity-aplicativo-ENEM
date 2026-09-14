@@ -1,0 +1,35 @@
+{
+  "uso": {"saida": 1957, "chamadas": 1, "custoUSD": 0.02645, "buscasWeb": 0, "cacheLido": 19903, "entradaNova": 1452, "cacheEscrito": 0},
+  "question": {
+    "area": "Matemática e suas Tecnologias",
+    "tema": "Exponenciação — crescimento exponencial em progressão geométrica aplicado à contagem de combinações de exercícios",
+    "visual": null,
+    "comando": "A avaliação correta do efeito dessa ampliação sobre o número de sequências possíveis indica que ele fica multiplicado por",
+    "recurso": "nenhum",
+    "gabarito": "C",
+    "textoBase": "Um aplicativo de treino monta circuitos de academia escolhendo, para cada exercício do circuito, uma entre 2 variações de movimento (por exemplo, agachamento livre ou agachamento com salto). A ordem dos exercícios no circuito é sempre a mesma, mudando apenas a variação escolhida em cada posição. Assim, para um circuito com n exercícios, o número total de sequências distintas de variações que o aplicativo pode gerar é dado por 2ⁿ.\n\nAtualmente, o circuito padrão da academia tem 4 exercícios, gerando um certo número de sequências possíveis. O instrutor recebeu uma proposta para ampliar o circuito, acrescentando mais 2 exercícios à sequência, mantendo o mesmo princípio de 2 variações por exercício, e quer avaliar de quantas vezes o número de sequências possíveis aumentaria com essa ampliação.\n\nFONTE: elaborado para fins didáticos, com base no princípio multiplicativo de contagem.",
+    "disciplina": "Matemática",
+    "habilidade": {"texto": "Avaliar propostas de intervenção na realidade envolvendo variação de grandezas.", "codigo": "H18"},
+    "competencia": {"texto": "Construir noções de variação de grandezas para a compreensão da realidade e a solução de problemas do cotidiano.", "numero": 4},
+    "dificuldade": "Médio",
+    "alternativas": {
+      "A": "2 vezes.",
+      "B": "3 vezes.",
+      "C": "4 vezes.",
+      "D": "6 vezes.",
+      "E": "8 vezes."
+    },
+    "objetoConhecimento": "Conhecimentos numéricos",
+    "resolucaoComentada": "Com n exercícios, o número de sequências é 2ⁿ. No circuito original, n = 4, então o total é 2⁴. Ao ampliar para 6 exercícios, o total passa a ser 2⁶. A razão entre o novo total e o original é 2⁶/2⁴ = 2⁶⁻⁴ = 2² = 4. Ou seja, cada exercício adicionado multiplica o número de sequências por 2 (pois dobra as escolhas possíveis em cada posição), e como foram acrescentados 2 exercícios, o fator total é 2 · 2 = 4. Portanto, o número de sequências possíveis fica multiplicado por 4 vezes com a ampliação proposta.",
+    "analiseAlternativas": {
+      "A": {"status": "incorreta", "comentario": "Erro de processo: o candidato considera que acrescentar 2 exercícios multiplica o total apenas por um fator de 2, como se cada exercício adicional dobrasse o total apenas uma vez no conjunto, ignorando que cada novo exercício multiplica o total por 2 de forma independente e sucessiva (2 × 2 = 4, não apenas 2)."},
+      "B": {"status": "incorreta", "comentario": "Reaproveitamento fora de contexto: o valor 3 pode surgir de uma confusão entre o número de exercícios acrescentados (2) e uma soma equivocada de expoentes ou de uma tentativa de calcular a razão como 6/4 = 1,5 arredondado, ou ainda de somar 1 exercício a mais por engano; em qualquer caso, o raciocínio não aplica corretamente a propriedade de potências de mesma base."},
+      "C": {"status": "correta", "comentario": "A razão entre as potências 2⁶ e 2⁴ é 2⁶⁻⁴ = 2² = 4, resultado que expressa corretamente quantas vezes o número de sequências possíveis aumenta ao se acrescentarem 2 exercícios ao circuito, cada um dobrando as possibilidades anteriores."},
+      "D": {"status": "incorreta", "comentario": "Erro de processo: esse valor pode resultar de uma subtração indevida entre os expoentes seguida de multiplicação pelo número de exercícios originais (por exemplo, 2 × (4 − 1) ou uma combinação incorreta entre adição e multiplicação dos expoentes), em vez de aplicar corretamente a divisão de potências de mesma base."},
+      "E": {"status": "incorreta", "comentario": "Verdade parcial: o valor 8 corresponde a 2³, que seria o fator de multiplicação caso fossem acrescentados 3 exercícios, e não 2 como informado no texto-base; o candidato confunde o número de exercícios acrescentados com o expoente do fator de aumento, gerando uma generalização indevida a partir de um dado que não corresponde ao caso descrito."}
+    }
+  },
+  "visualDiag": {"motivo": "", "refeito": 0, "conforme": true, "promptChars": 0, "entregueTipo": null, "recursoPedido": "nenhum", "tentativasRefazer": []},
+  "notacaoDiag": {"contas": {"alterado": false, "cobertura": true}, "notacao": {"resumo": "", "alterado": false, "tentativas": 0, "residuosAntes": [], "residuosDepois": []}, "residuoFinal": false, "revisorChamado": true, "residuoAntesDoRevisor": false},
+  "diversidadeDiag": {"recorte": "conteúdo: Crescimento exponencial em progressão geométrica aplicado a probabilidade e contagem de possibilidades · contexto: Em uma academia, um aplicativo de treino gera combinações de exercícios cujo número de sequências possíveis cresce exponencialmente a cada novo exercício incluído no circuito, e o instrutor precisa avaliar propostas de ampliação do circuito. · habilidade: H18: Avaliar propostas de intervenção na realidade envolvendo variação de grandezas.", "subtopico": null, "temasEvitar": 0, "eixoTematico": null, "temaEntregue": "Exponenciação — crescimento exponencial em progressão geométrica aplicado à contagem de combinações de exercícios", "dominiosEvitar": 0, "eixoRespeitado": null, "objetoEntregue": "Conhecimentos numéricos", "contextosEvitar": 0, "dominioContexto": "academia e exercícios físicos", "dominioAlternativo": "jogos de tabuleiro e sorteios"}
+}

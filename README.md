@@ -92,6 +92,58 @@ Expoentes, índices, raízes e sinais chegam ao estudante prontos — x², 2⁴,
    sobrescritas/subscritas (`fontwork/ampliar_carlito.py`). Teste no navegador, sem rede:
    `node tests/verify_math_notation.js`.
 
+## Diversidade de exemplos em levas, sem custo (v17 / generate-question v73)
+
+Problema real (leva 538678f0, 20 de Matemática sem tema, 14/09/2026): "fábrica de componentes
+eletrônicos" com linhas A/B 60%/40% em duas questões, "transportadora" em três, "cooperativa
+agrícola" em três, marcenaria e velas na mesma leva. Sem tema digitado só o eixo (objeto de
+conhecimento) era reservado, e as 5 questões de cada onda paralela não se enxergam.
+
+A correção é toda determinística, decidida no app ANTES da leva (como o gabarito e os eixos),
+sem chamada nova à IA, sem campo novo na resposta e sem aumentar o prompt da leva:
+
+1. **Subtópico oficial** (`SUBTOPICOS_OFICIAIS`, `planejaSubtopicos`): dentro de cada eixo,
+   cada questão sem tema recebe um item do texto do Anexo da Matriz (ex.: "porcentagem e
+   juros", "sequências e progressões"), em rodízio embaralhado. Matemática, Física, Química,
+   Biologia e Humanas; Linguagens fica só com o eixo por disciplina.
+2. **Domínio de contexto** (`DOMINIOS_CONTEXTO`, 61 cenários; `planejaDominios`): em
+   Matemática e Ciências da Natureza, toda leva de 2+ questões recebe, por questão, um domínio
+   principal e um alternativo, exclusivos dela. O backend (`buildDiversidadeTematica`) manda
+   ambientar a situação-problema nesse domínio (ou, se não couber, só no alternativo). Nas
+   levas com tema digitado, o planejamento de recortes (que já existia) recebe os domínios
+   (`dominios`) para que os contextos dele caiam neles.
+3. **Prompt do usuário não cresce na leva**: os temas entregues das outras questões só viajam
+   quando podem colidir em conteúdo (mesmo eixo; ou outro grupo de tema), itens de 120
+   caracteres, teto 40; com recorte planejado o bloco de domínio é omitido (o planejamento já o
+   recebeu). Medido em `tests/medir_prompt_diversidade.ts`, leva de 20 de Matemática sem tema:
+   61.905 caracteres (v73) contra 72.840 (v72), 15% menor; leva de 5 → 7% menor; leva de 2 →
+   2% menor; leva de 1 → igual. Por questão: só a PRIMEIRA da leva cresce (+205 caracteres,
+   ≈ 50 tokens, ≈ US$ 0,0001), as demais encolhem. Único caminho em que cresce por questão:
+   temas digitados todos diferentes (grupos de 1, sem recorte), +≈330 caracteres cada.
+4. **Auditoria de contexto sem IA** (`auditaDiversidadeContextos`, só Matemática e Natureza):
+   o texto-base de cada questão é conferido contra as palavras-chave do catálogo (específicas
+   de propósito — nada de "empresa", "motor", "bactéria", "reportagem"); duas questões no mesmo domínio
+   geram alerta na auditoria local do cartão e o botão **"Outro contexto"**
+   (`regenerarComOutroContexto`), que regenera SÓ aquela questão num domínio ainda não usado e
+   com o cenário colidido proibido (`contextosEvitar`, `dominiosEvitar`). Nada é regenerado
+   automaticamente. Simulados arquivados antes da v17 também são auditados ao abrir.
+
+5. **Ajustes vindos do teste real** (10 × Matemática/Exponenciação contra o backend v73, em
+   `tests/fixtures/teste_real_v73/`): (a) com o mesmo tema digitado, a auditoria de temas ignora
+   também a família da palavra ("exponencial", "exponenciais" com "Exponenciação"), que
+   aparecia em 9 dos 10 temas entregues e apontou como parecidas duas questões de exemplos
+   diferentes (`mesmaFamiliaDePalavra`); (b) o leitor numérico das alternativas
+   (`lerNumeroAlternativa`) passa a entender moeda na frente, milhar, fração, potência em
+   sobrescrito, notação científica e escala ("1,2 milhão") — a rede de segurança do gabarito
+   deixa de trocar de lugar alternativas em R$ já em ordem crescente, e a auditoria local do
+   cartão passa a apontar "R$ 10.648,00 / R$ 10.400,00" fora da ordem e "2,5 km" × "2.5 km"
+   como valor repetido (em listas híbridas "valor, pois justificativa" a ordem não é exigida;
+   valor repetido vira observação); (c) "FONTE: elaborado para fins didáticos" no começo de
+   uma linha conta como fonte.
+
+Testes: `node tests/verify_diversidade.js` (catálogo, reservas, corpos enviados, auditoria com
+as duas levas reais em `tests/fixtures/`, frases típicas de Física/Biologia, Humanas, leva mista, simulado antigo, botão, leitor numérico) — 49 verificações; `node tests/teste_real_fase_d.js` roda o app inteiro com as 10 questões reais. Ordem de publicação: backend v73 antes do app v17 (o app novo já encurta a lista de assuntos contando com o subtópico/domínio).
+
 ## Reconstruindo o `index.html` após editar `src/`
 
 ```bash

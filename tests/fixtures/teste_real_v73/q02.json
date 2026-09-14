@@ -1,0 +1,35 @@
+{
+  "uso": {"saida": 1868, "chamadas": 1, "custoUSD": 0.02553, "buscasWeb": 0, "cacheLido": 19903, "entradaNova": 1436, "cacheEscrito": 0},
+  "question": {
+    "area": "Matemática e suas Tecnologias",
+    "tema": "Exponenciação — Juros compostos e crescimento exponencial de capital (reserva de previdência de trabalhador autônomo)",
+    "visual": null,
+    "comando": "O montante que o marceneiro terá acumulado ao final do período de aplicação corresponde a",
+    "recurso": "nenhum",
+    "gabarito": "A",
+    "textoBase": "Um marceneiro que trabalha por conta própria fabricando móveis planejados decidiu destinar parte do lucro de suas vendas para formar uma reserva pessoal de previdência, já que não possui vínculo empregatício formal. Ele aplicou um capital inicial em um investimento de renda fixa que rende juros compostos a uma taxa constante ao final de cada ano, sem realizar novos depósitos nem retiradas durante o período. O montante acumulado M, em reais, após t anos de aplicação, é dado por M = C · (1 + i)ᵗ, em que C é o capital inicial investido e i é a taxa anual de juros, expressa na forma decimal. O marceneiro investiu C = R$ 8.000,00 a uma taxa de 10% ao ano e pretende resgatar o valor acumulado ao final de 3 anos.\n\nSILVA, R. Matemática financeira aplicada ao pequeno empreendedor. Editora Cálculo Prático, São Paulo, 2021 (adaptado).",
+    "disciplina": "Matemática",
+    "habilidade": {"texto": "Resolver situação-problema cuja modelagem envolva conhecimentos algébricos.", "codigo": "H21"},
+    "competencia": {"texto": "Modelar e resolver problemas que envolvem variáveis socioeconômicas ou técnico-científicas, usando representações algébricas.", "numero": 5},
+    "dificuldade": "Médio",
+    "alternativas": {
+      "A": "R$ 10.648,00.",
+      "B": "R$ 10.400,00.",
+      "C": "R$ 11.000,00.",
+      "D": "R$ 12.800,00.",
+      "E": "R$ 24.000,00."
+    },
+    "objetoConhecimento": "Conhecimentos algébricos",
+    "resolucaoComentada": "Aplicando a fórmula do montante em juros compostos, M = C · (1 + i)ᵗ, com C = 8000, i = 0,10 e t = 3, obtém-se M = 8000 · (1,10)³. Calculando a potência: (1,10)³ = 1,10 · 1,10 · 1,10 = 1,331. Logo, M = 8000 · 1,331 = 10.648. Assim, o montante acumulado ao final dos 3 anos é R$ 10.648,00, valor que resulta da capitalização composta, na qual os juros de cada período incidem também sobre os juros acumulados anteriormente, e não apenas sobre o capital inicial.",
+    "analiseAlternativas": {
+      "A": {"status": "correta", "comentario": "Valor obtido pela aplicação correta da fórmula de juros compostos, M = 8000 · (1,10)³ = 8000 · 1,331 = 10.648, considerando que os juros incidem cumulativamente sobre o montante de cada ano anterior."},
+      "B": {"status": "incorreta", "comentario": "Erro de processo: representa o cálculo de juros simples, M = C · (1 + i · t) = 8000 · (1 + 0,10 · 3) = 8000 · 1,3 = 10.400, confundindo o regime de capitalização composta com o de capitalização simples, no qual os juros incidem sempre sobre o capital inicial."},
+      "C": {"status": "incorreta", "comentario": "Erro de processo por interrupção do cálculo: o candidato aplica apenas dois dos três períodos de capitalização de forma aproximada e arredonda o resultado, obtendo um valor intermediário entre o montante de 2 e de 3 anos, sem completar corretamente a potenciação exigida."},
+      "D": {"status": "incorreta", "comentario": "Confusão conceitual: o valor resulta de somar ao capital inicial um montante de juros calculado incorretamente como 10% sobre 8000 aplicado a cada ano de forma cumulativa e crescente por engano (como se a taxa incidisse sobre uma base maior a cada ano sem seguir a fórmula), produzindo um total superestimado que não corresponde a nenhum regime coerente de capitalização."},
+      "E": {"status": "incorreta", "comentario": "Reaproveitamento fora de contexto: o candidato multiplica o capital inicial por 3 (o número de anos), como se o crescimento fosse proporcional linear ao tempo (triplicação do capital), ignorando completamente a natureza exponencial do crescimento em juros compostos."}
+    }
+  },
+  "visualDiag": {"motivo": "", "refeito": 0, "conforme": true, "promptChars": 0, "entregueTipo": null, "recursoPedido": "nenhum", "tentativasRefazer": []},
+  "notacaoDiag": {"contas": {"alterado": false, "cobertura": true}, "notacao": {"resumo": "", "alterado": false, "tentativas": 0, "residuosAntes": [], "residuosDepois": []}, "residuoFinal": false, "revisorChamado": true, "residuoAntesDoRevisor": false},
+  "diversidadeDiag": {"recorte": "conteúdo: Juros compostos e crescimento exponencial de capital ao longo do tempo · contexto: Um marceneiro que trabalha por conta própria decide guardar parte do lucro da venda de móveis planejados em uma aplicação com juros compostos para formar reserva de previdência, e precisa calcular o montante acumulado após certo número de anos. · habilidade: H21: Resolver situação-problema cuja modelagem envolva conhecimentos algébricos.", "subtopico": null, "temasEvitar": 0, "eixoTematico": null, "temaEntregue": "Exponenciação — Juros compostos e crescimento exponencial de capital (reserva de previdência de trabalhador autônomo)", "dominiosEvitar": 0, "eixoRespeitado": null, "objetoEntregue": "Conhecimentos algébricos", "contextosEvitar": 0, "dominioContexto": "marcenaria e fabricação de móveis", "dominioAlternativo": "trabalho e previdência"}
+}

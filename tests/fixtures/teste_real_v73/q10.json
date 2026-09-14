@@ -1,0 +1,35 @@
+{
+  "uso": {"saida": 2185, "chamadas": 1, "custoUSD": 0.0287, "buscasWeb": 0, "cacheLido": 19903, "entradaNova": 1433, "cacheEscrito": 0},
+  "question": {
+    "area": "Matemática e suas Tecnologias",
+    "tema": "Exponenciação — crescimento exponencial de colônias e comparação de taxas em tabela",
+    "visual": null,
+    "comando": "A comparação entre as taxas de crescimento das duas colmeias, obtidas a partir da tabela, indica que a duplicação da população ocorrerá primeiro na colmeia",
+    "recurso": "nenhum",
+    "gabarito": "A",
+    "textoBase": "Um apicultor iniciou o monitoramento de duas colmeias, X e Y, no mesmo dia, registrando o número de abelhas ao longo das primeiras semanas. Em ambas, a população cresce exponencialmente, seguindo uma lei do tipo N(t) = N₀ · aᵗ, em que t é o tempo em semanas contado a partir do início do registro. Os valores observados foram organizados na tabela a seguir.\n\nSemana (t) | Colmeia X | Colmeia Y\n0 | 800 | 1 000\n1 | 1 200 | 1 250\n2 | 1 800 | 1 562\n3 | 2 700 | 1 953\n\nO apicultor pretende identificar em qual das duas colmeias a população total de abelhas alcançará o dobro do valor inicial registrado em primeiro lugar, mantidas as taxas de crescimento observadas.\n\nDisponível em: www.apiculturaepesquisa.com.br. Acesso em: 3 mar. 2024 (adaptado).",
+    "disciplina": "Matemática",
+    "habilidade": {"texto": "Resolver problema com dados apresentados em tabelas ou gráficos.", "codigo": "H25"},
+    "competencia": {"texto": "Interpretar informações de natureza científica e social obtidas da leitura de gráficos e tabelas, realizando previsão de tendência, extrapolação, interpolação e interpretação.", "numero": 6},
+    "dificuldade": "Médio",
+    "alternativas": {
+      "A": "X, pois sua razão de crescimento semanal é maior.",
+      "B": "X, pois sua população inicial é menor.",
+      "C": "Y, pois sua razão de crescimento semanal é maior.",
+      "D": "Y, pois sua população inicial é maior.",
+      "E": "Y, pois seus valores absolutos superam os da colmeia X a partir da semana 2."
+    },
+    "objetoConhecimento": "Conhecimentos de estatística e probabilidade",
+    "resolucaoComentada": "Para cada colmeia, a razão de crescimento semanal (a) é obtida dividindo um termo pelo anterior: na colmeia X, 1200/800 = 1,5; 1800/1200 = 1,5; 2700/1800 = 1,5 — logo aX = 1,5. Na colmeia Y, 1250/1000 = 1,25; 1562/1250 = 1,25 (aproximadamente); 1953/1562 ≈ 1,25 — logo aY = 1,25. Quanto maior a razão de crescimento (base da exponencial), mais rapidamente a população dobra, independentemente do valor inicial N₀, pois a condição de duplicação é aᵗ = 2, e uma base maior exige um expoente t menor para atingir o mesmo valor 2. Como aX = 1,5 > aY = 1,25, a colmeia X duplicará sua população em menos semanas que a colmeia Y, ainda que sua população inicial (800) seja menor que a de Y (1 000). Portanto, a colmeia X atingirá o dobro do valor inicial primeiro.",
+    "analiseAlternativas": {
+      "A": {"status": "correta", "comentario": "A razão de crescimento semanal da colmeia X (1,5) é maior que a da colmeia Y (1,25), calculada a partir da divisão entre termos consecutivos da tabela. Como o tempo necessário para duplicar depende exclusivamente dessa razão (base da função exponencial), e não do valor inicial, a colmeia X dobra sua população primeiro."},
+      "B": {"status": "incorreta", "comentario": "Erro de processo: a alternativa atribui a duplicação mais rápida ao fato de a população inicial ser menor, mas o valor de N₀ não determina o tempo de duplicação em um modelo exponencial — esse tempo depende apenas da razão de crescimento a. Trata-se de uma confusão entre os parâmetros do modelo N(t) = N₀ · aᵗ."},
+      "C": {"status": "incorreta", "comentario": "Leitura parcial dos dados da tabela: a razão de crescimento semanal de Y (1,25) é, na verdade, menor que a de X (1,5), não maior. A alternativa inverte o resultado da comparação entre as taxas, provavelmente por uma leitura apressada dos valores absolutos, que crescem em ambas as colmeias mas em ritmos diferentes."},
+      "D": {"status": "incorreta", "comentario": "Verdade parcial combinada a erro de processo: é correto que a população inicial de Y (1 000) é maior que a de X (800), mas esse dado não influencia o tempo de duplicação, que depende apenas da razão de crescimento. A alternativa usa uma informação verdadeira da tabela para justificar uma conclusão que não decorre dela."},
+      "E": {"status": "incorreta", "comentario": "Reaproveitamento fora de contexto: o fato de os valores absolutos de X superarem os de Y a partir de certa semana é consequência da maior razão de crescimento de X, e não um argumento a favor de Y. A alternativa inverte a relação entre os dados observados e a conclusão pedida, atribuindo a Y um resultado que, na verdade, evidencia a superioridade de X."}
+    }
+  },
+  "visualDiag": {"motivo": "", "refeito": 0, "conforme": true, "promptChars": 0, "entregueTipo": null, "recursoPedido": "nenhum", "tentativasRefazer": []},
+  "notacaoDiag": {"contas": {"alterado": false, "cobertura": true}, "notacao": {"resumo": "", "alterado": false, "tentativas": 0, "residuosAntes": [], "residuosDepois": []}, "residuoFinal": false, "revisorChamado": true, "residuoAntesDoRevisor": false},
+  "diversidadeDiag": {"recorte": "conteúdo: Crescimento exponencial aplicado à expansão de colônias e comparação de gráficos de diferentes taxas · contexto: Um apicultor registra, em uma tabela, o número de abelhas em duas colmeias que crescem exponencialmente com taxas diferentes, e precisa identificar em qual colmeia a população dobrará primeiro. · habilidade: H25: Resolver problema com dados apresentados em tabelas ou gráficos.", "subtopico": null, "temasEvitar": 0, "eixoTematico": null, "temaEntregue": "Exponenciação — crescimento exponencial de colônias e comparação de taxas em tabela", "dominiosEvitar": 0, "eixoRespeitado": null, "objetoEntregue": "Conhecimentos de estatística e probabilidade", "contextosEvitar": 0, "dominioContexto": "apicultura e produção de mel", "dominioAlternativo": "ferrovias e metrô"}
+}

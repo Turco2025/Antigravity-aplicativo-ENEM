@@ -1,0 +1,35 @@
+{
+  "uso": {"saida": 2039, "chamadas": 1, "custoUSD": 0.02723, "buscasWeb": 0, "cacheLido": 19903, "entradaNova": 1432, "cacheEscrito": 0},
+  "question": {
+    "area": "Matemática e suas Tecnologias",
+    "tema": "Função exponencial aplicada ao resfriamento noturno de superfícies — interpretação de gráfico cartesiano",
+    "visual": null,
+    "comando": "A leitura do comportamento da curva T(t) para valores grandes de t indica que a temperatura da pista se aproxima, sem nunca atingir um valor inferior a",
+    "recurso": "nenhum",
+    "gabarito": "E",
+    "textoBase": "Uma estação de meteorologia monitora, durante a madrugada, a temperatura da superfície de uma pista de asfalto que perde calor para o ar após o pôr do sol. Os técnicos observam que, a partir da meia-noite, a temperatura T (em graus Celsius) da pista se aproxima cada vez mais devagar de um valor limite, sem nunca ficar abaixo dele, à medida que as horas passam. Com base nas leituras dos sensores, os técnicos ajustaram o modelo T(t) = 8 + 20 · 2⁻ᵗ, em que t é o tempo em horas contado a partir da meia-noite. Um gráfico da função T(t) foi plotado no plano cartesiano, com o eixo horizontal representando t e o eixo vertical representando T, mostrando a curva descendente que se estabiliza suavemente à medida que t cresce.\n\nCENTRO DE PREVISÃO DE TEMPO. Boletim técnico de monitoramento noturno de pistas. Departamento de Meteorologia Aplicada, 2023 (adaptado).",
+    "disciplina": "Matemática",
+    "habilidade": {"texto": "Interpretar gráfico cartesiano que represente relações entre grandezas.", "codigo": "H20"},
+    "competencia": {"texto": "Modelar e resolver problemas que envolvem variáveis socioeconômicas ou técnico-científicas, usando representações algébricas.", "numero": 5},
+    "dificuldade": "Médio",
+    "alternativas": {
+      "A": "0 °C.",
+      "B": "2 °C.",
+      "C": "4 °C.",
+      "D": "6 °C.",
+      "E": "8 °C."
+    },
+    "objetoConhecimento": "Conhecimentos algébricos",
+    "resolucaoComentada": "No modelo T(t) = 8 + 20 · 2⁻ᵗ, a parcela 20 · 2⁻ᵗ é uma exponencial decrescente: à medida que t aumenta, 2⁻ᵗ se aproxima de zero, mas nunca chega a ser negativo nem nulo para t finito, apenas cada vez menor. Assim, o termo 20 · 2⁻ᵗ tende a zero sem nunca assumir valor negativo, e a temperatura T(t) se aproxima do valor constante 8, que funciona como assíntota horizontal da curva no gráfico. Essa é a leitura correta do comportamento gráfico para valores grandes de t: a curva desce, mas se estabiliza junto ao patamar de 8 °C, nunca ultrapassando esse limite inferior.",
+    "analiseAlternativas": {
+      "A": {"status": "incorreta", "comentario": "Erro de leitura do gráfico por reaproveitamento fora de contexto: o candidato associa o comportamento assintótico de uma exponencial decrescente genérica (que tende a zero) diretamente ao valor final de T(t), ignorando que aqui a exponencial é apenas uma parcela somada à constante 8, e não a função completa."},
+      "B": {"status": "incorreta", "comentario": "Erro de processo na leitura da lei de formação: o valor 2 pode surgir de uma manipulação equivocada, como dividir a constante somada (8) pela base da potência (2·2=4, aproximado incorretamente), sem identificar corretamente qual termo representa o patamar de estabilização da curva."},
+      "C": {"status": "incorreta", "comentario": "Verdade parcial: o valor 4 pode ser obtido ao calcular erroneamente a metade da constante 8, supondo que a curva se estabiliza na metade do termo independente, uma confusão entre o valor da assíntota e um cálculo intermediário sem sentido físico no modelo."},
+      "D": {"status": "incorreta", "comentora": "Leitura parcial do gráfico: o candidato pode observar um ponto específico da curva em um instante inicial pequeno e supor, por extrapolação indevida, que esse valor observado corresponde ao limite de estabilização, quando na verdade a curva ainda está em processo de queda naquele instante.", "comentario": "Leitura parcial do gráfico: o candidato pode observar um ponto específico da curva em um instante inicial pequeno e supor, por extrapolação indevida, que esse valor observado corresponde ao limite de estabilização, quando na verdade a curva ainda está em processo de queda naquele instante."},
+      "E": {"status": "correta", "comentario": "Como 2⁻ᵗ tende a zero quando t cresce indefinidamente, o termo 20 · 2⁻ᵗ se aproxima de zero sem nunca ser negativo, restando apenas a constante 8 como valor-limite da temperatura, o que caracteriza corretamente a assíntota horizontal observada no gráfico."}
+    }
+  },
+  "visualDiag": {"motivo": "", "refeito": 0, "conforme": true, "promptChars": 0, "entregueTipo": null, "recursoPedido": "nenhum", "tentativasRefazer": []},
+  "notacaoDiag": {"contas": {"alterado": false, "cobertura": true}, "notacao": {"resumo": "", "alterado": false, "tentativas": 0, "residuosAntes": [], "residuosDepois": []}, "residuoFinal": false, "revisorChamado": true, "residuoAntesDoRevisor": false},
+  "diversidadeDiag": {"recorte": "conteúdo: Função exponencial aplicada a modelos de variação de temperatura ou concentração · contexto: Uma estação de meteorologia registra o resfriamento noturno de uma superfície segundo um modelo exponencial e apresenta um gráfico da temperatura em função do tempo, que precisa ser interpretado para prever a temperatura mínima. · habilidade: H20: Interpretar gráfico cartesiano que represente relações entre grandezas.", "subtopico": null, "temasEvitar": 0, "eixoTematico": null, "temaEntregue": "Função exponencial aplicada ao resfriamento noturno de superfícies — interpretação de gráfico cartesiano", "dominiosEvitar": 0, "eixoRespeitado": null, "objetoEntregue": "Conhecimentos algébricos", "contextosEvitar": 0, "dominioContexto": "clima e meteorologia", "dominioAlternativo": "laboratório de microbiologia"}
+}

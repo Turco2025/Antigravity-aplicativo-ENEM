@@ -1,0 +1,35 @@
+{
+  "uso": {"saida": 1687, "chamadas": 1, "custoUSD": 0.02373, "buscasWeb": 0, "cacheLido": 19903, "entradaNova": 1442, "cacheEscrito": 0},
+  "question": {
+    "area": "Matemática e suas Tecnologias",
+    "tema": "Exponenciação — modelagem exponencial de crescimento populacional (infestação de praga em lavoura)",
+    "visual": null,
+    "comando": "O número de semanas, a partir do levantamento inicial, necessário para que a infestação atinja o nível crítico corresponde a",
+    "recurso": "nenhum",
+    "gabarito": "B",
+    "textoBase": "Uma cooperativa de agricultura familiar identificou o surgimento de uma praga em uma lavoura de hortaliças. O levantamento inicial registrou 50 insetos por hectare, e, segundo o técnico agrônomo responsável, essa população dobra a cada semana, caso nenhuma medida de controle seja adotada. Com base nesse padrão de proliferação, a quantidade N de insetos por hectare, em função do número t de semanas transcorridas desde o levantamento inicial, pode ser descrita pela expressão N(t) = 50 · 2ᵗ. A cooperativa definiu que, ao atingir 1600 insetos por hectare, a lavoura estará em nível crítico de infestação, exigindo a aplicação imediata de um manejo integrado de controle biológico.\n\nCOOPERATIVA AGRÍCOLA REGIONAL. Boletim técnico de monitoramento fitossanitário. Setor de Agronomia, 2024 (adaptado).",
+    "disciplina": "Matemática",
+    "habilidade": {"texto": "Resolver situação-problema envolvendo a variação de grandezas, direta ou inversamente proporcionais.", "codigo": "H16"},
+    "competencia": {"texto": "Construir noções de variação de grandezas para a compreensão da realidade e a solução de problemas do cotidiano.", "numero": 4},
+    "dificuldade": "Médio",
+    "alternativas": {
+      "A": "3.",
+      "B": "5.",
+      "C": "8.",
+      "D": "16.",
+      "E": "32."
+    },
+    "objetoConhecimento": "Conhecimentos algébricos",
+    "resolucaoComentada": "Para encontrar o instante em que a infestação atinge o nível crítico, iguala-se N(t) a 1600: 50 · 2ᵗ = 1600. Dividindo os dois lados por 50, obtém-se 2ᵗ = 32. Como 32 = 2⁵, conclui-se que t = 5. Portanto, a infestação atingirá o nível crítico após 5 semanas.",
+    "analiseAlternativas": {
+      "A": {"status": "incorreta", "comentario": "Erro de processo: resulta de resolver 2ᵗ = 8 (confundindo o valor-alvo 1600 com o fator de crescimento 8, obtido, por exemplo, ao dividir 1600 por 200 em vez de por 50), levando a t = 3, uma etapa de cálculo anterior à correta."},
+      "B": {"status": "correta", "comentario": "Ao igualar 50 · 2ᵗ a 1600 e isolar a potência, obtém-se 2ᵗ = 32 = 2⁵, de modo que t = 5 semanas é o tempo necessário para a infestação atingir o nível crítico."},
+      "C": {"status": "incorreta", "comentario": "Reaproveitamento fora de contexto: o candidato toma o valor 1600 e o divide por 200 obtendo 8, mas interpreta esse resultado diretamente como o número de semanas, sem reconhecer que 8 é o fator multiplicativo (2ᵗ) e não o expoente t."},
+      "D": {"status": "incorreta", "comentario": "Confusão conceitual: o candidato calcula 1600 dividido por 100 (usando incorretamente o dobro da população inicial como divisor) e obtém 16, tratando esse quociente como resposta final sem relacioná-lo à base 2 da potência."},
+      "E": {"status": "incorreta", "comentario": "Leitura parcial: o candidato identifica corretamente que 1600 dividido por 50 resulta em 32, mas interrompe o raciocínio nesse ponto, apresentando o fator de crescimento 2ᵗ como se fosse o próprio número de semanas, em vez de resolver a equação 2ᵗ = 32."}
+    }
+  },
+  "visualDiag": {"motivo": "", "refeito": 0, "conforme": true, "promptChars": 0, "entregueTipo": null, "recursoPedido": "nenhum", "tentativasRefazer": []},
+  "notacaoDiag": {"contas": {"alterado": false, "cobertura": true}, "notacao": {"resumo": "", "alterado": false, "tentativas": 0, "residuosAntes": [], "residuosDepois": []}, "residuoFinal": false, "revisorChamado": true, "residuoAntesDoRevisor": false},
+  "diversidadeDiag": {"recorte": "conteúdo: Modelagem exponencial de crescimento populacional (de bactérias, pragas ou população) · contexto: Uma cooperativa de agricultura familiar monitora a proliferação de uma praga em uma lavoura, cuja população dobra a cada semana, e precisa prever em quantas semanas a infestação atingirá um nível crítico. · habilidade: H16: Resolver situação-problema envolvendo a variação de grandezas, direta ou inversamente proporcionais.", "subtopico": null, "temasEvitar": 0, "eixoTematico": null, "temaEntregue": "Exponenciação — modelagem exponencial de crescimento populacional (infestação de praga em lavoura)", "dominiosEvitar": 0, "eixoRespeitado": null, "objetoEntregue": "Conhecimentos algébricos", "contextosEvitar": 0, "dominioContexto": "agricultura familiar e cooperativas rurais", "dominioAlternativo": "informática e centros de dados"}
+}

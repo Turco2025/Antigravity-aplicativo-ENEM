@@ -299,8 +299,27 @@ function buildAncoragemVisual(area: string, disciplina: string, tema: string, re
    conhecimento oficial da disciplina, distribuído em rodízio) e a enviar os
    ASSUNTOS JÁ USADOS na leva. Este bloco vai no prompt do usuário — a parte
    que varia por questão — e por isso não mexe no cache do sistema. */
-function buildDiversidadeTematica(eixoTematico: string, temasEvitar: string[], temaDoProfessor: string, recorte = ""): string {
+/* v73 — DIVERSIDADE DE EXEMPLOS SEM CUSTO (pedido do professor, 14/09/2026).
+   Leva real 538678f0 (20 de Matemática, sem tema): "fábrica de componentes
+   eletrônicos" com linhas A/B 60%/40% em DUAS questões, "transportadora" em
+   três, "cooperativa agrícola" em três, marcenaria e velas na mesma leva.
+   O app agora reserva, ANTES da leva e sem chamada nova à IA, um SUBTÓPICO
+   oficial dentro do eixo e um DOMÍNIO DE CONTEXTO (principal + alternativo)
+   exclusivo de cada questão, e manda os domínios das outras como proibidos.
+   Este bloco só transmite essas reservas; nada aqui altera o cache do sistema
+   (é prompt do usuário) e o tamanho é parecido com o da lista antiga de
+   assuntos, que ficou mais curta (itens de 120 caracteres). */
+type DiversidadeExtras = {
+  subtopico?: string; dominioContexto?: string; dominioAlternativo?: string;
+  dominiosEvitar?: string[]; contextosEvitar?: string[];
+};
+function buildDiversidadeTematica(eixoTematico: string, temasEvitar: string[], temaDoProfessor: string, recorte = "", extras: DiversidadeExtras = {}): string {
   const partes: string[] = [];
+  const subtopico = (extras.subtopico || "").trim();
+  const dominio = (extras.dominioContexto || "").trim();
+  const dominioAlt = (extras.dominioAlternativo || "").trim();
+  const dominiosEvitar = (extras.dominiosEvitar || []).filter((d) => d && d !== dominio && d !== dominioAlt);
+  const contextosEvitar = (extras.contextosEvitar || []).filter(Boolean);
   /* v64: com tema digitado pelo professor, a diversidade vem de um RECORTE
      planejado antes da leva (ver planejarRecortes): conteúdo + contexto +
      habilidade próprios desta questão, sempre dentro do tema pedido. */
@@ -308,11 +327,27 @@ function buildDiversidadeTematica(eixoTematico: string, temasEvitar: string[], t
     partes.push(`🎯 RECORTE RESERVADO PARA ESTA QUESTÃO (diversidade da leva): este simulado tem várias questões sobre o mesmo tema pedido pelo professor, e cada uma recebeu de antemão um recorte próprio, para que a leva cubra o tema em vez de repetir o exemplo mais comum. Esta questão DEVE seguir este recorte — ${recorte} — mantendo-se DENTRO do tema pedido: trate exatamente esse conteúdo, construa o texto-base e a situação-problema sobre esse contexto (não o troque por outro mais frequente) e, quando o recorte indicar uma habilidade, mobilize essa habilidade da Matriz e cite-a nos campos "competencia" e "habilidade". O campo "tema" da sua resposta deve nomear o recorte, não apenas o tema geral.`);
   }
   if (eixoTematico) {
-    partes.push(`🎯 EIXO TEMÁTICO RESERVADO PARA ESTA QUESTÃO (diversidade da leva): o professor não detalhou o tema, e este simulado distribui o conteúdo da disciplina entre as questões. Esta questão DEVE mobilizar o objeto de conhecimento oficial "${eixoTematico}" — declare-o literalmente no campo "objetoConhecimento" — e escolher, DENTRO dele, um recorte de conteúdo específico, frequente nas provas do ENEM e diferente dos assuntos listados a seguir (quando houver). Não escolha um assunto de outro objeto de conhecimento.`);
+    if (subtopico) {
+      partes.push(`🎯 EIXO E SUBTÓPICO RESERVADOS (diversidade da leva): esta questão DEVE mobilizar o objeto de conhecimento oficial "${eixoTematico}" (copie-o em "objetoConhecimento") e tratar exatamente o subtópico "${subtopico}" — não outro item desse objeto. O campo "tema" nomeia o subtópico e o contexto.`);
+    } else {
+      partes.push(`🎯 EIXO TEMÁTICO RESERVADO PARA ESTA QUESTÃO (diversidade da leva): o professor não detalhou o tema, e este simulado distribui o conteúdo da disciplina entre as questões. Esta questão DEVE mobilizar o objeto de conhecimento oficial "${eixoTematico}" — declare-o literalmente no campo "objetoConhecimento" — e escolher, DENTRO dele, um recorte de conteúdo específico, frequente nas provas do ENEM e diferente dos assuntos listados a seguir (quando houver). Não escolha um assunto de outro objeto de conhecimento.`);
+    }
+  }
+  // Com recorte planejado que traz "contexto: …", o cenário já veio do
+  // planejamento (que recebeu os domínios): o bloco de domínio seria redundante
+  // — ou contraditório. Ele entra quando não há recorte, quando o recorte veio
+  // SEM contexto (o app descarta contextos fora do domínio, repetidos ou do
+  // botão "Outro contexto") e depois de uma colisão.
+  const recorteTemContexto = /(^|·)\s*contexto:/i.test(recorte);
+  if (dominio && (!recorte || !recorteTemContexto || contextosEvitar.length)) {
+    partes.push(`🎯 DOMÍNIO DE CONTEXTO RESERVADO (cada questão da leva tem o seu, para a prova não repetir exemplos): ambiente o texto-base e a situação-problema em "${dominio}" — cenário concreto, verossímil e brasileiro desse domínio.${dominioAlt ? ` Se o conteúdo não couber nele com naturalidade, use só o alternativo "${dominioAlt}".` : ""} Os demais domínios pertencem a outras questões.${dominiosEvitar.length ? ` ⛔ NÃO use: ${dominiosEvitar.join("; ")}.` : ""}`);
+  }
+  if (contextosEvitar.length) {
+    partes.push(`⛔ CENÁRIOS JÁ USADOS POR OUTRAS QUESTÕES DESTE SIMULADO — PROIBIDO ambientar esta questão em qualquer um deles, mesmo com outros números ou outra empresa do mesmo ramo: ${contextosEvitar.join("; ")}.`);
   }
   if (temasEvitar.length) {
     const lista = temasEvitar.map((t, i) => `${i + 1}. ${t}`).join("\n");
-    partes.push(`⛔ ASSUNTOS JÁ USADOS NESTE SIMULADO — PROIBIDO repetir, reformular ou variar superficialmente qualquer um deles (mesmo fenômeno, mesma estrutura, mesmo processo ou mesmo experimento com outros números NÃO conta como assunto novo):\n${lista}\nEscolha um fenômeno, estrutura, processo ou contexto claramente distinto — outro capítulo do conteúdo${temaDoProfessor ? "" : ", ainda que dentro do mesmo eixo temático"}. O campo "tema" da sua resposta deve deixar essa diferença evidente.`);
+    partes.push(`⛔ ASSUNTOS JÁ USADOS NESTE SIMULADO — PROIBIDO repetir, reformular ou variar superficialmente qualquer um deles (mesmo fenômeno, mesma estrutura, mesmo processo ou mesmo experimento com outros números NÃO conta como assunto novo):\n${lista}\n${subtopico ? `Fique no subtópico reservado acima, mas com outro exemplo, outra estrutura ou outro contexto, claramente distintos.` : `Escolha um fenômeno, estrutura, processo ou contexto claramente distinto — outro capítulo do conteúdo${temaDoProfessor ? "" : ", ainda que dentro do mesmo eixo temático"}.`} O campo "tema" da sua resposta deve deixar essa diferença evidente.`);
   }
   return partes.length ? `\n${partes.join("\n\n")}\n` : "";
 }
@@ -362,6 +397,7 @@ function buildUserPrompt(opts: {
   recurso: string; competenciaNum: number | null; habilidadeCod: string | null;
   instrucoesVisual?: string; gabaritoAlvo?: string | null;
   eixoTematico?: string; temasEvitar?: string[]; recorte?: string;
+  diversidade?: DiversidadeExtras;
 }) {
   // Trecho específico da Matriz (só quando o professor escolheu
   // competência/habilidade) — o caso "automático" está no bloco fixo.
@@ -372,12 +408,12 @@ function buildUserPrompt(opts: {
 
 Área do conhecimento: ${AREA_LABELS[opts.area]}
 Disciplina: ${opts.disciplina}
-Tema/conteúdo solicitado: ${opts.tema || "(o professor não detalhou; escolha um tema representativo da disciplina e do nível de dificuldade pedidos)"}
+Tema/conteúdo solicitado: ${opts.tema || (opts.eixoTematico ? (opts.diversidade && opts.diversidade.subtopico ? "(o professor não detalhou; siga o eixo e o subtópico reservados para esta questão, indicados abaixo)" : "(o professor não detalhou; siga o eixo reservado para esta questão, indicado abaixo)") : "(o professor não detalhou; escolha um tema representativo da disciplina e do nível de dificuldade pedidos)")}
 Nível de dificuldade: ${opts.dificuldade}
 Recurso visual pedido: ${opts.recurso}
 
 Siga integralmente as INSTRUÇÕES FIXAS DESTA CONFIGURAÇÃO que estão no prompt do sistema (regra de fontes, calibração de extensão, instruções do recurso visual, Matriz de Referência e formato de entrega) — elas fazem parte deste pedido.
-${buildDiversidadeTematica(opts.eixoTematico || "", opts.temasEvitar || [], opts.tema, opts.recorte || "")}${opts.instrucoesVisual ? `\nInstrução adicional do professor especificamente para o recurso visual (siga-a com prioridade, desde que compatível com as instruções do recurso visual no prompt do sistema e com a ANCORAGEM DE ASSUNTO logo abaixo): ${opts.instrucoesVisual}\n` : ""}
+${buildDiversidadeTematica(opts.eixoTematico || "", opts.temasEvitar || [], opts.tema, opts.recorte || "", opts.diversidade || {})}${opts.instrucoesVisual ? `\nInstrução adicional do professor especificamente para o recurso visual (siga-a com prioridade, desde que compatível com as instruções do recurso visual no prompt do sistema e com a ANCORAGEM DE ASSUNTO logo abaixo): ${opts.instrucoesVisual}\n` : ""}
 ${buildAncoragemVisual(opts.area, opts.disciplina, opts.tema, opts.recurso)}${matrizEspecifica}
 ${buildGabaritoAlvo(opts.gabaritoAlvo || null)}
 Entregue a questão chamando a ferramenta "entregar_questao", no formato descrito no prompt do sistema.`;
@@ -447,8 +483,15 @@ MATRIZ DE REFERÊNCIA — ${AREA_LABELS[area]} (competências e habilidades ofic
 ${listaHabilidadesDaArea(area)}`;
 }
 
-function buildPlanejamentoPrompt(opts: { area: string; disciplina: string; tema: string; quantidade: number; dificuldades: string[] }): string {
+function buildPlanejamentoPrompt(opts: { area: string; disciplina: string; tema: string; quantidade: number; dificuldades: string[]; dominios?: (string | null)[]; dominiosAlternativos?: (string | null)[] }): string {
   const niveis = opts.dificuldades.length ? opts.dificuldades.map((d, i) => `${i + 1}: ${d}`).join(", ") : "todas Médio";
+  // v73: domínios de contexto reservados pelo app (um por questão, exclusivos),
+  // com um alternativo para quando conteúdo e domínio não casam.
+  const alts = opts.dominiosAlternativos || [];
+  const doms = (opts.dominios || []).map((d, i) => d ? `${i + 1}: ${d}${alts[i] ? ` (ou ${alts[i]})` : ""}` : "").filter(Boolean);
+  const blocoDominios = doms.length
+    ? `\n\nDOMÍNIOS DE CONTEXTO RESERVADOS (um por recorte, na ordem das questões): o "contexto" de cada recorte DEVE se passar dentro do domínio indicado para o seu número — um cenário concreto e verossímil desse domínio, nomeando-o — e nunca no domínio de outro recorte. Quando houver um domínio entre parênteses, é o alternativo: use-o só se o conteúdo não couber com naturalidade no principal. Domínios: ${doms.join("; ")}.`
+    : "";
   return `Planeje ${opts.quantidade} recortes DISTINTOS para um simulado de ${AREA_LABELS[opts.area]}, disciplina ${opts.disciplina}. TODAS as questões são sobre o tema pedido pelo professor: "${opts.tema}". Nível de dificuldade pedido por questão: ${niveis}.
 
 Cada recorte é o plano de UMA questão e tem três partes:
@@ -456,7 +499,7 @@ Cada recorte é o plano de UMA questão e tem três partes:
 - "contexto": a situação-problema concreta e real em que a questão vai se apoiar — do cotidiano, do trabalho, da ciência, da tecnologia, do ambiente ou da sociedade brasileira, no espírito das provas reais do ENEM 2015-2025. Os ${opts.quantidade} contextos devem ser TODOS diferentes: nunca o mesmo aparelho, objeto, cenário ou experimento em dois recortes.
 - "habilidade": o código e o texto de UMA habilidade da Matriz (lista no prompt do sistema) que a questão vai exigir. Varie as habilidades ao longo da lista (cálculo, leitura de gráfico/tabela/esquema, comparação de procedimentos, análise de impacto social ou ambiental, etc.), sem concentrar todas na mesma; a habilidade deve corresponder à operação cognitiva do recorte, não só ao assunto.
 
-Regras: fique DENTRO do tema pedido (nunca migre para outro tema da disciplina); prefira recortes frequentes nas provas reais, ordenados do mais frequente ao menos frequente; recortes de nível "Fácil" pedem contextos diretos e uma etapa de raciocínio, "Difícil" pedem combinar informações ou uma armadilha conceitual fina; escreva em português, de forma específica (nada de "aplicações no cotidiano" — diga qual). Entregue chamando a ferramenta "entregar_recortes", com exatamente ${opts.quantidade} itens, na ordem das questões.`;
+Regras: fique DENTRO do tema pedido (nunca migre para outro tema da disciplina); prefira recortes frequentes nas provas reais, ordenados do mais frequente ao menos frequente; recortes de nível "Fácil" pedem contextos diretos e uma etapa de raciocínio, "Difícil" pedem combinar informações ou uma armadilha conceitual fina; escreva em português, de forma específica (nada de "aplicações no cotidiano" — diga qual).${blocoDominios} Entregue chamando a ferramenta "entregar_recortes", com exatamente ${opts.quantidade} itens, na ordem das questões.`;
 }
 
 const FERRAMENTA_RECORTES = {
@@ -471,7 +514,7 @@ const FERRAMENTA_RECORTES = {
           type: "object",
           properties: {
             conteudo: { type: "string", description: "Subtópico/conceito específico dentro do tema." },
-            contexto: { type: "string", description: "Situação-problema concreta e real, diferente das demais." },
+            contexto: { type: "string", description: "Situação-problema concreta e real, diferente das demais e, quando houver domínio reservado para este índice, dentro dele (nomeando o domínio)." },
             habilidade: { type: "string", description: "Código e texto de uma habilidade da Matriz (ex.: \"H21: ...\")." },
           },
           required: ["conteudo", "contexto", "habilidade"],
@@ -1674,6 +1717,15 @@ function selfTestResponse() {
     notacaoMatHash: fnv1a(NOTACAO_MATEMATICA),
     notacaoEmTodasAsAreas: ["linguagens", "humanas", "natureza", "matematica"].every((a) => buildSystemPrompt(a).includes("NOTAÇÃO MATEMÁTICA") && buildSystemPrompt(a).includes("NOTAÇÃO QUÍMICA")),
     notacaoMatAmostra: normalizarNotacaoMatematica({ textoBase: "Q(t) = Q0 · 2^(-t/T) e 4,6 x 10^9 anos; S = S0 . (1 + i)^t; 288 = 2^5 x 3^2; 5 m2; log10(A/A0)", resolucaoComentada: "Q0 = 200" }, "Matemática").textoBase,
+    // v73: diversidade de exemplos sem custo — o bloco do prompt transmite
+    // subtópico, domínio (com alternativo e proibidos) e cenários a evitar.
+    diversidadeV73: (() => {
+      const b = buildDiversidadeTematica("Conhecimentos numéricos", ["PG e depreciação"], "", "", { subtopico: "porcentagem e juros", dominioContexto: "pesca e aquicultura", dominioAlternativo: "correios e encomendas", dominiosEvitar: ["transporte e logística de cargas", "pesca e aquicultura"], contextosEvitar: ["fábrica de componentes eletrônicos"] });
+      const semRecorte = buildDiversidadeTematica("", [], "Função exponencial", "conteúdo: x · contexto: y", { dominioContexto: "pesca e aquicultura" });
+      const aposColisao = buildDiversidadeTematica("", [], "Função exponencial", "conteúdo: x", { dominioContexto: "pesca e aquicultura", contextosEvitar: ["marcenaria"] });
+      const semContexto = buildDiversidadeTematica("", [], "Função exponencial", "conteúdo: x · habilidade: H21: y", { dominioContexto: "pesca e aquicultura" });
+      return { subtopico: b.includes('subtópico "porcentagem e juros"'), dominio: b.includes('em "pesca e aquicultura"'), alternativo: b.includes('alternativo "correios e encomendas"'), proibidos: /NÃO use: transporte e logística de cargas\./.test(b), cenarios: b.includes("fábrica de componentes eletrônicos"), dominioOmitidoComRecorte: !semRecorte.includes("DOMÍNIO DE CONTEXTO"), dominioVoltaAposColisao: aposColisao.includes("DOMÍNIO DE CONTEXTO") && aposColisao.includes("marcenaria"), dominioComRecorteSemContexto: semContexto.includes("DOMÍNIO DE CONTEXTO"), chars: b.length };
+    })(),
   });
 }
 
@@ -1735,11 +1787,17 @@ Deno.serve(async (req: Request) => {
     const dificuldades: string[] = Array.isArray(body.dificuldades)
       ? body.dificuldades.slice(0, quantidade).map((d: unknown) => ["Fácil", "Médio", "Difícil"].includes(String(d)) ? String(d) : "Médio")
       : [];
+    // v73: domínios de contexto reservados pelo app, um por questão (ou null).
+    const limpaDominios = (v: unknown): (string | null)[] => Array.isArray(v)
+      ? v.slice(0, quantidade).map((d: unknown) => { const t = String(d || "").trim().slice(0, 80); return t || null; })
+      : [];
+    const dominios = limpaDominios(body.dominios);
+    const dominiosAlternativos = limpaDominios(body.dominiosAlternativos);
     const usos: any[] = [];
     try {
       // Sem cache_control de propósito: o prompt é pequeno e a chamada é única.
       const system: SistemaPrompt = [{ type: "text", text: buildSystemPlanejamento(area) }];
-      const userMsg = buildPlanejamentoPrompt({ area, disciplina, tema, quantidade, dificuldades });
+      const userMsg = buildPlanejamentoPrompt({ area, disciplina, tema, quantidade, dificuldades, dominios, dominiosAlternativos });
       let data = await callClaudeForJSON(system, userMsg, false, usos, FERRAMENTA_RECORTES);
       let recortes = normalizarRecortes(data, quantidade);
       if (!recortes.length) {
@@ -1825,9 +1883,19 @@ ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferrame
   const eixoTematico = tema ? "" : (body.eixoTematico || "").toString().trim().slice(0, 300);
   // v64 — recorte planejado (ver planejarRecortes): só com tema digitado.
   const recorte = tema ? (body.recorte || "").toString().trim().slice(0, 600) : "";
-  const temasEvitar: string[] = Array.isArray(body.temasEvitar)
-    ? Array.from(new Set(body.temasEvitar.map((t: unknown) => String(t || "").trim().slice(0, 200)).filter((t: string) => t))).slice(0, 30) as string[]
+  // v73: teto 40 (era 30) e itens de 120 caracteres — ver temasEvitarPara no app.
+  const listaCurta = (v: unknown, maxItens: number, maxChars: number): string[] => Array.isArray(v)
+    ? Array.from(new Set(v.map((t: unknown) => String(t || "").trim().slice(0, maxChars)).filter((t: string) => t))).slice(0, maxItens) as string[]
     : [];
+  const temasEvitar: string[] = listaCurta(body.temasEvitar, 40, 120);
+  // v73 — diversidade de exemplos sem custo (reservas feitas pelo app):
+  // subtópico oficial só sem tema; domínio de contexto em qualquer leva.
+  const subtopico = tema ? "" : (body.subtopico || "").toString().trim().slice(0, 200);
+  const dominioContexto = (body.dominioContexto || "").toString().trim().slice(0, 80);
+  const dominioAlternativo = (body.dominioAlternativo || "").toString().trim().slice(0, 80);
+  const dominiosEvitar: string[] = listaCurta(body.dominiosEvitar, 40, 80);
+  const contextosEvitar: string[] = listaCurta(body.contextosEvitar, 10, 120);
+  const diversidade: DiversidadeExtras = { subtopico, dominioContexto, dominioAlternativo, dominiosEvitar, contextosEvitar };
 
   const capResponse = await checkDailyCap();
   if (capResponse) return capResponse;
@@ -1838,7 +1906,7 @@ ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferrame
       { type: "text", text: buildSystemPrompt(area), cache_control: { type: "ephemeral" } },
       { type: "text", text: buildBlocoFixo({ area, disciplina, recurso, competenciaNum, habilidadeCod }), cache_control: { type: "ephemeral" } },
     ];
-    const userMsg = buildUserPrompt({ area, disciplina, tema, dificuldade, recurso, competenciaNum, habilidadeCod, instrucoesVisual, gabaritoAlvo, eixoTematico, temasEvitar, recorte });
+    const userMsg = buildUserPrompt({ area, disciplina, tema, dificuldade, recurso, competenciaNum, habilidadeCod, instrucoesVisual, gabaritoAlvo, eixoTematico, temasEvitar, recorte, diversidade });
     const webSearch = precisaFontesReais(disciplina) ? webSearchTool(disciplina) : false;
     // v62: a ferramenta de entrega é específica do recurso pedido (com
     // imagem/gráfico/tabela, o campo "visual" é obrigatório e tipado).
@@ -1924,6 +1992,11 @@ ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferrame
     const diversidadeDiag = {
       eixoTematico: eixoTematico || null,
       recorte: recorte || null,
+      subtopico: subtopico || null,
+      dominioContexto: dominioContexto || null,
+      dominioAlternativo: dominioAlternativo || null,
+      dominiosEvitar: dominiosEvitar.length,
+      contextosEvitar: contextosEvitar.length,
       temasEvitar: temasEvitar.length,
       temaEntregue: data && typeof data === "object" ? String(data.tema || "") : "",
       objetoEntregue: data && typeof data === "object" ? String(data.objetoConhecimento || "") : "",
@@ -1931,6 +2004,7 @@ ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferrame
     };
     if (eixoTematico) console.log(`[tema] "${diversidadeDiag.temaEntregue}" · eixo pedido "${eixoTematico}" · objeto entregue "${diversidadeDiag.objetoEntregue}" · respeitado ${diversidadeDiag.eixoRespeitado} · evitar ${temasEvitar.length} assunto(s)`);
     if (recorte) console.log(`[tema] "${diversidadeDiag.temaEntregue}" · recorte reservado "${recorte.slice(0, 160)}" · evitar ${temasEvitar.length} assunto(s)`);
+    if (subtopico || dominioContexto) console.log(`[contexto] "${diversidadeDiag.temaEntregue}"${subtopico ? ` · subtópico "${subtopico}"` : ""}${dominioContexto ? ` · domínio "${dominioContexto}"${dominioAlternativo ? ` (ou "${dominioAlternativo}")` : ""} · ${dominiosEvitar.length} domínio(s) proibido(s)` : ""}${contextosEvitar.length ? ` · ${contextosEvitar.length} cenário(s) a evitar` : ""}`);
     // v63: o registro vai por último, com TODAS as chamadas desta questão
     // (rascunho, refazer visual, retentativas) já somadas em "usos".
     const uso = resumoUso(usos);

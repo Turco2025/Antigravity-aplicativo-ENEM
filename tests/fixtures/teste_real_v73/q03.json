@@ -1,0 +1,35 @@
+{
+  "uso": {"saida": 2371, "chamadas": 1, "custoUSD": 0.0306, "buscasWeb": 0, "cacheLido": 19903, "entradaNova": 1456, "cacheEscrito": 0},
+  "question": {
+    "area": "Matemática e suas Tecnologias",
+    "tema": "Exponenciação — decaimento exponencial na atenuação de sinal de rádio (avaliação de razoabilidade de medição)",
+    "visual": null,
+    "comando": "A leitura registrada pelo técnico, quando comparada ao valor previsto pelo modelo para a mesma distância, permite concluir que essa medição é",
+    "recurso": "nenhum",
+    "gabarito": "D",
+    "textoBase": "Uma rádio comunitária instalou uma antena cuja potência do sinal decresce com a distância segundo o modelo P(d) = P₀ · 2⁻ⁿ, em que P₀ é a potência na saída da antena, d é a distância percorrida, em quilômetros, e n = d/2 representa quantas vezes o sinal perde metade de sua potência a cada 2 km percorridos. A equipe técnica sabe que P₀ = 800 unidades de potência (u.p.) e usa esse modelo para verificar se as leituras feitas em campo, com medidores portáteis, são compatíveis com o comportamento esperado do sinal. Em uma inspeção de rotina, um técnico registrou a leitura de 90 u.p. a uma distância de 6 km da antena e pediu à equipe de engenharia que avaliasse se esse valor é coerente com o modelo adotado pela emissora.\n\nRÁDIO COMUNITÁRIA SERRA VERDE. Relatório técnico de monitoramento de potência de sinal. Arquivo interno de engenharia, 2023 (adaptado).",
+    "disciplina": "Matemática",
+    "habilidade": {"texto": "Avaliar a razoabilidade de um resultado numérico na construção de argumentos sobre afirmações quantitativas.", "codigo": "H4"},
+    "competencia": {"texto": "Construir significados para os números naturais, inteiros, racionais e reais.", "numero": 1},
+    "dificuldade": "Médio",
+    "alternativas": {
+      "A": "razoável, pois 90 u.p. coincide exatamente com o valor previsto pelo modelo para 6 km.",
+      "B": "razoável, pois o modelo prevê que a potência a 6 km seria de aproximadamente 283 u.p., valor próximo de 90 u.p.",
+      "C": "razoável, pois a potência deveria dobrar a cada 2 km, alcançando um valor bem superior a 90 u.p. em 6 km.",
+      "D": "não razoável, pois o modelo prevê que a potência a 6 km seria de 100 u.p., valor distante do registrado.",
+      "E": "não razoável, pois a potência já deveria ter se anulado antes de o sinal atingir 6 km de distância."
+    },
+    "objetoConhecimento": "Conhecimentos numéricos",
+    "resolucaoComentada": "No modelo P(d) = P₀ · 2⁻ⁿ, com n = d/2, para d = 6 km tem-se n = 6/2 = 3. Assim, P(6) = 800 · 2⁻³ = 800 · (1/8) = 100 u.p. Esse é o valor previsto pelo modelo teórico para essa distância. Comparando com a leitura registrada em campo (90 u.p.), percebe-se que os valores são próximos, mas não coincidem: 90 u.p. está abaixo dos 100 u.p. esperados, uma diferença de 10 u.p. (10% do valor previsto). Para avaliar a razoabilidade da medição, o candidato precisa calcular corretamente o valor teórico do modelo e compará-lo ao valor medido, reconhecendo que uma diferença pequena, mas existente, torna a leitura não perfeitamente compatível com o modelo, embora esteja na mesma ordem de grandeza. A alternativa correta reconhece que o valor previsto é 100 u.p. e que a leitura de 90 u.p. se afasta desse valor, tornando a medição não razoável frente ao modelo adotado.",
+    "analiseAlternativas": {
+      "A": {"status": "incorreta", "comentario": "Erro de processo de resolução: o candidato pode ter assumido, sem calcular, que a leitura de campo bateria exatamente com o modelo, sem realizar a substituição de d = 6 na expressão P(d) = P₀ · 2⁻ⁿ. Ao calcular corretamente, obtém-se 100 u.p., não 90 u.p., portanto os valores não coincidem exatamente."},
+      "B": {"status": "incorreta", "comentario": "Erro de processo de resolução: essa alternativa sugere um cálculo equivocado da expressão exponencial, como usar n = d em vez de n = d/2, ou aplicar incorretamente o expoente, chegando a um valor de aproximadamente 283 u.p. que não corresponde ao resultado correto de P(6) = 800 · 2⁻³ = 100 u.p."},
+      "C": {"status": "incorreta", "comentario": "Inversão de causa/efeito ou de polaridade: essa alternativa inverte o sentido do decaimento exponencial, tratando o expoente negativo como se fosse positivo, isto é, supondo que a potência cresce (dobra) em vez de diminuir (reduz à metade) a cada 2 km, o que contraria a própria natureza do modelo de atenuação de sinal."},
+      "D": {"status": "correta", "comentario": "Calculando P(6) = 800 · 2⁻³ = 800 · (1/8) = 100 u.p., valor previsto pelo modelo. Como a leitura registrada foi de 90 u.p., há uma diferença perceptível entre o valor medido e o esperado, o que indica que essa medição não é plenamente compatível com o comportamento previsto pelo modelo de decaimento exponencial adotado pela emissora."},
+      "E": {"status": "incorreta", "comentario": "Senso comum: essa alternativa parte da ideia intuitiva, mas equivocada, de que um decaimento exponencial rapidamente reduziria a potência a zero, ignorando que a função exponencial 2⁻ⁿ nunca atinge o valor zero, apenas se aproxima dele assintoticamente, de modo que aos 6 km o sinal ainda mantém uma potência positiva e mensurável."}
+    }
+  },
+  "visualDiag": {"motivo": "", "refeito": 0, "conforme": true, "promptChars": 0, "entregueTipo": null, "recursoPedido": "nenhum", "tentativasRefazer": []},
+  "notacaoDiag": {"contas": {"alterado": false, "cobertura": true}, "notacao": {"resumo": "", "alterado": false, "tentativas": 0, "residuosAntes": [], "residuosDepois": []}, "residuoFinal": false, "revisorChamado": true, "residuoAntesDoRevisor": false},
+  "diversidadeDiag": {"recorte": "conteúdo: Decaimento exponencial aplicado à atenuação de sinal e meia-vida de processos físicos · contexto: Uma emissora de rádio comunitária estuda como a potência do sinal transmitido diminui exponencialmente com a distância da antena, e a equipe técnica precisa avaliar a razoabilidade de uma medição de intensidade a determinada distância. · habilidade: H4: Avaliar a razoabilidade de um resultado numérico na construção de argumentos sobre afirmações quantitativas.", "subtopico": null, "temasEvitar": 0, "eixoTematico": null, "temaEntregue": "Exponenciação — decaimento exponencial na atenuação de sinal de rádio (avaliação de razoabilidade de medição)", "dominiosEvitar": 0, "eixoRespeitado": null, "objetoEntregue": "Conhecimentos numéricos", "contextosEvitar": 0, "dominioContexto": "rádio e televisão", "dominioAlternativo": "reciclagem e gestão de resíduos"}
+}

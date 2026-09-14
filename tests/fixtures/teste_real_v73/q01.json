@@ -1,0 +1,35 @@
+{
+  "uso": {"saida": 2140, "chamadas": 1, "custoUSD": 0.07404, "buscasWeb": 0, "cacheLido": 0, "entradaNova": 1441, "cacheEscrito": 19903},
+  "question": {
+    "area": "Matemática e suas Tecnologias",
+    "tema": "Exponenciação - crescimento exponencial e escalas de tempo cósmico (potências de 10)",
+    "visual": null,
+    "comando": "Com base no padrão de comparação entre potências de mesma base descrito, a idade da Terra é maior que a idade da estrela recém-formada em um fator que corresponde a",
+    "recurso": "nenhum",
+    "gabarito": "E",
+    "textoBase": "Em um planetário, um painel de divulgação científica apresenta idades de corpos celestes escritas em notação de potência de 10, para facilitar a comparação entre escalas de tempo muito diferentes. O painel traz os seguintes valores aproximados:\n\nidade do universo: 1 × 10¹⁰ anos\nidade da Terra: 1 × 10⁹ anos\nidade de uma estrela recém-formada em uma nebulosa próxima: 1 × 10⁶ anos\n\nUm guia explica aos visitantes que, quando duas idades são escritas como potências de 10 com a mesma base, a diferença entre os expoentes indica quantas vezes uma quantidade é maior que a outra, já que dividir potências de mesma base equivale a subtrair os expoentes.\n\nPLANETÁRIO MUNICIPAL. Guia de exposição: escalas de tempo no universo. Material de divulgação científica, 2023 (adaptado).",
+    "disciplina": "Matemática",
+    "habilidade": {"texto": "Identificar padrões numéricos ou princípios de contagem.", "codigo": "H2"},
+    "competencia": {"texto": "Construir significados para os números naturais, inteiros, racionais e reais.", "numero": 1},
+    "dificuldade": "Médio",
+    "alternativas": {
+      "A": "10³ vezes, pois a razão entre as idades resulta em uma potência cujo expoente é a soma 9 + 6.",
+      "B": "10¹⁵ vezes, pois a comparação entre as duas idades deve multiplicar diretamente os expoentes 9 e 6.",
+      "C": "10⁴ vezes, pois o expoente da razão corresponde à diferença entre o maior expoente do painel e o da estrela.",
+      "D": "10⁶ vezes, pois o valor do expoente da idade da estrela já expressa isoladamente essa proporção.",
+      "E": "10³ vezes, pois a razão entre as idades corresponde a uma potência cujo expoente é a diferença 9 − 6."
+    },
+    "objetoConhecimento": "Conhecimentos numéricos",
+    "resolucaoComentada": "A idade da Terra é 1 × 10⁹ anos e a da estrela recém-formada é 1 × 10⁶ anos. Para comparar quantas vezes uma é maior que a outra, calcula-se a razão entre as duas potências de mesma base: (10⁹)/(10⁶) = 10⁹⁻⁶ = 10³. Isso significa que a Terra é 10³ (ou seja, 1000) vezes mais antiga que a estrela recém-formada. O raciocínio-chave, coerente com o padrão numérico apresentado no texto, é que a divisão de potências de mesma base corresponde à subtração dos expoentes (não à soma nem à multiplicação), e o expoente correto a ser subtraído é o da maior idade menos o da menor idade envolvida na comparação pedida (9 − 6), e não envolvendo o expoente 10 da idade do universo, que não faz parte da comparação solicitada.",
+    "analiseAlternativas": {
+      "A": {"status": "incorreta", "comentario": "Erro de processo: a alternativa troca a operação de subtração de expoentes por uma soma (9 + 6 = 15, mas aqui o valor 10³ é mantido com justificativa errada), revelando confusão sobre qual operação a divisão de potências de mesma base exige. O candidato que soma os expoentes em vez de subtraí-los chega a uma justificativa inconsistente com o valor numérico apresentado."},
+      "B": {"status": "incorreta", "comentario": "Erro de processo: representa a hipótese de que a comparação entre potências de mesma base se faz multiplicando os expoentes, quando na verdade a divisão de potências de mesma base exige subtração dos expoentes, não multiplicação. Esse é um erro comum de generalização indevida de outra propriedade de potências (a da potência de potência) para o contexto errado."},
+      "C": {"status": "incorreta", "comentario": "Reaproveitamento fora de contexto: usa o expoente 10, referente à idade do universo, que não está envolvida na comparação pedida entre Terra e estrela, resultando na subtração equivocada 10 − 6 = 4. Isso caracteriza a aplicação de um dado do texto-base em uma relação diferente da que o comando solicita."},
+      "D": {"status": "incorreta", "comentario": "Leitura parcial: toma isoladamente o expoente da idade da estrela (6) como se ele já representasse, por si só, o fator de comparação entre as duas idades, ignorando que é necessário relacionar os dois expoentes por meio da subtração para obter a razão entre as grandezas."},
+      "E": {"status": "correta", "comentario": "Aplica corretamente a propriedade de divisão de potências de mesma base, subtraindo o expoente da idade da estrela (6) do expoente da idade da Terra (9), obtendo 10⁹⁻⁶ = 10³, que representa exatamente quantas vezes a idade da Terra é maior que a da estrela recém-formada."}
+    }
+  },
+  "visualDiag": {"motivo": "", "refeito": 0, "conforme": true, "promptChars": 0, "entregueTipo": null, "recursoPedido": "nenhum", "tentativasRefazer": []},
+  "notacaoDiag": {"contas": {"alterado": false, "cobertura": true}, "notacao": {"resumo": "", "alterado": false, "tentativas": 0, "residuosAntes": [], "residuosDepois": []}, "residuoFinal": false, "revisorChamado": true, "residuoAntesDoRevisor": false},
+  "diversidadeDiag": {"recorte": "conteúdo: Crescimento exponencial aplicado à datação e escalas de tempo cósmico (potências de 10) · contexto: Em um planetário, uma exposição de divulgação científica apresenta a idade do universo e distâncias estelares usando notação de potências de 10, e o visitante precisa comparar ordens de grandeza entre a idade da Terra e a de uma estrela recém-formada · habilidade: H2: Identificar padrões numéricos ou princípios de contagem.", "subtopico": null, "temasEvitar": 0, "eixoTematico": null, "temaEntregue": "Exponenciação - crescimento exponencial e escalas de tempo cósmico (potências de 10)", "dominiosEvitar": 0, "eixoRespeitado": null, "objetoEntregue": "Conhecimentos numéricos", "contextosEvitar": 0, "dominioContexto": "planetário e divulgação científica", "dominioAlternativo": "museus e patrimônio cultural"}
+}

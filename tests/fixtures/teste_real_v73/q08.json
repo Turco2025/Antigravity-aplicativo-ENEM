@@ -1,0 +1,35 @@
+{
+  "uso": {"saida": 1858, "chamadas": 1, "custoUSD": 0.02542, "buscasWeb": 0, "cacheLido": 19903, "entradaNova": 1431, "cacheEscrito": 0},
+  "question": {
+    "area": "Matemática e suas Tecnologias",
+    "tema": "Exponenciação — equações exponenciais simples e mudança de base em contrato de reimpressão de livros",
+    "visual": null,
+    "comando": "A equação algébrica que permite determinar o menor valor de n para o qual a produção da reimpressão ultrapassa a meta estabelecida é obtida ao se igualar P(n) a 256 000, o que conduz a um valor de n igual a",
+    "recurso": "nenhum",
+    "gabarito": "D",
+    "textoBase": "Uma editora firmou um contrato de tiragem para um livro didático que prevê reimpressões sucessivas. A primeira edição produziu 8 000 exemplares. A cada nova reimpressão, a quantidade de exemplares produzidos naquela reimpressão é o dobro da quantidade produzida na reimpressão imediatamente anterior. Chamando de n o número de reimpressões já realizadas após a primeira edição (n = 1 corresponde à primeira reimpressão, n = 2 à segunda, e assim por diante), a quantidade P de exemplares produzidos na reimpressão de número n é dada por P(n) = 8000 · 2ⁿ. O departamento comercial da editora deseja saber a partir de qual reimpressão a produção dessa única edição ultrapassará 256 000 exemplares.\n\nBRASIL. Sindicato Nacional dos Editores de Livros. Panorama da produção editorial didática. Rio de Janeiro, 2022 (adaptado).",
+    "disciplina": "Matemática",
+    "habilidade": {"texto": "Identificar representações algébricas que expressem a relação entre grandezas.", "codigo": "H19"},
+    "competencia": {"texto": "Modelar e resolver problemas que envolvem variáveis socioeconômicas ou técnico-científicas, usando representações algébricas.", "numero": 5},
+    "dificuldade": "Médio",
+    "alternativas": {
+      "A": "2",
+      "B": "3",
+      "C": "4",
+      "D": "5",
+      "E": "8"
+    },
+    "objetoConhecimento": "Conhecimentos algébricos",
+    "resolucaoComentada": "Para determinar em qual reimpressão a produção atinge exatamente 256 000 exemplares, iguala-se a expressão algébrica ao valor-alvo: 8000 · 2ⁿ = 256 000. Isolando a potência, 2ⁿ = 256 000/8000 = 32. Como 32 é uma potência de 2 (32 = 2⁵), a mudança para base 2 em ambos os lados da igualdade permite comparar diretamente os expoentes: 2ⁿ = 2⁵, logo n = 5. Esse é o valor de n que faz a produção da reimpressão atingir exatamente a meta; assim, é a partir da quinta reimpressão que a produção ultrapassa 256 000 exemplares.",
+    "analiseAlternativas": {
+      "A": {"status": "incorreta", "comentario": "Erro de processo: o candidato calcula corretamente a razão 256 000/8000 = 32, mas comete um engano ao decompor 32 como potência de 2, associando erroneamente esse valor a 2², resultado de uma tentativa apressada de fatoração sem verificar a igualdade final."},
+      "B": {"status": "incorreta", "comentario": "Erro de processo: o estudante pode confundir a base da potência, testando 2ⁿ = 32 com uma decomposição parcial (por exemplo, considerando 8 = 2³ como se fosse o próprio n), sem completar corretamente a igualdade 2ⁿ = 2⁵."},
+      "C": {"status": "incorreta", "comentario": "Verdade parcial: esse valor corresponde a uma etapa intermediária do raciocínio, como se o candidato calculasse 256 000/8000 e depois, por engano, associasse esse quociente a 2⁴ = 16 em vez de 2⁵ = 32, arredondando ou estimando a potência sem conferir o resultado exato."},
+      "D": {"status": "correta", "comentario": "Resolvendo 8000 · 2ⁿ = 256 000, obtém-se 2ⁿ = 32 = 2⁵, e pela comparação de expoentes de mesma base conclui-se que n = 5, valor que efetivamente iguala a produção à meta estabelecida."},
+      "E": {"status": "incorreta", "comentario": "Reaproveitamento fora de contexto: o candidato pode reutilizar o expoente da decomposição de 8000 = 2³ · 1000 ou confundir o número 8 (presente em 8000 e em 2³) como se fosse diretamente o valor de n, sem realizar a divisão e a mudança de base corretamente."}
+    }
+  },
+  "visualDiag": {"motivo": "", "refeito": 0, "conforme": true, "promptChars": 0, "entregueTipo": null, "recursoPedido": "nenhum", "tentativasRefazer": []},
+  "notacaoDiag": {"contas": {"alterado": false, "cobertura": true}, "notacao": {"resumo": "", "alterado": false, "tentativas": 0, "residuosAntes": [], "residuosDepois": []}, "residuoFinal": false, "revisorChamado": true, "residuoAntesDoRevisor": false},
+  "diversidadeDiag": {"recorte": "conteúdo: Equações exponenciais simples e mudança de base na resolução algébrica · contexto: Uma editora de livros didáticos calcula, a partir de um contrato de tiragem, em quantas reimpressões sucessivas a produção total de exemplares (que cresce exponencialmente a cada edição) ultrapassará um número-alvo de vendas. · habilidade: H19: Identificar representações algébricas que expressem a relação entre grandezas.", "subtopico": null, "temasEvitar": 0, "eixoTematico": null, "temaEntregue": "Exponenciação — equações exponenciais simples e mudança de base em contrato de reimpressão de livros", "dominiosEvitar": 0, "eixoRespeitado": null, "objetoEntregue": "Conhecimentos algébricos", "contextosEvitar": 0, "dominioContexto": "livros, editoras e bibliotecas", "dominioAlternativo": "indústria de componentes eletrônicos"}
+}

@@ -1,0 +1,35 @@
+{
+  "uso": {"saida": 1703, "chamadas": 1, "custoUSD": 0.02388, "buscasWeb": 0, "cacheLido": 19903, "entradaNova": 1437, "cacheEscrito": 0},
+  "question": {
+    "area": "Matemática e suas Tecnologias",
+    "tema": "Exponenciação — propriedades das potências de base 2 na conversão de unidades de armazenamento digital",
+    "visual": null,
+    "comando": "A quantidade de fichas de hóspede que cabem exatamente nesse espaço de armazenamento corresponde a",
+    "recurso": "nenhum",
+    "gabarito": "C",
+    "textoBase": "Um hotel está reformulando seu sistema de reservas e precisa dimensionar o servidor que armazenará os dados dos hóspedes. Nesse sistema, as unidades de armazenamento seguem potências de base 2: 1 quilobyte (KB) equivale a 2¹⁰ bytes, e 1 megabyte (MB) equivale a 2¹⁰ quilobytes.\n\nO técnico responsável constatou que cada ficha de hóspede ocupa exatamente 2⁶ bytes. Para calcular quantas fichas cabem em um espaço de 2²⁰ bytes reservado no servidor, ele precisa expressar esse espaço em fichas, usando as propriedades de potência de mesma base para simplificar a divisão entre as quantidades envolvidas, sem recorrer à escrita decimal completa dos números.\n\nDisponível em: https://www.gta.ufrj.br/grad/06_1/binario/index.html. Acesso em: 3 mar. 2024 (adaptado).",
+    "disciplina": "Matemática",
+    "habilidade": {"texto": "Identificar relações entre grandezas e unidades de medida.", "codigo": "H10"},
+    "competencia": {"texto": "Construir noções de grandezas e medidas para a compreensão da realidade e a solução de problemas do cotidiano.", "numero": 3},
+    "dificuldade": "Médio",
+    "alternativas": {
+      "A": "2¹⁰",
+      "B": "2¹³",
+      "C": "2¹⁴",
+      "D": "2²⁶",
+      "E": "2¹²⁰"
+    },
+    "objetoConhecimento": "Conhecimentos numéricos",
+    "resolucaoComentada": "O espaço total disponível é 2²⁰ bytes, e cada ficha ocupa 2⁶ bytes. Para determinar quantas fichas cabem, divide-se o espaço total pelo tamanho de cada ficha: 2²⁰ ÷ 2⁶. Pela propriedade do quociente de potências de mesma base (conserva-se a base e subtraem-se os expoentes), tem-se 2²⁰ ÷ 2⁶ = 2²⁰⁻⁶ = 2¹⁴. Logo, cabem 2¹⁴ fichas no espaço reservado.",
+    "analiseAlternativas": {
+      "A": {"status": "incorreta", "comentario": "Erro de processo: resulta de uma subtração equivocada dos expoentes (20 − 6 tratado incorretamente como 10, possivelmente por engano ao lidar com os algarismos), o que indica falha na aplicação correta da propriedade do quociente de potências de mesma base."},
+      "B": {"status": "incorreta", "comentario": "Erro de processo: corresponde a dividir o expoente do espaço total (20) por um valor próximo relacionado ao tamanho da ficha em vez de subtrair os expoentes, uma confusão entre a operação de divisão de potências e a divisão direta dos próprios expoentes."},
+      "C": {"status": "correta", "comentario": "Aplica corretamente a propriedade do quociente de potências de mesma base, subtraindo os expoentes (20 − 6 = 14) para obter a quantidade de fichas que cabem no espaço reservado."},
+      "D": {"status": "incorreta", "comentario": "Reaproveitamento fora de contexto: o expoente 26 surge de uma soma indevida dos expoentes (20 + 6), como se a operação fosse de produto de potências, quando a situação exige uma divisão entre o espaço total e o tamanho de cada ficha."},
+      "E": {"status": "incorreta", "comentario": "Erro de processo: o expoente 120 resulta de multiplicar os expoentes (20 × 6), confundindo a propriedade do quociente com a propriedade da potência de potência, que não se aplica a essa divisão entre grandezas distintas."}
+    }
+  },
+  "visualDiag": {"motivo": "", "refeito": 0, "conforme": true, "promptChars": 0, "entregueTipo": null, "recursoPedido": "nenhum", "tentativasRefazer": []},
+  "notacaoDiag": {"contas": {"alterado": false, "cobertura": true}, "notacao": {"resumo": "", "alterado": false, "tentativas": 0, "residuosAntes": [], "residuosDepois": []}, "residuoFinal": false, "revisorChamado": true, "residuoAntesDoRevisor": false},
+  "diversidadeDiag": {"recorte": "conteúdo: Propriedades das potências (produto, quociente e potência de potência) na conversão de unidades · contexto: Em um hotel que está reformando seu sistema de reservas, a equipe de TI precisa converter capacidades de armazenamento de dados de hóspedes entre diferentes potências de 2 (bytes, quilobytes, megabytes) para dimensionar o servidor. · habilidade: H10: Identificar relações entre grandezas e unidades de medida.", "subtopico": null, "temasEvitar": 0, "eixoTematico": null, "temaEntregue": "Exponenciação — propriedades das potências de base 2 na conversão de unidades de armazenamento digital", "dominiosEvitar": 0, "eixoRespeitado": null, "objetoEntregue": "Conhecimentos numéricos", "contextosEvitar": 0, "dominioContexto": "turismo e hotelaria", "dominioAlternativo": "cerâmica e olaria"}
+}

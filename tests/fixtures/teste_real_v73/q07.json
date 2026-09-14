@@ -1,0 +1,35 @@
+{
+  "uso": {"saida": 2226, "chamadas": 1, "custoUSD": 0.02912, "buscasWeb": 0, "cacheLido": 19903, "entradaNova": 1439, "cacheEscrito": 0},
+  "question": {
+    "area": "Matemática e suas Tecnologias",
+    "tema": "Exponenciação — depreciação exponencial de veículos e comparação de taxas anuais",
+    "visual": null,
+    "comando": "A comparação entre os dois modelos, após dois anos de uso, permite concluir que o valor de revenda do modelo Y em relação a V₀ é",
+    "recurso": "nenhum",
+    "gabarito": "B",
+    "textoBase": "Uma oficina mecânica presta consultoria a clientes que desejam comprar carro usado e pede ajuda para decidir qual veículo representa o melhor negócio a médio prazo. Dois modelos, de marcas diferentes, custam hoje exatamente o mesmo valor de mercado, V₀. O modelo X perde 20% do seu valor a cada ano que passa, enquanto o modelo Y perde 10% do seu valor a cada ano. Em ambos os casos, a desvalorização incide sempre sobre o valor do ano anterior, de modo que o valor de revenda V, após t anos completos, é dado por V(t) = V₀ · (1 − i)ᵗ, em que i é a taxa anual de depreciação de cada modelo. A oficina orienta o cliente a escolher o carro que, ao final de dois anos de uso, mantiver o maior valor de revenda em relação ao preço pago inicialmente.\n\nOFICINA MODELO. Relatório de avaliação de veículos usados. São Paulo, 2024 (adaptado).",
+    "disciplina": "Matemática",
+    "habilidade": {"texto": "Analisar informações envolvendo a variação de grandezas como recurso para a construção de argumentação.", "codigo": "H17"},
+    "competencia": {"texto": "Construir noções de variação de grandezas para a compreensão da realidade e a solução de problemas do cotidiano.", "numero": 4},
+    "dificuldade": "Médio",
+    "alternativas": {
+      "A": "menor que o do modelo X, pois toda taxa de depreciação menor gera queda de valor mais acentuada ao longo do tempo.",
+      "B": "maior que o do modelo X, pois a taxa de depreciação menor faz o fator multiplicador (1 − i)ᵗ se aproximar mais de 1.",
+      "C": "igual ao do modelo X, pois ambos os veículos partem do mesmo valor inicial V₀ e sofrem depreciação exponencial.",
+      "D": "maior que o do modelo X, pois a diferença entre as taxas anuais de depreciação dobra de tamanho a cada ano decorrido.",
+      "E": "menor que o do modelo X, pois uma taxa de depreciação menor implica uma perda absoluta de valor maior no período."
+    },
+    "objetoConhecimento": "Conhecimentos algébricos",
+    "resolucaoComentada": "Para o modelo X, com i = 20% = 0,20, o valor após 2 anos é V(2) = V₀ · (1 − 0,20)² = V₀ · (0,8)² = 0,64 · V₀, ou seja, 64% do valor inicial. Para o modelo Y, com i = 10% = 0,10, o valor após 2 anos é V(2) = V₀ · (1 − 0,10)² = V₀ · (0,9)² = 0,81 · V₀, ou seja, 81% do valor inicial. Como o fator multiplicador (1 − i) é uma base entre 0 e 1, quanto menor a taxa i de depreciação, mais próxima de 1 fica essa base, e maior é o valor de (1 − i)ᵗ para o mesmo expoente t — logo, menor é a perda percentual acumulada. Assim, o modelo Y, que tem menor taxa anual de depreciação, preserva proporcionalmente mais valor de revenda que o modelo X ao final dos dois anos, confirmando que a menor taxa é o melhor negócio nesse critério.",
+    "analiseAlternativas": {
+      "A": {"status": "incorreta", "comentario": "Inversão de causa/efeito: o candidato troca a relação entre a taxa de depreciação e o fator multiplicador (1 − i)ᵗ, supondo que uma taxa menor produz queda mais acentuada, quando na verdade uma base (1 − i) mais próxima de 1 preserva mais valor, não menos."},
+      "B": {"status": "correta", "comentario": "Compara corretamente os dois fatores multiplicadores exponenciais: (0,9)² = 0,81 é maior que (0,8)² = 0,64, de modo que a menor taxa de depreciação anual do modelo Y resulta em maior valor de revenda relativo ao final de dois anos."},
+      "C": {"status": "incorreta", "comentario": "Verdade parcial: é verdade que ambos partem do mesmo V₀, mas essa igualdade inicial não implica igualdade após a aplicação de taxas de depreciação diferentes ao longo do tempo — o candidato ignora que o expoente t amplifica a diferença entre as bases (1 − i) de cada modelo."},
+      "D": {"status": "incorreta", "comentario": "Erro de processo: o candidato acerta a direção da comparação (Y maior que X), mas fundamenta essa conclusão em uma relação numérica inventada (a diferença entre taxas 'dobrar' a cada ano), quando na realidade a diferença entre os valores decorre da potenciação das bases (1 − i), não de uma progressão da diferença entre as taxas."},
+      "E": {"status": "incorreta", "comentario": "Confusão conceitual: o candidato troca perda percentual por perda absoluta sem calcular nenhuma delas, presumindo de forma equivocada que taxa menor sempre corresponde a maior perda em valores absolutos, o que não decorre da modelagem exponencial apresentada no texto-base."}
+    }
+  },
+  "visualDiag": {"motivo": "", "refeito": 0, "conforme": true, "promptChars": 0, "entregueTipo": null, "recursoPedido": "nenhum", "tentativasRefazer": []},
+  "notacaoDiag": {"contas": {"alterado": false, "cobertura": true}, "notacao": {"resumo": "", "alterado": false, "tentativas": 0, "residuosAntes": [], "residuosDepois": []}, "residuoFinal": false, "revisorChamado": true, "residuoAntesDoRevisor": false},
+  "diversidadeDiag": {"recorte": "conteúdo: Depreciação exponencial de valor (desvalorização de bens) e comparação de taxas · contexto: Uma oficina mecânica avalia a desvalorização exponencial do valor de revenda de veículos usados ao longo dos anos, comparando duas taxas de depreciação anuais para decidir qual carro é melhor negócio de compra. · habilidade: H17: Analisar informações envolvendo a variação de grandezas como recurso para a construção de argumentação.", "subtopico": null, "temasEvitar": 0, "eixoTematico": null, "temaEntregue": "Exponenciação — depreciação exponencial de veículos e comparação de taxas anuais", "dominiosEvitar": 0, "eixoRespeitado": null, "objetoEntregue": "Conhecimentos algébricos", "contextosEvitar": 0, "dominioContexto": "mecânica automotiva", "dominioAlternativo": "cinema e plataformas de streaming"}
+}

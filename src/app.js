@@ -648,6 +648,9 @@ async function abrirSimuladoSalvo(id){
     document.getElementById("formPanel").style.display = "none";
     document.getElementById("resultsPanel").style.display = "block";
     document.getElementById("genProgressWrap").classList.add("hidden");
+    // v17: contextos repetidos também são apontados em simulados arquivados
+    // (só marcação local — nada é gerado ao abrir).
+    try{ auditaDiversidadeContextos(); }catch(e){ /* nunca interrompe */ }
     renderResults();
     updateProgress();
     toast(`Simulado "${data.nome}" aberto.`, "ok");
@@ -1481,19 +1484,289 @@ function embaralha(lista){
   return a;
 }
 
+/* ---------------- v17 — Diversidade de exemplos, sem custo (14/09/2026) ----------------
+
+   Leva real 538678f0 (20 de Matemática, sem tema digitado): questões 2 e 7
+   quase iguais ("fábrica de componentes eletrônicos", linhas A e B, 60%/40%),
+   3 e 4 a mesma depreciação em PG, "transportadora" em 8, 13 e 15,
+   "cooperativa agrícola" em 3, 11 e 18, marcenaria e velas em 14 e 19. Sem
+   tema, só o eixo (objeto de conhecimento) era reservado; dentro do eixo nada
+   distribuía o conteúdo, e nenhum mecanismo cuidava do CENÁRIO. A lista de
+   "assuntos já usados" só via questões já entregues — as 5 da mesma onda
+   paralela não se enxergam.
+
+   Pedido do professor: nenhum exemplo/contexto repetido na leva, SEM custo a
+   mais por questão. Então tudo é decidido aqui, de forma determinística, ANTES
+   da leva (como o gabarito e os eixos), sem chamada nova à IA, sem campo novo
+   na resposta e com o prompt da leva MENOR que antes (a lista de assuntos já
+   usados passa a levar só o que pode colidir; medido em
+   tests/medir_prompt_diversidade.ts):
+   1) SUBTÓPICO OFICIAL — dentro do eixo, cada questão recebe um item do texto
+      do Anexo da Matriz (ex.: "porcentagem e juros", "sequências e
+      progressões"), em rodízio embaralhado. Fecha "duas de probabilidade
+      condicional" e "duas de desvio padrão".
+   2) DOMÍNIO DE CONTEXTO — catálogo curado de cenários do ENEM; cada questão
+      da leva recebe um domínio principal e um alternativo, exclusivos dela.
+      Os domínios das outras vão como proibidos. Fecha a cegueira da onda.
+   3) AUDITORIA por palavras-chave (sem IA) do texto-base contra o catálogo:
+      duas questões no mesmo domínio geram alerta e o botão "Outro contexto",
+      que só gasta se o professor clicar. Nenhuma regeneração automática. */
+
+// Subtópicos oficiais por objeto de conhecimento (texto do Anexo da Matriz de
+// Referência, dividido nos itens que o próprio Anexo separa). Linguagens fica
+// só com o eixo por disciplina: seus objetos são modos de ler textos reais.
+const SUBTOPICOS_OFICIAIS = {
+  // Matemática
+  "Conhecimentos numéricos": ["operações em conjuntos numéricos (naturais, inteiros, racionais e reais)", "desigualdades", "divisibilidade", "fatoração", "razões e proporções", "porcentagem e juros", "relações de dependência entre grandezas", "sequências e progressões", "princípios de contagem"],
+  "Conhecimentos geométricos": ["características das figuras geométricas planas e espaciais", "grandezas, unidades de medida e escalas", "comprimentos, áreas e volumes", "ângulos", "posições de retas", "simetrias de figuras planas ou espaciais", "congruência e semelhança de triângulos", "teorema de Tales", "relações métricas nos triângulos", "circunferências", "trigonometria do ângulo agudo"],
+  "Conhecimentos de estatística e probabilidade": ["representação e análise de dados", "medidas de tendência central (médias, moda e mediana)", "desvios e variância", "noções de probabilidade"],
+  "Conhecimentos algébricos": ["gráficos e funções", "funções algébricas do 1.º e do 2.º graus", "funções polinomiais e racionais", "funções exponenciais e logarítmicas", "equações e inequações", "relações no ciclo trigonométrico e funções trigonométricas"],
+  "Conhecimentos algébricos/geométricos": ["plano cartesiano", "retas", "circunferências", "paralelismo e perpendicularidade", "sistemas de equações"],
+  // Física
+  "Conhecimentos básicos e fundamentais": ["noções de ordem de grandeza e notação científica", "Sistema Internacional de Unidades", "observações e mensurações: representação de grandezas físicas mensuráveis", "ferramentas básicas: gráficos e vetores", "grandezas vetoriais e escalares; operações básicas com vetores"],
+  "O movimento, o equilíbrio e a descoberta de leis físicas": ["grandezas fundamentais da mecânica: tempo, espaço, velocidade e aceleração", "descrição matemática e gráfica do movimento; casos especiais de movimentos", "inércia, sistemas de referência, massa e quantidade de movimento", "leis de Newton e diagramas de forças (atrito, peso, normal e tração)", "conservação da quantidade de movimento e teorema do impulso", "momento de uma força (torque) e equilíbrio estático", "forças nos movimentos circulares e força centrípeta", "hidrostática: empuxo e princípios de Pascal, Arquimedes e Stevin"],
+  "Energia, trabalho e potência": ["conceituação de trabalho, energia e potência", "energia potencial e energia cinética", "conservação da energia mecânica e dissipação de energia", "trabalho da força gravitacional e energia potencial gravitacional", "forças conservativas e dissipativas"],
+  "A Mecânica e o funcionamento do Universo": ["força peso e aceleração gravitacional", "lei da Gravitação Universal", "leis de Kepler e movimentos de corpos celestes", "influência na Terra: marés e variações climáticas", "concepções históricas sobre a origem do universo e sua evolução"],
+  "Fenômenos Elétricos e Magnéticos": ["carga elétrica, corrente elétrica e lei de Coulomb", "campo elétrico, potencial elétrico, linhas de campo, superfícies equipotenciais e blindagem", "capacitores", "lei de Ohm, resistência elétrica, resistividade e efeito Joule", "tensão, corrente, potência e energia; consumo de energia em dispositivos elétricos", "circuitos elétricos simples, correntes contínua e alternada, medidores elétricos", "campo magnético, ímãs permanentes e campo magnético terrestre"],
+  "Oscilações, ondas, óptica e radiação": ["feixes e frentes de ondas; reflexão e refração", "óptica geométrica: lentes e espelhos; formação de imagens", "instrumentos ópticos simples", "fenômenos ondulatórios: pulsos e ondas; período, frequência e ciclo", "propagação: velocidade, frequência e comprimento de onda; ondas em diferentes meios"],
+  "O calor e os fenômenos térmicos": ["conceitos de calor e temperatura; escalas termométricas", "transferência de calor, equilíbrio térmico e condução", "capacidade calorífica e calor específico", "dilatação térmica", "mudanças de estado físico e calor latente", "comportamento de gases ideais", "máquinas térmicas, ciclo de Carnot e leis da Termodinâmica", "fenômenos térmicos do cotidiano e fenômenos climáticos ligados ao ciclo da água"],
+  // Química
+  "Transformações Químicas": ["evidências e interpretação de transformações químicas", "sistemas gasosos: leis dos gases, equação geral dos gases ideais, princípio de Avogadro, massa e volume molar", "teoria cinética dos gases e misturas gasosas", "modelos atômicos: Dalton, Thomson, Rutherford e Rutherford-Bohr", "número atômico, número de massa, isótopos e massa atômica", "elementos químicos e Tabela Periódica", "reações químicas"],
+  "Representação das transformações químicas": ["fórmulas químicas", "balanceamento de equações químicas", "leis ponderais das reações químicas", "determinação de fórmulas químicas", "grandezas químicas: massa, volume, mol, massa molar e constante de Avogadro", "cálculos estequiométricos"],
+  "Materiais, suas propriedades e usos": ["propriedades e estados físicos dos materiais; mudanças de estado", "misturas: tipos e métodos de separação", "metais e ligas metálicas (ferro, cobre e alumínio); ligação metálica", "substâncias iônicas (cloreto, carbonato, nitrato e sulfato) e ligação iônica", "substâncias moleculares e ligação covalente", "polaridade de moléculas e forças intermoleculares", "relação entre estrutura, propriedade e aplicação das substâncias"],
+  "Água": ["ocorrência e importância da água; ligação, estrutura e propriedades", "soluções verdadeiras, coloidais e suspensões; solubilidade", "concentração das soluções", "aspectos qualitativos das propriedades coligativas", "ácidos, bases, sais e óxidos: definição, classificação, formulação e nomenclatura", "propriedades de ácidos e bases: indicadores, condutibilidade elétrica, reação com metais e neutralização"],
+  "Transformações Químicas e Energia": ["calor de reação, entalpia e equações termoquímicas", "lei de Hess", "reações de oxirredução e potenciais padrão de redução", "pilhas", "eletrólise e leis de Faraday", "radioatividade: desintegração radioativa e radioisótopos", "reações de fissão e fusão nuclear"],
+  "Dinâmica das Transformações Químicas": ["velocidade de reação", "energia de ativação", "fatores que alteram a velocidade: concentração, pressão e temperatura", "catalisadores"],
+  "Transformação Química e Equilíbrio": ["caracterização do sistema em equilíbrio e constante de equilíbrio", "produto iônico da água, equilíbrio ácido-base e pH", "solubilidade dos sais e hidrólise", "fatores que alteram o sistema em equilíbrio", "aplicação da velocidade e do equilíbrio químico no cotidiano"],
+  "Compostos de Carbono": ["características gerais dos compostos orgânicos e principais funções orgânicas", "estrutura e propriedades de hidrocarbonetos", "compostos orgânicos oxigenados; fermentação", "compostos orgânicos nitrogenados", "macromoléculas e polímeros naturais e sintéticos (amido, celulose, borracha, polietileno, PVC, náilon)", "óleos e gorduras, sabões e detergentes sintéticos", "proteínas e enzimas"],
+  "Relações da Química com as Tecnologias, a Sociedade e o Meio Ambiente": ["química na agricultura e na saúde", "química nos alimentos", "indústria química: obtenção e uso de cloro, hidróxido de sódio, ácido sulfúrico, amônia e ácido nítrico", "mineração e metalurgia", "poluição e tratamento de água", "poluição atmosférica", "contaminação e proteção do ambiente"],
+  "Energias Químicas no Cotidiano": ["petróleo, gás natural e carvão", "madeira, hulha e biomassa", "biocombustíveis", "impactos ambientais de combustíveis fósseis", "energia nuclear, lixo atômico e suas vantagens e desvantagens"],
+  // Biologia
+  "Moléculas, células e tecidos": ["estrutura e fisiologia celular: membrana, citoplasma e núcleo", "divisão celular", "metabolismo energético: fotossíntese e respiração", "codificação da informação genética e síntese proteica", "diferenciação celular e principais tecidos animais e vegetais", "células-tronco, clonagem e tecnologia do DNA recombinante", "aplicações de biotecnologia: alimentos, fármacos, paternidade, investigação criminal e identificação", "aspectos éticos do desenvolvimento biotecnológico; biotecnologia e sustentabilidade"],
+  "Hereditariedade e diversidade da vida": ["princípios básicos da transmissão de características hereditárias", "concepções pré-mendelianas sobre a hereditariedade", "aspectos genéticos do funcionamento do corpo humano; antígenos e anticorpos", "grupos sanguíneos, transplantes e doenças autoimunes", "neoplasias e a influência de fatores ambientais", "mutações gênicas e cromossômicas; aconselhamento genético", "fundamentos genéticos da evolução e da diversidade biológica"],
+  "Identidade dos seres vivos": ["níveis de organização dos seres vivos", "vírus, procariontes e eucariontes; autótrofos e heterótrofos", "sistemática e as grandes linhas da evolução dos seres vivos", "tipos de ciclo de vida", "padrões anatômicos e fisiológicos e adaptação a diferentes ambientes", "embriologia, anatomia e fisiologia humana", "evolução humana"],
+  "Ecologia e ciências ambientais": ["ecossistemas, fatores bióticos e abióticos, habitat e nicho ecológico", "comunidade biológica: teia alimentar, sucessão e comunidade clímax", "dinâmica de populações e interações entre os seres vivos", "ciclos biogeoquímicos e fluxo de energia no ecossistema", "biogeografia e biomas brasileiros", "exploração e uso de recursos naturais", "problemas ambientais: mudanças climáticas, efeito estufa, desmatamento, erosão e poluição", "conservação e recuperação de ecossistemas; conservação da biodiversidade", "tecnologias ambientais, saneamento básico e legislação ambiental"],
+  "Origem e evolução da vida": ["a biologia como ciência: história, métodos, técnicas e experimentação", "hipóteses sobre a origem do Universo, da Terra e dos seres vivos", "explicações pré-darwinistas para a modificação das espécies", "a teoria evolutiva de Charles Darwin", "teoria sintética da evolução", "seleção artificial e seu impacto sobre ambientes naturais e populações humanas"],
+  "Qualidade de vida das populações humanas": ["aspectos biológicos da pobreza e do desenvolvimento humano; indicadores sociais, ambientais e econômicos", "principais doenças que afetam a população brasileira: caracterização, prevenção e profilaxia", "noções de primeiros socorros", "doenças sexualmente transmissíveis", "uso indevido de drogas, gravidez na adolescência e obesidade", "violência e segurança pública", "exercícios físicos e vida saudável", "aspectos biológicos do desenvolvimento sustentável; legislação e cidadania"],
+  // Ciências Humanas
+  "Diversidade cultural, conflitos e vida em sociedade": ["cultura material e imaterial; patrimônio e diversidade cultural no Brasil", "a Conquista da América; conflitos entre europeus e indígenas na América colonial", "a escravidão e as formas de resistência indígena e africana na América", "história cultural dos povos africanos; a luta dos negros no Brasil e o negro na formação da sociedade brasileira", "história dos povos indígenas e a formação sociocultural brasileira", "movimentos culturais no mundo ocidental e seus impactos na vida política e social"],
+  "Formas de organização social, movimentos sociais, pensamento político e ação do Estado": ["cidadania e democracia na Antiguidade; Estado e direitos do cidadão a partir da Idade Moderna; democracia direta, indireta e representativa", "revoluções sociais e políticas na Europa Moderna", "formação territorial brasileira; as regiões brasileiras; políticas de reordenamento territorial", "as lutas pela independência política das colônias da América", "grupos sociais em conflito no Brasil imperial e a construção da nação", "o pensamento liberal na sociedade capitalista e seus críticos nos séculos XIX e XX", "políticas de colonização, migração, imigração e emigração no Brasil nos séculos XIX e XX", "os grandes processos revolucionários do século XX: Revolução Bolchevique, Chinesa e Cubana", "geopolítica e conflitos entre os séculos XIX e XX: Imperialismo, Guerras Mundiais e Guerra Fria", "sistemas totalitários na Europa do século XX e ditaduras na América Latina (Estado Novo)", "conflitos político-culturais pós-Guerra Fria e organismos multilaterais", "a luta pela conquista de direitos: direitos civis, humanos, políticos e sociais; políticas afirmativas", "vida urbana: redes e hierarquia nas cidades, pobreza e segregação espacial"],
+  "Características e transformações das estruturas produtivas": ["formas de organização da produção: escravismo antigo, feudalismo, capitalismo e socialismo", "economia agroexportadora brasileira: açúcar, mineração colonial, café e borracha", "Revolução Industrial, sistema de fábrica e formação do espaço urbano-industrial", "transformações na estrutura produtiva no século XX: fordismo, toyotismo e novas técnicas de produção", "a industrialização brasileira, a urbanização e as transformações sociais e trabalhistas", "a globalização e as novas tecnologias de telecomunicação e suas consequências", "espaços agrários: modernização da agricultura, agronegócio, agricultura familiar e lutas no campo; relação campo-cidade"],
+  "Os domínios naturais e a relação do ser humano com o ambiente": ["relação homem-natureza e apropriação dos recursos naturais ao longo do tempo; impacto ambiental das atividades econômicas no Brasil", "recursos minerais e energéticos: exploração e impactos", "recursos hídricos; bacias hidrográficas e seus aproveitamentos", "questões ambientais contemporâneas: mudança climática, ilhas de calor, efeito estufa, chuva ácida e camada de ozônio", "a nova ordem ambiental internacional; unidades de conservação, corredores ecológicos e zoneamento ecológico-econômico", "origem e evolução do conceito de sustentabilidade", "estrutura interna da Terra; solo e relevo; agentes internos e externos modeladores do relevo", "atmosfera e classificação climática; características climáticas do território brasileiro", "os grandes domínios da vegetação no Brasil e no mundo"],
+  "Representação espacial": ["projeções cartográficas", "leitura de mapas temáticos, físicos e políticos", "tecnologias modernas aplicadas à cartografia"],
+};
+
+/* Catálogo de domínios de contexto (cenários de situação-problema frequentes
+   nas provas reais do ENEM). "n" é o nome que vai ao prompt; "k" são radicais
+   de palavras-chave (sem acento, minúsculas) usados só pela auditoria local
+   para reconhecer o cenário no texto-base — específicos de propósito (nada de
+   "empresa", "loja", "cidade"), para não acusar semelhança falsa. */
+const DOMINIOS_CONTEXTO = [
+  { n: "transporte e logística de cargas", k: ["transportadora", "frete", "caminhao", "caminhoes", "armazem", "centro de distribuicao", "empresa de logistica"] },
+  { n: "agricultura familiar e cooperativas rurais", k: ["cooperativa agricola", "cooperativa de agricultores", "agricultor", "lavoura", "plantio", "colheita", "trator", "safra", "fazenda"] },
+  { n: "marcenaria e fabricação de móveis", k: ["marcenar", "marceneir", "carpint", "loja de moveis", "fabrica de moveis", "serraria"] },
+  { n: "indústria de componentes eletrônicos", k: ["componente eletronic", "componentes eletronic", "fabrica de resistores", "placa de circuito", "linha de montagem"] },
+  { n: "arquitetura de interiores e revestimentos", k: ["arquitetura de interiores", "ladrilh", "azulej", "piso decorativo", "pisos decorativos", "pisos de salas", "revestir pisos"] },
+  { n: "saúde pública e vacinação", k: ["vacina", "posto de saude", "campanha de vacinacao", "epidemi", "agente de saude", "vigilancia sanitaria"] },
+  { n: "hospital e exames médicos", k: ["hospital", "paciente", "exame medico", "medicina nuclear", "radiofarmac", "clinica medica"] },
+  { n: "laboratório de microbiologia", k: ["microbiolog", "colonia de bacterias", "cultura de bacterias", "populacao de bacterias", "numero de bacterias", "cultura de celulas", "placa de petri"] },
+  { n: "atletismo e treinos esportivos", k: ["atleta", "atletismo", "velocista", "maratona", "tecnico de atletismo", "prova de 100", "corrida de rua"] },
+  { n: "futebol e estádios", k: ["futebol", "estadio de futebol", "estadios de futebol", "torcida", "campeonato de futebol", "jogadores de"] },
+  { n: "música, bandas e shows", k: ["musica", "banda de musica", "instrumento musical", "violao", "show musical", "festival de musica"] },
+  { n: "cinema e plataformas de streaming", k: ["cinema", "filme", "streaming", "sala de cinema", "serie de tv"] },
+  { n: "comércio varejista e promoções", k: ["liquidacao", "promocao.", "promocoes", "desconto de", "varejo", "loja de eletro", "vendedor"] },
+  { n: "consumo de energia elétrica residencial", k: ["conta de luz", "kwh", "consumo de energia", "tarifa de energia", "chuveiro eletrico", "conta de energia"] },
+  { n: "energia solar fotovoltaica", k: ["painel solar", "paineis solares", "energia solar", "fotovoltaic", "placa solar"] },
+  { n: "reciclagem e gestão de resíduos", k: ["reciclag", "residuos solidos", "coleta seletiva", "aterro sanitario", "lixo"] },
+  { n: "clima e meteorologia", k: ["meteorolog", "precipitacao", "previsao do tempo", "estacao meteorologica", "pluviometr"] },
+  { n: "astronomia e exploração espacial", k: ["telescopio", "astronom", "satelite artificial", "estacao espacial", "sonda espacial", "foguete"] },
+  { n: "culinária e alimentação", k: ["receita culinaria", "cozinheir", "restaurante", "padaria", "confeitar"] },
+  { n: "indústria têxtil e confecção", k: ["costur", "confeccao", "textil", "malharia", "alfaiat", "tecido de algodao"] },
+  { n: "turismo e hotelaria", k: ["turista", "hotel", "pousada", "turismo", "hospede"] },
+  { n: "museus e patrimônio cultural", k: ["museu", "patrimonio historico", "acervo do museu", "obra de arte"] },
+  { n: "construção civil", k: ["pedreiro", "construcao civil", "concreto armado", "laje", "tijolo", "cimento", "canteiro de obras"] },
+  { n: "finanças pessoais e crédito", k: ["orcamento familiar", "poupanca", "financiamento", "emprestimo", "amortizacao", "juros", "prestacao", "prestacoes"] },
+  { n: "telecomunicações e internet", k: ["operadora de telefonia", "plano de dados", "telefonia", "banda larga", "wi-fi", "provedor de internet"] },
+  { n: "pesquisas de opinião e eleições", k: ["eleicao", "eleitor", "pesquisa de opiniao", "urna", "votos"] },
+  { n: "demografia e censo", k: ["ibge", "censo", "demograf", "taxa de natalidade", "piramide etaria", "crescimento populacional", "populacao de uma cidade", "populacao do municipio"] },
+  { n: "mineração e metalurgia", k: ["mineracao", "minerio", "mina de", "metalurg", "siderurg"] },
+  { n: "pesca e aquicultura", k: ["pesca", "pescador", "aquicultura", "tanque de peixes", "piscicultura"] },
+  { n: "jogos de tabuleiro e sorteios", k: ["jogo de tabuleiro", "dois dados", "dado de seis faces", "baralho", "sorteio", "roleta", "loteria"] },
+  { n: "trânsito e segurança viária", k: ["transito", "radar", "semaforo", "rodovia", "motorista", "limite de velocidade"] },
+  { n: "escola e vida estudantil", k: ["escolar", "escola tecnica", "colegio", "alunos", "turma", "sala de aula"] },
+  { n: "saneamento e abastecimento de água", k: ["saneamento", "caixa d'agua", "caixas d'agua", "reservatorio", "abastecimento de agua", "rede de esgoto", "esgoto.", "estacao de tratamento"] },
+  { n: "aviação e aeroportos", k: ["aviao", "avioes", "aeroporto", "aeronave", "companhia aerea", "voo comercial"] },
+  { n: "ferrovias e metrô", k: ["trem", "trens", "ferrovia", "vagao", "vagoes", "estacao de metro", "linha de metro", "trilhos da"] },
+  { n: "farmácia e medicamentos", k: ["farmacia", "medicamento", "remedio", "comprimidos", "bula", "dosagem"] },
+  { n: "cartografia e mapas", k: ["mapa rodoviario", "cartograf", "gps", "coordenadas geograficas", "atlas", "escala do mapa"] },
+  { n: "fotografia e impressão", k: ["fotografia", "camera fotografica", "impressora", "pixel"] },
+  { n: "teatro e dança", k: ["teatro", "peca teatral", "danca", "palco", "espetaculo", "coreografia"] },
+  { n: "livros, editoras e bibliotecas", k: ["biblioteca", "livraria", "tiragem", "feira do livro", "exemplares do livro"] },
+  { n: "petróleo e combustíveis", k: ["petroleo", "gasolina", "etanol", "posto de combustivel", "refinaria", "postos de gasolina"] },
+  { n: "informática e centros de dados", k: ["computador", "software", "centro de dados", "programador", "servidores de"] },
+  { n: "redes sociais e aplicativos", k: ["rede social", "redes sociais", "aplicativo de", "seguidores", "postagem", "curtidas"] },
+  { n: "trabalho e previdência", k: ["trabalhador", "aposentadoria", "inss", "previdencia", "jornada de trabalho", "carteira de trabalho", "folha de pagamento", "reajuste salarial"] },
+  { n: "feiras livres e artesanato", k: ["feira livre", "feirante", "artesa", "artesanato", "barraca", "velas aromaticas"] },
+  { n: "mecânica automotiva", k: ["oficina mecanica", "pneu", "pecas automotivas", "automovel", "mecanico de"] },
+  { n: "academia e exercícios físicos", k: ["academia", "musculacao", "exercicio fisico", "esteira ergometrica"] },
+  { n: "ciclismo e bicicletas", k: ["bicicleta", "ciclist", "ciclovia", "pedal"] },
+  { n: "correios e encomendas", k: ["correios", "agencia dos correios", "carteiro", "encomendas postais"] },
+  { n: "parques e praças públicas", k: ["parque municipal", "praca", "quadra poliesportiva", "playground", "parque da cidade"] },
+  { n: "zoológicos e aquários", k: ["zoologico", "aquario", "tratador"] },
+  { n: "supermercado e rotulagem de produtos", k: ["supermercado", "rotulo", "rotulagem", "gondola", "rede de supermercados"] },
+  { n: "rádio e televisão", k: ["emissora", "estacao de radio", "televisao", "audiencia", "programa de tv"] },
+  { n: "festas e eventos", k: ["festa", "festa de casamento", "aniversario", "buffet", "convidados"] },
+  { n: "cerâmica e olaria", k: ["ceramica", "olaria", "argila", "oleiro", "vasos de ceramica"] },
+  { n: "indústria de sucos e bebidas", k: ["fabrica de sucos", "fabrica de bebidas", "engarraf", "refrigerante"] },
+  { n: "apicultura e produção de mel", k: ["abelha", "colmeia", "apicult", "mel"] },
+  { n: "pecuária e laticínios", k: ["gado", "laticinio", "vaca", "queijo", "pastagem", "producao de leite"] },
+  { n: "florestas e reflorestamento", k: ["floresta", "reflorestamento", "mudas", "desmatamento", "arvores"] },
+  { n: "planetário e divulgação científica", k: ["planetario municipal", "cupula do planetario", "visita ao planetario", "planetarios", "cupula", "divulgacao cientifica"] },
+  { n: "radioatividade e datação", k: ["meia vida", "radioativ", "decaimento", "datacao por carbono", "carbono 14", "radioisotopo"] },
+];
+
+// Áreas em que o domínio de contexto é RESERVADO (o texto-base é uma
+// situação-problema construída). Em Humanas e Linguagens o texto-base costuma
+// ser fonte real (documento, charge, poema): ali só valem o subtópico/eixo e
+// a lista de contextos já usados — nada de forçar cenário sobre um texto real.
+const AREAS_COM_DOMINIO = ["matematica", "natureza"];
+
+function planejaSubtopicos(){
+  state.questions.forEach(q => { q.subtopico = null; });
+  const porEixo = new Map();
+  state.questions.forEach(q => {
+    if((q.tema || "").trim() || !q.eixoTematico) return;
+    if(!porEixo.has(q.eixoTematico)) porEixo.set(q.eixoTematico, []);
+    porEixo.get(q.eixoTematico).push(q);
+  });
+  porEixo.forEach((qs, eixo) => {
+    const lista = SUBTOPICOS_OFICIAIS[eixo];
+    if(!Array.isArray(lista) || !lista.length) return;
+    const ordem = embaralha(lista);
+    // Mais questões que subtópicos (ex.: "Representação espacial", 3 itens, com
+    // 4 questões): as que sobram ficam só com o eixo — nunca um subtópico repetido,
+    // que contradiria a lista de assuntos já usados.
+    qs.forEach((q, i) => { q.subtopico = i < ordem.length ? ordem[i] : null; });
+  });
+}
+
+function planejaDominios(){
+  state.questions.forEach(q => { q.dominio = null; q.dominioAlt = null; q.contextosEvitar = null; q.colisaoContexto = null; });
+  if(!AREAS_COM_DOMINIO.includes(state.area) || state.questions.length < 2) return;
+  const ordem = embaralha(DOMINIOS_CONTEXTO.map(d => d.n));
+  const n = state.questions.length;
+  // Principais: os n primeiros nomes; alternativos: os n seguintes. O catálogo
+  // tem 60 nomes e a leva no máximo 20 (setQty), logo 2n ≤ 40 < 60 e todos são
+  // distintos. Se um dia n passar de 30, a questão fica sem alternativo (null)
+  // em vez de receber o principal de outra.
+  state.questions.forEach((q, i) => {
+    q.dominio = ordem[i];
+    q.dominioAlt = (n + i) < ordem.length ? ordem[n + i] : null;
+  });
+}
+
+// Domínios principais reservados pelas OUTRAS questões da leva. (Os
+// alternativos delas não precisam ir: esta questão só pode usar o próprio
+// principal ou o próprio alternativo, e todos são distintos por construção.)
+function dominiosEvitarPara(q){
+  const lista = [];
+  state.questions.forEach(o => {
+    if(o === q || !o.dominio) return;
+    if(!lista.includes(o.dominio) && o.dominio !== q.dominio && o.dominio !== q.dominioAlt) lista.push(o.dominio);
+  });
+  return lista;
+}
+
+function normalizaTextoBusca(s){
+  // apóstrofo tipográfico → ', hífen → espaço ("caixa-d'água" = "caixa d'agua")
+  return String(s || "").toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").replace(/[\u2019\u02bc]/g, "'").replace(/-/g, " ").replace(/\s+/g, " ");
+}
+function escapeRegExp(s){ return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+// Palavra-chave curta (até 5 letras, sem espaço) ou terminada em "." só vale
+// como palavra inteira (com plural): "mel" não bate em "melhor", "trem" em
+// "tremendo", "planeta." em "planetário", "esgoto." em "esgotou". As demais
+// valem como radical no início da palavra ("marcenar" → marcenaria, marceneiro).
+function dominioBateNoTexto(texto, dom){
+  return dom.k.some(k => {
+    const inteira = /\.$/.test(k) || (!/\s/.test(k) && k.length <= 5);
+    const kn = escapeRegExp(normalizaTextoBusca(k.replace(/\.$/, "")));
+    return new RegExp("(^|[^a-z])" + kn + (inteira ? "(s|es)?([^a-z]|$)" : "")).test(texto);
+  });
+}
+function textoDeBuscaDaQuestao(q){
+  const d = q && q.data;
+  if(!d) return null;
+  return normalizaTextoBusca([d.textoBase, d.comando, d.visual && d.visual.descricao].filter(Boolean).join(" "));
+}
+
+/* Auditoria de contexto (sem IA): para cada domínio do catálogo, quais
+   questões entregues se passam nele; duas ou mais no mesmo domínio = par
+   repetido. Marca em cada questão envolvida (menos a primeira do par) a
+   colisão, para a auditoria local do cartão e o botão "Outro contexto".
+   Devolve os pares em texto para o console/toast. */
+function auditaDiversidadeContextos(){
+  const qs = state.questions;
+  qs.forEach(q => { q.colisaoContexto = null; });
+  const pares = [];
+  // Só onde o texto-base é situação-problema construída (Matemática e Natureza):
+  // em Humanas e Linguagens duas questões "sobre eleições" não são exemplo repetido.
+  if(!AREAS_COM_DOMINIO.includes(state.area)) return pares;
+  const textos = qs.map(textoDeBuscaDaQuestao);
+  const vistos = new Set();
+  DOMINIOS_CONTEXTO.forEach(dom => {
+    const idx = [];
+    textos.forEach((t, i) => { if(t && dominioBateNoTexto(t, dom)) idx.push(i); });
+    if(idx.length < 2) return;
+    for(let a = 0; a < idx.length; a++){
+      for(let b = a + 1; b < idx.length; b++){
+        const chave = idx[a] + "-" + idx[b];
+        if(vistos.has(chave)) continue;
+        vistos.add(chave);
+        pares.push(`${idx[a] + 1} e ${idx[b] + 1} (${dom.n})`);
+        const q = qs[idx[b]];
+        q.colisaoContexto = (q.colisaoContexto ? q.colisaoContexto + "; " : "") + `${dom.n} — igual à questão ${idx[a] + 1}`;
+      }
+    }
+  });
+  return pares;
+}
+
+// Botão "Outro contexto": domínio novo, ainda não usado por ninguém na leva,
+// e os cenários da colisão como proibidos. Só então regenera (custo de UMA
+// questão, e só porque o professor pediu).
+async function regenerarComOutroContexto(q){
+  const usados = new Set();
+  state.questions.forEach(o => { [o.dominio, o.dominioAlt].forEach(d => { if(d) usados.add(d); }); });
+  const livres = embaralha(DOMINIOS_CONTEXTO.map(d => d.n).filter(n => !usados.has(n)));
+  const colididos = String(q.colisaoContexto || "").split(";").map(s => s.split(" — ")[0].trim()).filter(Boolean);
+  if(livres.length && AREAS_COM_DOMINIO.includes(state.area)){
+    q.dominio = livres[0];
+    q.dominioAlt = livres[1] || null;
+  }
+  q.contextosEvitar = Array.from(new Set([...(q.contextosEvitar || []), ...colididos])).slice(0, 10);
+  // Leva com tema: o recorte planejado dizia "contexto: X" com o cenário que
+  // colidiu — fica só o conteúdo (e a habilidade); o cenário novo vem do
+  // domínio, que o backend passa a incluir quando há contextos a evitar.
+  if(q.recorte) q.recorte = q.recorte.split(" · ").filter(p => !/^contexto:/i.test(p)).join(" · ") || null;
+  q.colisaoContexto = null;
+  await regenerarQuestaoEArquivar(q);
+}
+
 /* Reserva um eixo temático (objeto de conhecimento oficial) para cada questão
    SEM tema digitado, em rodízio sobre a lista embaralhada: com 10 questões de
    Biologia (6 objetos), nenhum objeto recebe mais de 2 questões — e, dentro do
-   mesmo objeto, "temasEvitar" (abaixo) impede o mesmo recorte. Questões com
-   tema do professor não recebem eixo: o tema dele manda. */
+   mesmo objeto, o SUBTÓPICO oficial (v17) e "temasEvitar" (abaixo) impedem o
+   mesmo recorte. Questões com tema do professor não recebem eixo: o tema dele
+   manda. */
 function planejaEixosTematicos(){
   const objetos = objetosDaDisciplina(state.area, state.disciplina);
   const semTema = state.questions.filter(q => !(q.tema || "").trim());
   semTema.forEach(q => { q.eixoTematico = null; });
   state.questions.filter(q => (q.tema || "").trim()).forEach(q => { q.eixoTematico = null; });
-  if(!objetos.length || semTema.length < 2) return; // uma questão só não tem com o que repetir
+  if(!objetos.length || semTema.length < 2){ planejaSubtopicos(); return; } // uma questão só não tem com o que repetir
   const ordem = embaralha(objetos);
   semTema.forEach((q, i) => { q.eixoTematico = ordem[i % ordem.length]; });
+  planejaSubtopicos();
 }
 
 // Assuntos já usados na leva, do ponto de vista da questão q: os temas
@@ -1507,18 +1780,37 @@ function temasEvitarPara(q){
   // as questões têm o mesmo tema digitado, ele apareceria aqui vindo das
   // outras, e o pedido ficaria contraditório ("tema: X" / "proibido: X").
   const proprioTema = (q.tema || "").trim().toLowerCase();
+  // v17: com subtópico e domínio reservados, só as questões do MESMO eixo
+  // podem colidir em conteúdo — os temas entregues das demais saem da lista
+  // (é o que mantém o prompt do mesmo tamanho de antes, ou menor). Os temas
+  // digitados pelo professor nas outras questões continuam sempre.
+  const soMesmoEixo = !!(q.subtopico && q.eixoTematico);
+  // Idem com tema digitado e recorte planejado: as questões do mesmo grupo
+  // já receberam recortes distintos do planejamento — seus temas entregues
+  // não precisam viajar de novo; os de outros grupos continuam indo.
+  const comRecorte = !!(q.recorte && proprioTema);
   state.questions.forEach(o => {
     if(o === q) return;
-    const candidatos = [(o.tema || "").trim(), (o.data && o.data.tema || "").trim()];
+    const mesmoGrupo = comRecorte && (o.tema || "").trim().toLowerCase() === proprioTema && !!o.recorte;
+    const entregue = (mesmoGrupo || (soMesmoEixo && o.eixoTematico !== q.eixoTematico)) ? "" : (o.data && o.data.tema || "").trim();
+    // Tema digitado em outra questão que coincide com o subtópico reservado desta
+    // ("Função exponencial" × "funções exponenciais e logarítmicas") não pode virar
+    // "proibido" — seria contradição direta com a reserva.
+    const digitado = (o.tema || "").trim();
+    const candidatos = [(q.subtopico && temaCoincideComSubtopico(digitado, q.subtopico)) ? "" : digitado, entregue];
     candidatos.forEach(t => {
       if(!t) return;
       const chave = t.toLowerCase();
       if(chave === proprioTema) return;
       if(vistos.has(chave)) return;
-      vistos.add(chave); lista.push(t.slice(0, 200));
+      vistos.add(chave); lista.push(t.slice(0, 120));
     });
   });
-  return lista.slice(0, 30);
+  // v17: teto 40 (era 30). Com 20 questões, tema digitado + tema entregue das
+  // outras 19 chegam a 38 itens — o teto de 30 cortava as últimas questões da
+  // leva da lista das primeiras. Itens de 120 caracteres (eram 200), para o
+  // prompt não crescer.
+  return lista.slice(0, 40);
 }
 
 /* Recortes planejados para questões com o MESMO tema digitado (backend v64).
@@ -1529,6 +1821,17 @@ function temasEvitarPara(q){
    questões com o mesmo tema, UMA chamada curta ao backend devolve um recorte
    por questão (conteúdo + contexto real + habilidade), decidido ANTES da
    leva, como o gabarito e os eixos. Custa centavos por leva. */
+// O contexto planejado cita o domínio reservado? Vale uma palavra significativa
+// do nome do domínio (≥ 5 letras, singularizada) ou uma palavra-chave do catálogo.
+function contextoRespeitaDominio(contexto, dominio){
+  if(!dominio) return false;
+  const t = normalizaTextoBusca(contexto);
+  const dom = DOMINIOS_CONTEXTO.find(d => d.n === dominio);
+  if(dom && dominioBateNoTexto(t, dom)) return true;
+  const palavras = normalizaTextoBusca(dominio).split(/[^a-z]+/).filter(w => w.length >= 5).map(radicalPalavra);
+  const tw = new Set(t.split(/[^a-z]+/).map(radicalPalavra));
+  return palavras.some(w => tw.has(w));
+}
 function recorteTexto(r, q){
   const partes = [];
   if(r && r.conteudo) partes.push(`conteúdo: ${String(r.conteudo).trim()}`);
@@ -1562,6 +1865,11 @@ async function planejaRecortesPorTema(){
           tema: g.tema,
           quantidade: g.qs.length,
           dificuldades: g.qs.map(q => q.dificuldade),
+          // v17: o contexto de cada recorte tem de cair no domínio reservado da
+          // questão (ver planejaDominios) — principal ou, se não couber com
+          // naturalidade, o alternativo. Nenhuma chamada a mais.
+          dominios: g.qs.map(q => q.dominio || null),
+          dominiosAlternativos: g.qs.map(q => q.dominioAlt || null),
         }),
       });
       let payload = {};
@@ -1570,7 +1878,26 @@ async function planejaRecortesPorTema(){
         throw new Error(payload.error || `Erro HTTP ${resp.status} ao planejar os recortes.`);
       }
       if(payload.uso) somaUso(payload.uso);
-      g.qs.forEach((q, i) => { q.recorte = recorteTexto(payload.recortes[i % payload.recortes.length], q); });
+      // v17: (1) se o planejador devolveu MENOS recortes que questões, as que
+      // sobram ficam sem recorte (o domínio reservado assume) — antes recebiam
+      // o recorte de outra questão, contexto repetido garantido; (2) o contexto
+      // de cada recorte só é aproveitado se cair no domínio reservado (principal
+      // ou alternativo) e não repetir o de outro recorte do grupo — senão sai do
+      // recorte e o backend ambienta pelo domínio.
+      const contextosAceitos = [];
+      g.qs.forEach((q, i) => {
+        const r = i < payload.recortes.length ? Object.assign({}, payload.recortes[i]) : null;
+        if(r && r.contexto){
+          const ctx = String(r.contexto);
+          const noDominio = !q.dominio || contextoRespeitaDominio(ctx, q.dominio) || contextoRespeitaDominio(ctx, q.dominioAlt);
+          const repetido = contextosAceitos.some(c => temasParecidos(c, ctx));
+          if(!noDominio || repetido){
+            console.warn(`[tema] recorte ${state.questions.indexOf(q) + 1}: contexto do planejador descartado (${!noDominio ? "fora do domínio reservado" : "repete outro recorte"}): "${ctx.slice(0, 120)}"`);
+            delete r.contexto;
+          } else contextosAceitos.push(ctx);
+        }
+        q.recorte = r ? recorteTexto(r, q) : null;
+      });
       console.log(`[tema] recortes planejados para "${g.tema}" (${payload.recortes.length}/${g.qs.length}): ` + g.qs.map(q => `${state.questions.indexOf(q) + 1}: ${q.recorte}`).join(" · "));
     }catch(e){
       // O planejamento é um refinamento: se falhar, a leva segue sem ele.
@@ -1586,8 +1913,46 @@ const PALAVRAS_VAZIAS = new Set(["a","o","e","de","da","do","das","dos","em","na
 function palavrasChaveTema(t){
   return new Set(String(t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(p => p.length > 3 && !PALAVRAS_VAZIAS.has(p)));
 }
-function temasParecidos(a, b){
+// Radical simples de uma palavra (plural → singular): funções→funcao,
+// exponenciais→exponencial, papéis→papel, jovens→jovem, casas→casa.
+function radicalPalavra(w){
+  return String(w).replace(/oes$/, "ao").replace(/ais$/, "al").replace(/eis$/, "el").replace(/ois$/, "ol").replace(/ns$/, "m").replace(/(r|z)es$/, "$1").replace(/s$/, "");
+}
+// O tema digitado pelo professor coincide com o subtópico oficial reservado?
+// ("Função exponencial" × "funções exponenciais e logarítmicas" → sim.) Metade
+// ou mais das palavras significativas do tema, singularizadas, estão no subtópico.
+function temaCoincideComSubtopico(tema, subtopico){
+  const A = Array.from(palavrasChaveTema(tema)).map(radicalPalavra);
+  const B = new Set(Array.from(palavrasChaveTema(subtopico)).map(radicalPalavra));
+  if(!A.length || !B.size) return false;
+  const comum = A.filter(w => B.has(w)).length;
+  return comum / A.length >= 0.5;
+}
+// Duas palavras da mesma família? Mesmo radical, ou os 6 primeiros caracteres
+// iguais: "exponenciacao" ~ "exponencial" ~ "exponenciais", "logaritmo" ~
+// "logaritmica", "porcentagem" ~ "porcentual", "trigonometria" ~ "trigonometricas".
+function mesmaFamiliaDePalavra(a, b){
+  const ra = radicalPalavra(a), rb = radicalPalavra(b);
+  if(ra === rb) return true;
+  return ra.length >= 6 && rb.length >= 6 && ra.slice(0, 6) === rb.slice(0, 6);
+}
+function temasParecidos(a, b, ignorar){
   const A = palavrasChaveTema(a), B = palavrasChaveTema(b);
+  // v17: numa leva com o mesmo tema digitado ("Exponenciação"), as palavras do
+  // tema do professor aparecem em todos os temas entregues e não medem
+  // semelhança entre eles — saem da conta. Vale para a família da palavra:
+  // com "Exponenciação" digitado, "exponencial"/"exponenciais" também saem
+  // (no teste real, "exponencial" aparecia em 9 dos 10 temas entregues e fez
+  // duas questões de exemplos diferentes serem apontadas como parecidas).
+  if(ignorar && ignorar.size){
+    // Dois temas entregues idênticos ("Exponenciação" × "Exponenciação",
+    // "Exponencial" × "Exponenciais") são parecidos por definição, mesmo que
+    // sobre só a palavra do professor.
+    const rA = new Set(Array.from(A).map(radicalPalavra)), rB = new Set(Array.from(B).map(radicalPalavra));
+    if(rA.size && rA.size === rB.size && Array.from(rA).every(w => rB.has(w))) return true;
+    const ig = Array.from(ignorar);
+    [A, B].forEach(S => { Array.from(S).forEach(w => { if(ig.some(g => mesmaFamiliaDePalavra(w, g))) S.delete(w); }); });
+  }
   if(!A.size || !B.size) return false;
   let comum = 0; A.forEach(p => { if(B.has(p)) comum++; });
   return comum / Math.min(A.size, B.size) >= 0.5;
@@ -1600,7 +1965,9 @@ function auditaDiversidadeTemas(){
   for(let i = 0; i < qs.length; i++){
     for(let j = i + 1; j < qs.length; j++){
       const ta = qs[i].data && qs[i].data.tema, tb = qs[j].data && qs[j].data.tema;
-      if(ta && tb && temasParecidos(ta, tb)) pares.push(`${i + 1} e ${j + 1} ("${ta}" / "${tb}")`);
+      const ti = (qs[i].tema || "").trim().toLowerCase(), tj = (qs[j].tema || "").trim().toLowerCase();
+      const ignorar = (ti && ti === tj) ? palavrasChaveTema(ti) : null;
+      if(ta && tb && temasParecidos(ta, tb, ignorar)) pares.push(`${i + 1} e ${j + 1} ("${ta}" / "${tb}")`);
     }
   }
   return pares;
@@ -1613,14 +1980,65 @@ function gabaritoAlvoDe(idx){
   return state.gabaritoPlan[idx] || null;
 }
 
+/* Leitura do número que abre uma alternativa — ou null quando ela não começa
+   por um número. Lê o que as questões de fato trazem: moeda na frente
+   ("R$ 10.648,00"), separador de milhar por ponto ou espaço ("10.648,00",
+   "1 000", "2.500.000"), vírgula ou ponto decimal ("2,5", "0,001", "3.14159"),
+   fração ("1/3"), potência em sobrescrito ("10³ vezes" → 1000, "2¹⁴" → 16384,
+   "10⁻³" → 0,001), notação científica ("3,5 × 10⁴" → 35000) e escala em
+   palavras ("1,2 milhão", "900 mil"). Uma expressão algébrica ("2ⁿ", "2⁻ᵗ",
+   "2ˣ", "2 × 10ⁿ") não é número — devolve null, para a leva não ser acusada de
+   "fora de ordem" por causa de letras no expoente. Devolve também o "resto"
+   (o que vem depois do número, normalizado): duas alternativas só têm "o mesmo
+   valor" quando valor E resto coincidem ("2,5 km" × "2.5 km"), e não quando o
+   número é só um prefixo ("1/6" × "1/5" já são distintos pela fração; "10 m/s"
+   × "10 km/h" pelo resto).
+   No teste real de v17 as alternativas "R$ 10.648,00" / "R$ 10.400,00" saíram
+   fora da ordem crescente e a auditoria não viu, porque só lia textos que
+   começavam pelo dígito. */
+const SOBRESCRITOS_DIGITOS = { "\u2070": "0", "\u00b9": "1", "\u00b2": "2", "\u00b3": "3", "\u2074": "4", "\u2075": "5", "\u2076": "6", "\u2077": "7", "\u2078": "8", "\u2079": "9", "\u207b": "-" };
+// Expoente em sobrescrito: dígitos, com ou sem o sinal ⁻ na frente.
+const RE_EXPOENTE_SOBRESCRITO = "([\u2070\u00b9\u00b2\u00b3\u2074-\u2079]+|\u207b[\u2070\u00b9\u00b2\u00b3\u2074-\u2079]+)";
+function lerNumeroAlternativa(texto){
+  let t = String(texto || "").normalize("NFC").trim()
+    .replace(/^(R\$|US\$|U\$|\u20ac|\u00a3|\$)\s*/i, "")
+    .replace(/^[\u2212\u2013]\s?/, "-");
+  // "0,001"/"0.001" é decimal, nunca milhar; fora disso, ponto ou espaço seguido
+  // de exatamente 3 dígitos é separador de milhar.
+  if(!/^-?0[.,]\d/.test(t)) t = t.replace(/(\d)[.\s](?=\d{3}(?!\d))/g, "$1");
+  const cient = new RegExp("^(-?\\d+(?:[.,]\\d+)?)\\s*[\u00d7xX\u00b7]\\s*10" + RE_EXPOENTE_SOBRESCRITO).exec(t);
+  const m = cient || new RegExp("^(-?\\d+(?:[.,]\\d+)?)" + RE_EXPOENTE_SOBRESCRITO + "?").exec(t);
+  if(!m) return null;
+  let resto = t.slice(m[0].length);
+  // Letra em sobrescrito colada ao número ("2ⁿ", "2⁻ᵗ", "2ˣ") ou "2 × 10ⁿ": expressão, não valor.
+  if(/^[\u2070-\u209f\u02b0-\u02ff\u1d2c-\u1d6b\u2c7c]/.test(resto)) return null;
+  if(/^\s*[\u00d7xX\u00b7]\s*10[\u2070-\u209f]/.test(resto)) return null;
+  let valor = parseFloat(m[1].replace(",", "."));
+  if(m[2]){
+    const exp = parseInt(Array.from(m[2]).map(c => SOBRESCRITOS_DIGITOS[c]).join(""), 10);
+    valor = cient ? valor * Math.pow(10, exp) : Math.pow(valor, exp);
+  }else{
+    const frac = /^\s*\/\s*(\d+)(?!\d*[.,]\d)/.exec(resto);
+    if(frac && parseInt(frac[1], 10) !== 0){ valor = valor / parseInt(frac[1], 10); resto = resto.slice(frac[0].length); }
+  }
+  // "1,2 milhão" e "900 mil" precisam ficar na mesma escala para a ordem valer.
+  const escala = /^\s*(mil|milhao|milhoes|bilhao|bilhoes|trilhao|trilhoes)\b/i.exec(resto.normalize("NFD").replace(/[\u0300-\u036f]/g, ""));
+  if(escala){
+    valor *= /^mil$/i.test(escala[1]) ? 1e3 : /^milh/i.test(escala[1]) ? 1e6 : /^bilh/i.test(escala[1]) ? 1e9 : 1e12;
+    resto = resto.slice(escala[0].length);
+  }
+  if(!isFinite(valor)) return null;
+  return { valor, resto: resto.trim().replace(/[\s.;,]+$/, "").toLowerCase() };
+}
+function valorNumericoAlternativa(texto){
+  const r = lerNumeroAlternativa(texto);
+  return r ? r.valor : null;
+}
+
 // As alternativas numéricas têm de ficar em ordem crescente (Guia do Inep). Se
 // estiverem, trocar duas de lugar quebraria a regra — nesse caso não mexemos.
 function alternativasNumericasOrdenadas(alts){
-  const vals = GABARITO_LETRAS.map(L => {
-    const t = String((alts && alts[L]) || "").trim().replace(/\./g, "").replace(",", ".");
-    const m = /^-?\d+(\.\d+)?/.exec(t);
-    return m ? parseFloat(m[0]) : null;
-  });
+  const vals = GABARITO_LETRAS.map(L => valorNumericoAlternativa(alts && alts[L]));
   if(vals.some(v => v === null)) return false;
   for(let i = 1; i < vals.length; i++){ if(vals[i] < vals[i - 1]) return false; }
   return true;
@@ -1722,6 +2140,18 @@ async function generateQuestion(q){
           // há 2+ questões com o mesmo tema (ver planejaRecortesPorTema).
           recorte: (q.tema || "").trim() ? (q.recorte || null) : null,
           temasEvitar: temasEvitarPara(q),
+          // v17 — diversidade sem custo: subtópico oficial dentro do eixo (só
+          // sem tema), domínio de contexto reservado (principal e alternativo),
+          // domínios reservados pelas outras questões e contextos a evitar
+          // (só depois de uma colisão apontada pela auditoria).
+          subtopico: (q.tema || "").trim() ? null : (q.subtopico || null),
+          dominioContexto: q.dominio || null,
+          dominioAlternativo: q.dominioAlt || null,
+          // A lista dos domínios das outras questões só vai depois de uma colisão
+          // (botão "Outro contexto"): a reserva é exclusiva por construção e a
+          // lista custaria ~600 caracteres em cada questão.
+          dominiosEvitar: Array.isArray(q.contextosEvitar) && q.contextosEvitar.length ? dominiosEvitarPara(q) : [],
+          contextosEvitar: Array.isArray(q.contextosEvitar) ? q.contextosEvitar : [],
         }),
       });
       rawBody = await resp.text();
@@ -1766,7 +2196,7 @@ async function generateQuestion(q){
     q.diag = [];
     if(payload.diversidadeDiag){
       const dd = payload.diversidadeDiag;
-      diagImagem(q, "tema", `entregue "${dd.temaEntregue}" · objeto "${dd.objetoEntregue}"` + (dd.eixoTematico ? ` · eixo reservado "${dd.eixoTematico}" (${dd.eixoRespeitado ? "respeitado" : "NÃO respeitado"})` : dd.recorte ? ` · recorte reservado "${String(dd.recorte).slice(0, 160)}"` : " · sem eixo nem recorte (leva de 1 ou temas distintos)") + ` · ${dd.temasEvitar} assunto(s) a evitar`);
+      diagImagem(q, "tema", `entregue "${dd.temaEntregue}" · objeto "${dd.objetoEntregue}"` + (dd.eixoTematico ? ` · eixo reservado "${dd.eixoTematico}" (${dd.eixoRespeitado ? "respeitado" : "NÃO respeitado"})` : dd.recorte ? ` · recorte reservado "${String(dd.recorte).slice(0, 160)}"` : " · sem eixo nem recorte (leva de 1 ou temas distintos)") + (dd.subtopico ? ` · subtópico "${dd.subtopico}"` : "") + (dd.dominioContexto ? ` · domínio "${dd.dominioContexto}"${dd.dominioAlternativo ? ` (ou "${dd.dominioAlternativo}")` : ""} · ${dd.dominiosEvitar || 0} domínio(s) proibido(s)` : "") + ` · ${dd.temasEvitar} assunto(s) a evitar`);
     }
     const vd = payload.visualDiag || null;
     diagImagem(q, "questao_recebida", `recurso pedido "${q.recurso}" · visual entregue ${q.data.visual ? `tipo "${q.data.visual.tipo}"` : "nulo"} · promptImagem ${imgTextoDeEspecificacao(q.data.visual && q.data.visual.promptImagem, 0).length} chars` + (vd ? ` · backend: refeito ${vd.refeito}x, conforme ${vd.conforme}${vd.motivo ? ", " + vd.motivo : ""}` : "") + (q.data.visualPendente ? ` · visualPendente: ${q.data.visualPendente.motivo}` : ""));
@@ -1926,6 +2356,17 @@ function resumoImagens(){
 async function regenerarQuestaoEArquivar(q){
   await generateQuestion(q);
   await aguardaImagensPendentes();
+  // v17: a auditoria de contextos da leva é refeita (a questão nova pode ter
+  // resolvido — ou criado — uma repetição). Só os cartões cuja marcação mudou
+  // são redesenhados — renderResults() inteiro descartaria um "Editar" aberto
+  // em outra questão e recriaria todos os gráficos.
+  try{
+    const antes = state.questions.map(o => o.colisaoContexto || null);
+    auditaDiversidadeContextos();
+    // A própria questão sempre é redesenhada: seu cartão foi montado antes da
+    // auditoria e precisa mostrar (ou tirar) o aviso e o botão.
+    state.questions.forEach((o, i) => { if(o === q || (o.colisaoContexto || null) !== antes[i]) updateQuestionCard(o, i); });
+  }catch(e){ /* nunca interrompe */ }
   if(simuladoAbertoId) await salvarSimuladoAtual();
 }
 
@@ -1987,7 +2428,12 @@ async function generateAll(){
   // questões saem em paralelo, então a distribuição tem de ser decidida antes).
   planejaEixosTematicos();
   if(state.questions.some(q => q.eixoTematico)){
-    console.log("[tema] eixos reservados: " + state.questions.map((q, i) => `${i + 1}: ${q.eixoTematico || "(tema do professor)"}`).join(" · "));
+    console.log("[tema] eixos reservados: " + state.questions.map((q, i) => `${i + 1}: ${q.eixoTematico || "(tema do professor)"}${q.subtopico ? " › " + q.subtopico : ""}`).join(" · "));
+  }
+  // v17: domínios de contexto reservados ANTES de gerar (mesma lógica).
+  planejaDominios();
+  if(state.questions.some(q => q.dominio)){
+    console.log("[contexto] domínios reservados: " + state.questions.map((q, i) => `${i + 1}: ${q.dominio}${q.dominioAlt ? " (ou " + q.dominioAlt + ")" : ""}`).join(" · "));
   }
   renderResults();
   updateProgress();
@@ -2034,6 +2480,14 @@ async function generateAll(){
   if(repetidos.length){
     console.warn("[tema] temas parecidos na leva:", repetidos);
     toast(`Atenção: questões com assunto parecido — ${repetidos.slice(0, 3).join("; ")}${repetidos.length > 3 ? "; …" : ""}. Use "Regenerar" em uma delas para diversificar.`, "err");
+  }
+  // v17: contextos repetidos (auditoria local, sem IA). Só avisa e oferece o
+  // botão "Outro contexto" no cartão — nada é regenerado sozinho.
+  const contextosRepetidos = auditaDiversidadeContextos();
+  if(contextosRepetidos.length){
+    console.warn("[contexto] contextos repetidos na leva:", contextosRepetidos);
+    toast(`Atenção: questões no mesmo contexto — ${contextosRepetidos.slice(0, 3).join("; ")}${contextosRepetidos.length > 3 ? "; …" : ""}. Use "Outro contexto" na questão marcada.`, "err");
+    renderResults();
   }
   const problemas = auditaGabaritos();
   if(problemas.length){
@@ -2806,10 +3260,29 @@ function auditaQuestaoLocal(q){
   const vistos = new Map();
   L.forEach(k => { if(txt(k)){ const n = norm(k); if(vistos.has(n)) aviso("Alternativas " + vistos.get(n) + " e " + k + " são iguais."); else vistos.set(n, k); } });
 
-  // Numéricas em ordem crescente
-  const nums = L.map(k => { const m = /^-?\d+(?:[.,]\d+)?/.exec(txt(k).replace(/\.(?=\d{3}\b)/g, "")); return m ? parseFloat(m[0].replace(",", ".")) : null; });
-  if(nums.every(v => v !== null)){
-    for(let i = 1; i < nums.length; i++){ if(nums[i] < nums[i-1]){ aviso("Alternativas numéricas fora da ordem crescente (Guia do Inep)."); break; } }
+  // Numéricas em ordem crescente e sem valor repetido (mesmo leitor da rede de
+  // segurança do gabarito: moeda, milhar, sobrescrito, notação científica).
+  const lidos = L.map(k => lerNumeroAlternativa(txt(k)));
+  if(lidos.every(v => v !== null)){
+    // Lista híbrida ("10³ vezes, pois a razão…"): valor + justificativa. Aí a ordem
+    // numérica não é exigível (o valor pode repetir de propósito); o que importa
+    // é o valor repetido com justificativas diferentes — alternativas dependentes.
+    const hibrida = lidos.some(v => v.resto.length > 40);
+    if(!hibrida){
+      for(let i = 1; i < lidos.length; i++){ if(lidos[i].valor < lidos[i-1].valor){ aviso("Alternativas numéricas fora da ordem crescente (Guia do Inep)."); break; } }
+    }
+    // Mesmo valor E mesmo complemento ("2,5 km" × "2.5 km"): alternativas dependentes.
+    // Só o número igual não basta ("1/6" × "1/5", "10 m/s" × "10 km/h" são distintas).
+    const porValor = new Map(), porChave = new Map();
+    L.forEach((k, i) => {
+      const chave = lidos[i].valor + "|" + lidos[i].resto;
+      if(porChave.has(chave)){ if(norm(porChave.get(chave)) !== norm(k)) aviso("Alternativas " + porChave.get(chave) + " e " + k + " têm o mesmo valor numérico."); }
+      else{
+        porChave.set(chave, k);
+        if(hibrida && porValor.has(lidos[i].valor)) info("Alternativas " + porValor.get(lidos[i].valor) + " e " + k + " repetem o mesmo valor (" + txt(k).split(/\s/)[0] + ") com justificativas diferentes — confira se são independentes.");
+        if(!porValor.has(lidos[i].valor)) porValor.set(lidos[i].valor, k);
+      }
+    });
   }
 
   // Análise das alternativas: exatamente uma "correta", e é o gabarito
@@ -2837,9 +3310,15 @@ function auditaQuestaoLocal(q){
     }
   }
 
+  // v17: contexto repetido na leva (auditoria por palavras-chave, sem IA)
+  if(q.colisaoContexto) aviso("Contexto repetido na leva: " + q.colisaoContexto + '. Use "Outro contexto".');
+
   // Texto-base: citação de fonte
   const tb = String(d.textoBase || "");
-  if(tb && !/(dispon[ií]vel em|adaptad[oa]|acesso em|\bIn:|\b(1[89]|20)\d{2}\b)/i.test(tb)) info("Texto-base sem citação de fonte aparente (autor/obra/ano).");
+  // "FONTE: elaborado para fins didáticos" (no começo de uma linha) é a situação
+  // hipotética que o Guia admite — conta como fonte. No meio do texto ("foi
+  // elaborado pelo governo", "a principal fonte: o petróleo") não conta.
+  if(tb && !/(dispon[ií]vel em|adaptad[oa]s?\b|acesso em|\bIn:|(^|\n)\s*fontes?\s*[:–—-]|(^|\n)\s*(texto\s+)?elaborad[oa]s?\s+(para|pel[oa]|com|a partir)|\b(1[89]|20)\d{2}\b)/i.test(tb)) info("Texto-base sem citação de fonte aparente (autor/obra/ano).");
 
   // Recurso visual
   const v = d.visual;
@@ -2918,6 +3397,9 @@ function renderQuestionCard(q, idx){
   const actions = head.querySelector(".qcard-actions");
   actions.appendChild(iconBtn("🔄", "Regenerar", () => regenerarQuestaoEArquivar(q)));
   actions.appendChild(iconBtn("✏️", "Editar", () => toggleEdit(el, q, idx)));
+  if(q.data && q.colisaoContexto){
+    actions.appendChild(iconBtn("🎭", "Outro contexto (regenera esta questão em um cenário ainda não usado na leva)", () => regenerarComOutroContexto(q)));
+  }
   if(q.data){
     actions.appendChild(iconBtn("⬇️", "Mais fácil", () => { q.dificuldade = "Fácil"; regenerarQuestaoEArquivar(q); }));
     actions.appendChild(iconBtn("⬆️", "Mais difícil", () => { q.dificuldade = "Difícil"; regenerarQuestaoEArquivar(q); }));
