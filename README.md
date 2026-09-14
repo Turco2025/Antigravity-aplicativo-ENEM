@@ -78,6 +78,14 @@ Expoentes, índices, raízes e sinais chegam ao estudante prontos — x², 2⁴,
    fim do radicando. O núcleo JavaScript é o
    MESMO no backend e em `src/app.js` (entre as marcas `NM-INÍCIO`/`NM-FIM`), testado pelos
    mesmos casos: `node nm/testa_core_node.js` e `deno run --allow-read nm/testa_core_deno.ts`.
+2b. **Revisor de notação (LLM, `review-math-question` v5)**: quando ainda sobra `^`, `_`, "sqrt(",
+   letra x como × ou índice com várias letras (`V_cone`) depois da rede determinística — caso
+   típico: expoente com fração, `2^(t/3)` —, a `generate-question` (v72, todas as áreas) chama o
+   revisor, que reescreve SÓ os campos afetados com as regras oficiais de notação (variável
+   auxiliar: `2ⁿ, em que n = t/3`), renormaliza e aceita campo a campo (só se reduziu os resíduos,
+   preservou todos os números e o tamanho), até 2 tentativas, dentro do orçamento de tempo da
+   função. Em Matemática o mesmo revisor continua auditando as contas com lastro nos livros.
+   O prompt de geração também ganhou uma autoverificação obrigatória de `^`/`_` antes de entregar.
 3. **App**: a normalização roda em toda questão que entra (backend, arquivo, refazer visual) —
    simulados arquivados antes da v16 saem corrigidos ao reabrir. A verificação por questão
    aponta `^`, `_`, LaTeX e letra x como × em todas as áreas. A fonte do PDF ganhou as letras

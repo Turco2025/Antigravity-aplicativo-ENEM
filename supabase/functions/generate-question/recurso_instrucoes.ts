@@ -164,6 +164,15 @@ Q(t) = Q₀ · 2⁻ⁿ, em que n = t/T · 288 = 2⁵ · 3² · √288 = 12√2 �
 S = S₀ · (1 + i)ᵗ · (1 + i)⁰ = 1 · aₙ = a₁ + (n − 1) · r · f(x) = 2ˣ · log₁₀ 1000 = 3
 V = π · r² · h = 3 · 3² · 8 = 216 m³ · 1,5 × 10⁻³ mol/L · 9,8 m/s²
 
+ANTES DE ENTREGAR — AUTOVERIFICAÇÃO OBRIGATÓRIA DE NOTAÇÃO: releia CADA campo
+(texto-base, comando, as cinco alternativas, resolução, os cinco comentários,
+títulos e células) procurando o caractere ^ , o caractere _ e a palavra "sqrt".
+Se encontrar QUALQUER um, a questão está errada e não pode ser entregue assim:
+reescreva o trecho — expoente numérico → sobrescrito (2⁴); expoente com fração ou
+expressão → variável auxiliar declarada (2ⁿ, em que n = t/3), usada em todas as
+ocorrências; índice → subscrito (Q₀) ou número (V₁, V₂) — e só então entregue.
+Uma questão com ^ ou _ em qualquer campo é rejeitada.
+
 JSON: os caracteres Unicode entram diretamente, em UTF-8, nunca como código ou
 sequência de escape.`;
 

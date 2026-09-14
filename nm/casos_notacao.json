@@ -365,6 +365,11 @@
       "n": "radical: grupo sem fechar fica",
       "in": "√(x + 1 e mais",
       "igual": true
+    },
+    {
+      "n": "radical: √ab e √xy² cobrem as letras; √2x só o número",
+      "in": "√ab e √xy² e √2x",
+      "out": "√a̅b̅ e √x̅y̅²̅ e √2̅x"
     }
   ],
   "questao": [

@@ -23,7 +23,7 @@ import { normalizarNotacaoTexto, normalizarNotacaoQuimica, normalizarNotacaoVisu
    casos de teste. Roda em TODAS as áreas, depois da química. Caso real que a
    motivou: 13/09/2026, 6 de 20 questões de Matemática com Q0, 2^4, 10^9,
    "4,6 x 10^9" — porque nenhuma regra de notação chegava a Matemática. */
-import { normalizarNotacaoMatematica, nmNormalizaTexto } from "https://raw.githubusercontent.com/Turco2025/Enem/main/supabase/functions/generate-question/notacao_matematica.ts";
+import { normalizarNotacaoMatematica, nmNormalizaTexto, nmAudita } from "https://raw.githubusercontent.com/Turco2025/Enem/main/supabase/functions/generate-question/notacao_matematica.ts";
 
 
 const CORS_HEADERS = {
@@ -1677,7 +1677,22 @@ function selfTestResponse() {
   });
 }
 
+// v72: sobra de notação ASCII em algum campo da questão (depois das redes
+// determinísticas)? Índices com mais de uma letra (V_cone) também contam.
+function temResiduoNotacao(q: any, area: string): boolean {
+  const textos: string[] = [];
+  for (const c of ["textoBase", "comando", "resolucaoComentada"]) if (typeof q?.[c] === "string") textos.push(q[c]);   // "tema" é do professor
+  if (q?.alternativas && typeof q.alternativas === "object") for (const v of Object.values(q.alternativas)) if (typeof v === "string") textos.push(v);
+  if (q?.analiseAlternativas && typeof q.analiseAlternativas === "object") for (const a of Object.values(q.analiseAlternativas) as any[]) if (a && typeof a.comentario === "string") textos.push(a.comentario);
+  const v = q?.visual;
+  if (v && typeof v === "object") { for (const c of ["titulo", "descricao"]) if (typeof v[c] === "string") textos.push(v[c]); for (const arr of [v.colunas, v.labels]) if (Array.isArray(arr)) for (const x of arr) if (typeof x === "string") textos.push(x); if (Array.isArray(v.linhas)) for (const l of v.linhas) if (Array.isArray(l)) for (const x of l) if (typeof x === "string") textos.push(x); }
+  const indicesContam = area === "matematica" || area === "natureza";   // fora daí, "@a_silva" e "#e_agora" são nomes, não índices
+  return textos.some((t) => nmAudita(t).length > 0 || (indicesContam && /(?<![\p{L}\p{Nd}@#\/])\p{L}_[\p{L}]{2,}(?![\p{L}\p{Nd}])/u.test(t)));
+}
+const LIMITE_FUNCAO_MS = 140_000;   // a Edge Function é encerrada em 150 s; margem de 10 s
+
 Deno.serve(async (req: Request) => {
+  const inicioReq = Date.now();
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: CORS_HEADERS });
   }
@@ -1842,36 +1857,53 @@ ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferrame
        function fora do ar) nunca pode derrubar a entrega da questão —
        mantém-se o resultado do rascunho. */
     const revisarMatematica = body.revisarMatematica !== false;
-    if (area === "matematica" && revisarMatematica) {
+    /* v72: as redes determinísticas rodam ANTES do revisor, para que ele só
+       receba o que elas não resolvem; rodam de novo no fim (idempotentes). */
+    data = normalizarNotacaoMatematica(normalizarNotacaoQuimica(data, area, disciplina), disciplina);
+    const residuoAntes = temResiduoNotacao(data, area);
+    let notacaoDiag: any = { residuoAntesDoRevisor: residuoAntes, revisorChamado: false };
+    // O revisor é chamado em Matemática (contas + notação) e, nas demais áreas,
+    // só quando sobrou notação ASCII (passe de notação, uma chamada curta).
+    if ((area === "matematica" && revisarMatematica) || residuoAntes) {
       /* Relógio de segurança nesta ponta também: a review-math-question faz
-         embedding + busca vetorial + uma chamada não streaming à Anthropic, e
-         agora tem seu próprio timeout interno em cada uma dessas etapas —
-         mas, sem um limite aqui também, uma trava ali (ou na própria rede
-         entre as duas funções) ainda seguraria a entrega desta questão
-         indefinidamente. 60 s é folgado para o que a revisão faz. */
-      const reviewController = new AbortController();
-      const reviewWatchdog = setTimeout(() => reviewController.abort(), 60_000);
-      try {
-        const reviewResp = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/review-math-question`, {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-          },
-          body: JSON.stringify({ question: data }),
-          signal: reviewController.signal,
-        });
-        if (reviewResp.ok) {
-          const reviewData = await reviewResp.json();
-          if (reviewData?.question && typeof reviewData.question === "object") {
-            data = reviewData.question;
+         embedding + busca vetorial + até três chamadas não streaming à
+         Anthropic (contas + 2 tentativas de notação), cada uma com seu próprio
+         timeout — mas, sem um limite aqui, uma trava na rede entre as duas
+         funções ainda seguraria a entrega. O orçamento é o que resta dos 140 s
+         da função, e vai junto no corpo (prazoMs) para o revisor se organizar. */
+      const restante = LIMITE_FUNCAO_MS - (Date.now() - inicioReq);
+      if (restante < 20_000) {
+        notacaoDiag.pulado = `sem tempo para o revisor (restavam ${Math.round(restante / 1000)} s)`;
+      } else {
+        const prazoMs = Math.min(restante - 5_000, 110_000);
+        const reviewController = new AbortController();
+        const reviewWatchdog = setTimeout(() => reviewController.abort(), prazoMs + 3_000);
+        try {
+          const reviewResp = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/review-math-question`, {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+            },
+            body: JSON.stringify({ question: data, area, disciplina, prazoMs, soNotacao: area !== "matematica" }),
+            signal: reviewController.signal,
+          });
+          if (reviewResp.ok) {
+            const reviewData = await reviewResp.json();
+            if (reviewData?.question && typeof reviewData.question === "object") {
+              data = reviewData.question;
+            }
+            notacaoDiag = { ...notacaoDiag, revisorChamado: true, contas: { alterado: reviewData?.alterado === true, cobertura: reviewData?.coberturaEncontrada === true }, notacao: reviewData?.notacao ?? null };
+          } else {
+            notacaoDiag.erro = `review-math-question HTTP ${reviewResp.status}`;
           }
+        } catch (e) {
+          // Mantém a questão como veio do rascunho — nunca falha a geração por
+          // causa do revisor (inclui o timeout acima).
+          notacaoDiag.erro = String((e as any)?.message || e).slice(0, 200);
+        } finally {
+          clearTimeout(reviewWatchdog);
         }
-      } catch (_e) {
-        // Mantém a questão como veio do rascunho — nunca falha a geração por
-        // causa do revisor de matemática (inclui timeout de 60 s acima).
-      } finally {
-        clearTimeout(reviewWatchdog);
       }
     }
 
@@ -1910,7 +1942,10 @@ ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferrame
     // química converte H2O → H₂O antes que a matemática veja "letra + dígito".
     data = normalizarNotacaoQuimica(data, area, disciplina);
     data = normalizarNotacaoMatematica(data, disciplina);
-    return jsonResponse({ question: corrigirQuebrasLiterais(data), uso, visualDiag, diversidadeDiag });
+    notacaoDiag.residuoFinal = temResiduoNotacao(data, area);
+    if (notacaoDiag.residuoFinal) console.warn(`[notação] resíduo ASCII na questão entregue (${disciplina}: "${String(data?.tema || "").slice(0, 60)}") — ` + JSON.stringify(notacaoDiag.notacao?.residuosDepois ?? notacaoDiag));
+    else if (notacaoDiag.residuoAntesDoRevisor) console.log(`[notação] resíduo corrigido pelo revisor (${notacaoDiag.notacao?.tentativas ?? "?"} tentativa(s))`);
+    return jsonResponse({ question: corrigirQuebrasLiterais(data), uso, visualDiag, diversidadeDiag, notacaoDiag });
   } catch (err) {
     return jsonResponse({ error: `Erro ao gerar questão: ${String((err as any)?.message || err)}` }, 502);
   }

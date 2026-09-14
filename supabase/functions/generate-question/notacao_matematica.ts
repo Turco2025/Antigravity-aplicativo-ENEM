@@ -167,8 +167,9 @@ function nmPontoMultiplicacao(texto) {
 
 // 7) radical com barra sobre o radicando inteiro
 var NM_SOBRELINHA = "\u0305";
-// radicando "nu": número (com decimal), letra ou letra grega, com expoente já em sobrescrito
-var NM_RE_RADICANDO_NU = /^(?:\d+(?:[,.]\d+)?|[A-Za-zπ])[⁰¹²³⁴⁵⁶⁷⁸⁹]*/u;
+// radicando "nu":
+// (número com decimal, OU 1–3 letras — "√ab" é √(a·b) —, com expoente já em sobrescrito)
+var NM_RE_RADICANDO_NU = /^(?:\d+(?:[,.]\d+)?|[A-Za-zπ]{1,3})[⁰¹²³⁴⁵⁶⁷⁸⁹]*/u;
 function nmSobrelinha(radicando) {
   var out = "";
   for (var ch of radicando) out += ch + NM_SOBRELINHA;
