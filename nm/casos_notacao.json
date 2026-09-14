@@ -1,0 +1,685 @@
+{
+  "_": "Casos compartilhados entre o backend (Deno) e o app (Node). 'texto' → nmNormalizaTexto; 'questao' → nmNormalizaQuestao(q, disciplina). 'igual' = saída idêntica à entrada.",
+  "texto": [
+    {
+      "n": "real q4 comentário",
+      "in": "quadrado perfeito (2^4 x 3^2 = 144) e apresenta",
+      "out": "quadrado perfeito (2⁴ × 3² = 144) e apresenta"
+    },
+    {
+      "n": "real q4 resolução",
+      "in": "288 = 2^5 × 3^2. Assim, raiz quadrada",
+      "out": "288 = 2⁵ × 3². Assim, raiz quadrada"
+    },
+    {
+      "n": "real q19 texto-base",
+      "in": "Formação da Terra: 4,6 x 10^9 anos atrás",
+      "out": "Formação da Terra: 4,6 × 10⁹ anos atrás"
+    },
+    {
+      "n": "real q19 resolução",
+      "in": "(4,6 x 10^9) / (3,2 x 10^8). Dividindo as potências de 10, 10^9/10^8 = 10. Multiplicando os resultados parciais, 1,4 x 10 = 14.",
+      "out": "(4,6 × 10⁹) / (3,2 × 10⁸). Dividindo as potências de 10, 10⁹/10⁸ = 10. Multiplicando os resultados parciais, 1,4 × 10 = 14."
+    },
+    {
+      "n": "real q8",
+      "in": "chegando a (1/2)^5, e representa",
+      "out": "chegando a (1/2)⁵, e representa"
+    },
+    {
+      "n": "real q8 negativo",
+      "in": "em vez de redução (2^-5)",
+      "out": "em vez de redução (2⁻⁵)"
+    },
+    {
+      "n": "real q8 grupo negativo",
+      "in": "(1/2)^(-5) = 2^5, um valor",
+      "out": "(1/2)⁻⁵ = 2⁵, um valor"
+    },
+    {
+      "n": "real q12 potência zero",
+      "in": "portanto (1 + i)^0 = 1 (uma vez que",
+      "out": "portanto (1 + i)⁰ = 1 (uma vez que"
+    },
+    {
+      "n": "real q12 expoente letra",
+      "in": "segundo a fórmula S = S0 . (1 + i)^t, em que",
+      "out": "segundo a fórmula S = S0 · (1 + i)ᵗ, em que"
+    },
+    {
+      "n": "real q12 ponto",
+      "in": "Assim, S = S0 . 1 = S0, ou seja",
+      "out": "Assim, S = S0 · 1 = S0, ou seja"
+    },
+    {
+      "n": "real q3 fração no expoente FICA",
+      "in": "Q(t) = Q0 · 2^(-t/T)",
+      "out": "Q(t) = Q0 · 2^(-t/T)"
+    },
+    {
+      "n": "real q3 decimal FICA",
+      "in": "a fração restante é 2^(-1,5) = 2^(-3/2), exatamente",
+      "out": "a fração restante é 2^(-1,5) = 2^(-3/2), exatamente"
+    },
+    {
+      "n": "real q17 fração FICA",
+      "in": "P(t) = P0 · 2^(t/2), com P0 = 400",
+      "out": "P(t) = P0 · 2^(t/2), com P0 = 400"
+    },
+    {
+      "n": "expoente com letra e sinal",
+      "in": "a_n = a_1 · q^(n-1)",
+      "out": "aₙ = a₁ · qⁿ⁻¹"
+    },
+    {
+      "n": "chaves",
+      "in": "f(x) = e^{kt} e g(x) = x^{12}",
+      "out": "f(x) = eᵏᵗ e g(x) = x¹²"
+    },
+    {
+      "n": "índice com chaves",
+      "in": "x_{12} e a_{n+1}",
+      "out": "x₁₂ e aₙ₊₁"
+    },
+    {
+      "n": "expoente literal simples",
+      "in": "f(x) = 2^x e h(t) = 10^t",
+      "out": "f(x) = 2ˣ e h(t) = 10ᵗ"
+    },
+    {
+      "n": "menos unicode",
+      "in": "1,5 × 10^−3 mol/L",
+      "out": "1,5 × 10⁻³ mol/L"
+    },
+    {
+      "n": "2^3^2 fica",
+      "in": "calcule 2^3^2",
+      "out": "calcule 2^3^2"
+    },
+    {
+      "n": "x^2-3x converte (expressão)",
+      "in": "x^2-3x+2 = 0",
+      "out": "x²-3x+2 = 0"
+    },
+    {
+      "n": "carga SO4^2- fica",
+      "in": "o íon SO4^2- em solução",
+      "out": "o íon SO4^2- em solução"
+    },
+    {
+      "n": "carga grupo fica",
+      "in": "o íon SO4^(2-) e Ca^{2+}",
+      "out": "o íon SO4^(2-) e Ca^{2+}"
+    },
+    {
+      "n": "Ca^2+ fica",
+      "in": "Ca^2+ (aq)",
+      "out": "Ca^2+ (aq)"
+    },
+    {
+      "n": "snake_case fica",
+      "in": "a variável meu_texto e quero_saber",
+      "out": "a variável meu_texto e quero_saber"
+    },
+    {
+      "n": "hashtag fica",
+      "in": "#enem_2024 e @joao_2",
+      "out": "#enem_2024 e @joao_2"
+    },
+    {
+      "n": "IBGE fica",
+      "in": "IBGE_2022 e PNAD_Continua",
+      "out": "IBGE_2022 e PNAD_Continua"
+    },
+    {
+      "n": "url fica",
+      "in": "Disponível em: https://exemplo.org/dados_2^3/x_1?a=b^2. Acesso em 2024.",
+      "out": "Disponível em: https://exemplo.org/dados_2^3/x_1?a=b^2. Acesso em 2024."
+    },
+    {
+      "n": "unidades",
+      "in": "área de 5 m2 e volume de 0,5 cm3; densidade 1,2 kg/m3; 3,2 km2; aceleração 9,8 m/s2",
+      "out": "área de 5 m² e volume de 0,5 cm³; densidade 1,2 kg/m³; 3,2 km²; aceleração 9,8 m/s²"
+    },
+    {
+      "n": "unidade não colada em número fica",
+      "in": "a sala m2 é a maior",
+      "out": "a sala m2 é a maior"
+    },
+    {
+      "n": "futebol fica",
+      "in": "Brasil 3 x 1 Argentina, placar de 2 x 2",
+      "out": "Brasil 3 x 1 Argentina, placar de 2 x 2"
+    },
+    {
+      "n": "x com igual na oração",
+      "in": "logo 3 x 5 = 15 balas",
+      "out": "logo 3 × 5 = 15 balas"
+    },
+    {
+      "n": "x colado antes de 10 com expoente",
+      "in": "massa 5,9x10^24 kg",
+      "out": "massa 5,9 × 10²⁴ kg"
+    },
+    {
+      "n": "2x2 fica",
+      "in": "a matriz 2x2 e o polinômio 2x2",
+      "out": "a matriz 2x2 e o polinômio 2x2"
+    },
+    {
+      "n": "ponto e frase comum fica",
+      "in": "Veja o item 2 . A resposta certa",
+      "out": "Veja o item 2 . A resposta certa"
+    },
+    {
+      "n": "ponto fonte adaptado fica",
+      "in": "texto adaptado . (Fragmento)",
+      "out": "texto adaptado . (Fragmento)"
+    },
+    {
+      "n": "unicode já certo é idempotente",
+      "in": "x² + 10⁻³ · aₙ e SO₄²⁻ e 2ⁿ⁻¹",
+      "out": "x² + 10⁻³ · aₙ e SO₄²⁻ e 2ⁿ⁻¹"
+    },
+    {
+      "n": "H10 e códigos ficam",
+      "in": "habilidade H10, COP30, vitamina B12, H1N1, PM2,5",
+      "out": "habilidade H10, COP30, vitamina B12, H1N1, PM2,5"
+    },
+    {
+      "n": "letra sem sobrescrito fica",
+      "in": "o termo x^q e y^Q",
+      "out": "o termo x^q e y^Q"
+    },
+    {
+      "n": "índice letra sem subscrito fica",
+      "in": "o termo a_b e c_d",
+      "out": "o termo a_b e c_d"
+    },
+    {
+      "n": "índice maiúsculo fica",
+      "in": "x_A e y_B",
+      "out": "x_A e y_B"
+    },
+    {
+      "n": "linguagens sem alteração",
+      "in": "O poema, publicado em 1922, dialoga com a Semana de Arte Moderna. O eu lírico afirma: 'sou 300, sou 350'. Veja o item 3 x 4 do edital.",
+      "igual": true
+    },
+    {
+      "n": "expoente longo demais fica",
+      "in": "2^(aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)",
+      "igual": true
+    },
+    {
+      "n": "expoente com espaço interno",
+      "in": "2^(n - 1) termos",
+      "out": "2ⁿ⁻¹ termos"
+    },
+    {
+      "n": "potência de dez negativa em texto",
+      "in": "10^-6 m e 10^12 bytes",
+      "out": "10⁻⁶ m e 10¹² bytes"
+    },
+    {
+      "n": "índice zero sublinhado",
+      "in": "v = v_0 + a·t e Q_0 = 200",
+      "out": "v = v₀ + a·t e Q₀ = 200"
+    },
+    {
+      "n": "sub índice n maiúsculo fica",
+      "in": "S_N e T_1",
+      "out": "S_N e T₁"
+    },
+    {
+      "n": "log_2 e sen_n",
+      "in": "log_2 8 = 3 e (x)_1 = 2",
+      "out": "log₂ 8 = 3 e (x)₁ = 2"
+    },
+    {
+      "n": "palavra_1 fica",
+      "in": "variavel_1 e Total_2",
+      "out": "variavel_1 e Total_2"
+    },
+    {
+      "n": "log10 e log2",
+      "in": "M = log10(A/A0) e log2 8 = 3, mas catalog10 fica",
+      "out": "M = log₁₀(A/A0) e log₂ 8 = 3, mas catalog10 fica"
+    },
+    {
+      "n": "corpus: (2^3)^2",
+      "in": "128 = 2^7 = 2^6 · 2 = (2^3)^2 · 2",
+      "out": "128 = 2⁷ = 2⁶ · 2 = (2³)² · 2"
+    },
+    {
+      "n": "corpus: x_v e t_v",
+      "in": "x_v = -b/(2a) e t_v = -20/(2×(-5)) e h_cone fica e C_A(x) fica",
+      "out": "xᵥ = -b/(2a) e tᵥ = -20/(2×(-5)) e h_cone fica e C_A(x) fica"
+    },
+    {
+      "n": "corpus física: v_oy, R_total ficam; v0² não tem letra+dígito aqui",
+      "in": "v_y² = v_oy² - 2·g·H e R_total = 3R",
+      "out": "v_y² = v_oy² - 2·g·H e R_total = 3R"
+    },
+    {
+      "n": "corpus: e^(−t/RC) fica",
+      "in": "V(t) = V₀·(1 − e^(−t/RC))",
+      "igual": true
+    },
+    {
+      "n": "B1 carga com estado físico fica",
+      "in": "SO4^2-(aq) + Ba^2+(aq) → BaSO4(s); Fe^3+(aq)",
+      "igual": true
+    },
+    {
+      "n": "B1 expressão com parêntese converte",
+      "in": "x^2-(x+1) = 0",
+      "out": "x²-(x+1) = 0"
+    },
+    {
+      "n": "B2 log de 2 fica",
+      "in": "Adote log2 = 0,30 e log3 = 0,48; então 2·log2 + log3 e x = log2/log3",
+      "igual": true
+    },
+    {
+      "n": "B2 log com argumento converte",
+      "in": "log10(A/A0) e log2 8 = 3 e log10 1000",
+      "out": "log₁₀(A/A0) e log₂ 8 = 3 e log₁₀ 1000"
+    },
+    {
+      "n": "M2 x^2y → x²y",
+      "in": "o monômio x^2y tem grau 3 e x^2y^2",
+      "out": "o monômio x²y tem grau 3 e x²y²"
+    },
+    {
+      "n": "M2 letra expoente seguida de letra fica",
+      "in": "a^nb",
+      "igual": true
+    },
+    {
+      "n": "M3 v_0^2",
+      "in": "v² = v_0^2 + 2·a·d e x_n^2",
+      "out": "v² = v₀² + 2·a·d e xₙ²"
+    },
+    {
+      "n": "M4 ponto sem conta fica",
+      "in": "Lei n . 9 e R$ 5 . 000 e (2019) . a autora",
+      "igual": true
+    },
+    {
+      "n": "M4 ponto com parêntese ou igual converte",
+      "in": "P = 2 . (3 + 4) e S = S0 . 1",
+      "out": "P = 2 · (3 + 4) e S = S0 · 1"
+    },
+    {
+      "n": "M1 url em unidades/log/x fica",
+      "in": "Disponível em: https://site.org/log10/5m2/2x10^3/a_1.html",
+      "igual": true
+    },
+    {
+      "n": "unidades de Física com ponto",
+      "in": "R = 8,31 J·mol^-1·K^-1 e 3 kg.m/s^2",
+      "out": "R = 8,31 J·mol⁻¹·K⁻¹ e 3 kg.m/s²"
+    },
+    {
+      "n": "ponto com notação científica sem igual",
+      "in": "massa de 1,5 . 10^3 kg",
+      "out": "massa de 1,5 · 10³ kg"
+    }
+  ],
+  "questao": [
+    {
+      "n": "real q3 — Q0 unificada (Matemática)",
+      "disciplina": "Matemática",
+      "in": {
+        "textoBase": "A quantidade ativa é dada pela expressão\n\nQ(t) = Q0 · 2^(-t/T)\n\nem que Q0 é a quantidade inicial. Após 9 horas, restava exatamente Q0 · 2^(-3/2) do material.",
+        "comando": "A meia-vida T do radiofármaco, em horas, é",
+        "alternativas": {
+          "A": "3",
+          "B": "4,5",
+          "C": "6",
+          "D": "9",
+          "E": "13,5"
+        },
+        "gabarito": "C",
+        "resolucaoComentada": "Como Q(t) = Q0·2^(-t/T) e a fração foi Q0·2^(-3/2), igualam-se os expoentes: 9/T = 3/2, logo T = 6 horas.",
+        "analiseAlternativas": {
+          "C": {
+            "status": "correta",
+            "comentario": "Igualando os expoentes (pois Q0·2^(-9/T) = Q0·2^(-3/2)), obtém-se T = 6."
+          }
+        },
+        "fonte": "Disponível em: https://x.org/Q0_2^3. Acesso em 2024."
+      },
+      "out": {
+        "textoBase": "A quantidade ativa é dada pela expressão\n\nQ(t) = Q₀ · 2^(-t/T)\n\nem que Q₀ é a quantidade inicial. Após 9 horas, restava exatamente Q₀ · 2^(-3/2) do material.",
+        "comando": "A meia-vida T do radiofármaco, em horas, é",
+        "alternativas": {
+          "A": "3",
+          "B": "4,5",
+          "C": "6",
+          "D": "9",
+          "E": "13,5"
+        },
+        "gabarito": "C",
+        "resolucaoComentada": "Como Q(t) = Q₀·2^(-t/T) e a fração foi Q₀·2^(-3/2), igualam-se os expoentes: 9/T = 3/2, logo T = 6 horas.",
+        "analiseAlternativas": {
+          "C": {
+            "status": "correta",
+            "comentario": "Igualando os expoentes (pois Q₀·2^(-9/T) = Q₀·2^(-3/2)), obtém-se T = 6."
+          }
+        },
+        "fonte": "Disponível em: https://x.org/Q0_2^3. Acesso em 2024."
+      }
+    },
+    {
+      "n": "real q12 — S0 com ponto (Matemática)",
+      "disciplina": "Matemática",
+      "in": {
+        "textoBase": "O saldo cresce segundo a fórmula S = S0 . (1 + i)^t, em que S0 é o depósito inicial.",
+        "alternativas": {
+          "A": "igual a S0",
+          "B": "S0 multiplicado por i, pois",
+          "C": "S0 multiplicado por (1 + i)",
+          "D": "S0 dividido por (1 + i), pois",
+          "E": "zero"
+        },
+        "resolucaoComentada": "Substituindo na fórmula: S = S0 . (1 + i)^0. Pela propriedade a^0 = 1, S = S0 . 1 = S0."
+      },
+      "out": {
+        "textoBase": "O saldo cresce segundo a fórmula S = S₀ · (1 + i)ᵗ, em que S₀ é o depósito inicial.",
+        "alternativas": {
+          "A": "igual a S₀",
+          "B": "S₀ multiplicado por i, pois",
+          "C": "S₀ multiplicado por (1 + i)",
+          "D": "S₀ dividido por (1 + i), pois",
+          "E": "zero"
+        },
+        "resolucaoComentada": "Substituindo na fórmula: S = S₀ · (1 + i)⁰. Pela propriedade a⁰ = 1, S = S₀ · 1 = S₀."
+      }
+    },
+    {
+      "n": "letra+dígito sem evidência fica (Matemática)",
+      "disciplina": "Matemática",
+      "in": {
+        "textoBase": "A folha A4 e a vitamina D3 aparecem no texto; o item Q0 não tem operador.",
+        "resolucaoComentada": "Nada de fórmula aqui."
+      },
+      "igual": true
+    },
+    {
+      "n": "letra+dígito em Humanas fica",
+      "disciplina": "Geografia",
+      "in": {
+        "textoBase": "Os agregados M1 + M2 = base monetária ampliada.",
+        "resolucaoComentada": "M1 + M2 = M3."
+      },
+      "igual": true
+    },
+    {
+      "n": "Física: F1 + F2 = 10 N vira F₁ + F₂",
+      "disciplina": "Física",
+      "in": {
+        "textoBase": "Duas forças F1 e F2 atuam no bloco.",
+        "resolucaoComentada": "Pela soma vetorial, F1 + F2 = 10 N, logo F1 = 6 N."
+      },
+      "out": {
+        "textoBase": "Duas forças F₁ e F₂ atuam no bloco.",
+        "resolucaoComentada": "Pela soma vetorial, F₁ + F₂ = 10 N, logo F₁ = 6 N."
+      }
+    },
+    {
+      "n": "Matemática: T1 + T2 = 60 vira índice (corpus: D1, L1, H1 em regra de três)",
+      "disciplina": "Matemática",
+      "in": {
+        "textoBase": "As turmas T1 e T2 fizeram a prova.",
+        "resolucaoComentada": "T1 + T2 = 60 alunos."
+      },
+      "out": {
+        "textoBase": "As turmas T₁ e T₂ fizeram a prova.",
+        "resolucaoComentada": "T₁ + T₂ = 60 alunos."
+      }
+    },
+    {
+      "n": "visual: rótulos e séries",
+      "disciplina": "Matemática",
+      "in": {
+        "textoBase": "A tabela mostra P = P0 · 2^t.",
+        "visual": {
+          "tipo": "tabela",
+          "titulo": "Valores de P0 · 2^t",
+          "colunas": [
+            "t",
+            "P (10^3 unidades)"
+          ],
+          "linhas": [
+            [
+              "0",
+              "P0"
+            ],
+            [
+              "1",
+              "2 P0"
+            ]
+          ],
+          "datasets": [
+            {
+              "label": "P0 · 2^t",
+              "data": [
+                1,
+                2
+              ]
+            }
+          ],
+          "promptImagem": "label P0 and 2^t exactly"
+        }
+      },
+      "out": {
+        "textoBase": "A tabela mostra P = P₀ · 2ᵗ.",
+        "visual": {
+          "tipo": "tabela",
+          "titulo": "Valores de P₀ · 2ᵗ",
+          "colunas": [
+            "t",
+            "P (10³ unidades)"
+          ],
+          "linhas": [
+            [
+              "0",
+              "P₀"
+            ],
+            [
+              "1",
+              "2 P₀"
+            ]
+          ],
+          "datasets": [
+            {
+              "label": "P₀ · 2ᵗ",
+              "data": [
+                1,
+                2
+              ]
+            }
+          ],
+          "promptImagem": "label P0 and 2^t exactly"
+        }
+      }
+    },
+    {
+      "n": "campos protegidos intactos",
+      "disciplina": "Matemática",
+      "in": {
+        "textoBase": "x^2 = 4",
+        "objetoConhecimento": "Potências x^2",
+        "competencia": {
+          "numero": 5,
+          "texto": "H^2 x^2"
+        },
+        "habilidade": {
+          "codigo": "H21",
+          "texto": "a_n"
+        },
+        "fonte": "Autor. Livro x^2. 2020."
+      },
+      "out": {
+        "textoBase": "x² = 4",
+        "objetoConhecimento": "Potências x^2",
+        "competencia": {
+          "numero": 5,
+          "texto": "H^2 x^2"
+        },
+        "habilidade": {
+          "codigo": "H21",
+          "texto": "a_n"
+        },
+        "fonte": "Autor. Livro x^2. 2020."
+      }
+    },
+    {
+      "n": "corpus 4540 — N0 x 2^t (Matemática)",
+      "disciplina": "Matemática",
+      "in": {
+        "textoBase": "O número de bactérias é dado por N = N0 · 2^t, em que N0 é a quantidade inicial.",
+        "analiseAlternativas": {
+          "E": {
+            "status": "correta",
+            "comentario": "Aplicando corretamente N = N0 x 2^t com N0 = 3 e t = 5 horas, obtém-se N = 3 x 32 = 96."
+          }
+        }
+      },
+      "out": {
+        "textoBase": "O número de bactérias é dado por N = N₀ · 2ᵗ, em que N₀ é a quantidade inicial.",
+        "analiseAlternativas": {
+          "E": {
+            "status": "correta",
+            "comentario": "Aplicando corretamente N = N₀ × 2ᵗ com N₀ = 3 e t = 5 horas, obtém-se N = 3 × 32 = 96."
+          }
+        }
+      }
+    },
+    {
+      "n": "corpus 3b98 — A2/A1 = 10^6/10^4 (Matemática)",
+      "disciplina": "Matemática",
+      "in": {
+        "textoBase": "A magnitude é dada por M = log(A/A0), em que A0 é a amplitude de referência. As amplitudes A1 e A2 foram registradas.",
+        "resolucaoComentada": "Para o primeiro terremoto, M1 = 4 = log(A1/A0), logo A1/A0 = 10^4. A razão pedida é A2/A1 = (A2/A0)/(A1/A0) = 10^6/10^4 = 10^(6-4) = 10^2 = 100."
+      },
+      "out": {
+        "textoBase": "A magnitude é dada por M = log(A/A₀), em que A₀ é a amplitude de referência. As amplitudes A₁ e A₂ foram registradas.",
+        "resolucaoComentada": "Para o primeiro terremoto, M₁ = 4 = log(A₁/A₀), logo A₁/A₀ = 10⁴. A razão pedida é A₂/A₁ = (A₂/A₀)/(A₁/A₀) = 10⁶/10⁴ = 10⁶⁻⁴ = 10² = 100."
+      }
+    },
+    {
+      "n": "corpus af03 — máquinas M1 e M2 (rótulos) ficam",
+      "disciplina": "Matemática",
+      "in": {
+        "textoBase": "Dois produtos, P e Q, em duas máquinas, M1 e M2. As linhas correspondem às máquinas (M1 e M2).",
+        "resolucaoComentada": "A matriz é [[40, 25], [30, 50]], em que as linhas representam M1 e M2, e a soma é 40 + 25 = 65."
+      },
+      "igual": true
+    },
+    {
+      "n": "corpus b01e — regra de três composta D2 = D1 × (L1/L2) × (H1/H2)",
+      "disciplina": "Matemática",
+      "in": {
+        "resolucaoComentada": "Montando a regra de três composta: D2 = D1 × (L1/L2) × (H1/H2), em que D1 = 6 dias, L1 = 4 linhas, L2 = 6 linhas, H1 = 3 horas, H2 = 4 horas."
+      },
+      "out": {
+        "resolucaoComentada": "Montando a regra de três composta: D₂ = D₁ × (L₁/L₂) × (H₁/H₂), em que D₁ = 6 dias, L₁ = 4 linhas, L₂ = 6 linhas, H₁ = 3 horas, H₂ = 4 horas."
+      }
+    },
+    {
+      "n": "I3 x2 sem x1 fica (Matemática)",
+      "disciplina": "Matemática",
+      "in": {
+        "textoBase": "Resolva x2 - 5x + 6 = 0.",
+        "resolucaoComentada": "x2 - 5x + 6 = 0 tem raízes 2 e 3."
+      },
+      "igual": true
+    },
+    {
+      "n": "I3 x1 e x2 viram índices",
+      "disciplina": "Matemática",
+      "in": {
+        "resolucaoComentada": "As raízes são x1 = 2 e x2 = 3, logo x1 + x2 = 5."
+      },
+      "out": {
+        "resolucaoComentada": "As raízes são x₁ = 2 e x₂ = 3, logo x₁ + x₂ = 5."
+      }
+    },
+    {
+      "n": "I3 planilha fica",
+      "disciplina": "Matemática",
+      "in": {
+        "textoBase": "Na planilha, a célula B2 = A1 + A2 soma as vendas.",
+        "resolucaoComentada": "B2 = A1 + A2 = 30."
+      },
+      "igual": true
+    },
+    {
+      "n": "célula fotovoltaica não é planilha (Física)",
+      "disciplina": "Física",
+      "in": {
+        "textoBase": "A célula fotovoltaica fornece P1 = 10 W.",
+        "resolucaoComentada": "P1 + P2 = 30 W."
+      },
+      "out": {
+        "textoBase": "A célula fotovoltaica fornece P₁ = 10 W.",
+        "resolucaoComentada": "P₁ + P₂ = 30 W."
+      }
+    }
+  ],
+  "auditoria": [
+    {
+      "in": "Q(t) = Q₀ · 2^(-t/T)",
+      "achados": [
+        "expoente com acento circunflexo (use x², 10⁻³, 2ˣ)"
+      ]
+    },
+    {
+      "in": "aₙ = a_b",
+      "achados": [],
+      "_": "letra sem subscrito não tem solução: não se avisa"
+    },
+    {
+      "in": "x² + 10⁻³ · aₙ",
+      "achados": []
+    },
+    {
+      "in": "meu_texto e #enem_2024",
+      "achados": []
+    },
+    {
+      "in": "\\frac{1}{2} e sqrt(2)",
+      "achados": [
+        "comando LaTeX",
+        "raiz como texto (use √)"
+      ]
+    },
+    {
+      "in": "Brasil 3 x 1 Argentina",
+      "achados": []
+    },
+    {
+      "in": "3 x 5 = 15",
+      "achados": [
+        "letra x como sinal de multiplicação (use ×)"
+      ]
+    },
+    {
+      "in": "C_A(x) = 400 + 5x e x_b",
+      "achados": []
+    },
+    {
+      "in": "a_{n} e x_(1) e Q_0",
+      "achados": [
+        "índice com sublinhado (use Q₀, aₙ)"
+      ]
+    },
+    {
+      "in": "Adote log2 = 0,30",
+      "achados": []
+    }
+  ]
+}

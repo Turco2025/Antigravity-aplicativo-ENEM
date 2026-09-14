@@ -12,12 +12,18 @@ const APP_DATA: any = APP_DATA_JSON;
    visual e formato de entrega) vivem em recurso_instrucoes.ts, ao lado deste
    arquivo no repositório, e entram no pacote do mesmo jeito que app_data.json:
    embutidos no deploy, sem rede em produção. Conteúdo idêntico ao da v62. */
-import { NOTACAO_QUIMICA, RECURSO_INSTRUCOES, COMPLEMENTO_BIOLOGIA, instrucoesImagem, ehBiologia, JSON_SCHEMA_TXT } from "https://raw.githubusercontent.com/Turco2025/Enem/main/supabase/functions/generate-question/recurso_instrucoes.ts";
+import { NOTACAO_QUIMICA, NOTACAO_MATEMATICA, RECURSO_INSTRUCOES, COMPLEMENTO_BIOLOGIA, instrucoesImagem, ehBiologia, JSON_SCHEMA_TXT } from "https://raw.githubusercontent.com/Turco2025/Enem/main/supabase/functions/generate-question/recurso_instrucoes.ts";
 /* v70: rede de segurança da notação química (índices e cargas em subscrito/
    sobrescrito, lista fechada) vive em notacao_quimica.ts, ao lado deste
    arquivo no repositório, e entra no pacote como recurso_instrucoes.ts:
    embutida no deploy, sem rede em produção. Ver o cabeçalho daquele arquivo. */
 import { normalizarNotacaoTexto, normalizarNotacaoQuimica, normalizarNotacaoVisual, qnTabela, qnConverteIon, QN_FORMULAS_COMUNS, QN_FORMULAS_DISCIPLINA, QN_GASES, QN_GASES_SEMPRE, QN_IONS } from "https://raw.githubusercontent.com/Turco2025/Enem/main/supabase/functions/generate-question/notacao_quimica.ts";
+/* v71: rede de segurança da notação MATEMÁTICA (expoentes, índices, × e ·),
+   em notacao_matematica.ts — o mesmo JavaScript que roda no app, com os mesmos
+   casos de teste. Roda em TODAS as áreas, depois da química. Caso real que a
+   motivou: 13/09/2026, 6 de 20 questões de Matemática com Q0, 2^4, 10^9,
+   "4,6 x 10^9" — porque nenhuma regra de notação chegava a Matemática. */
+import { normalizarNotacaoMatematica, nmNormalizaTexto } from "https://raw.githubusercontent.com/Turco2025/Enem/main/supabase/functions/generate-question/notacao_matematica.ts";
 
 
 const CORS_HEADERS = {
@@ -143,14 +149,18 @@ function buildObjetosConhecimento(area: string): string {
   return `\n\n📚 OBJETOS DE CONHECIMENTO OFICIAIS DESTA ÁREA (Anexo da Matriz de Referência do ENEM) — a questão DEVE declarar exatamente UM deles, no campo "objetoConhecimento", escolhido por ser o recorte de conteúdo que ela efetivamente mobiliza (não por afinidade temática de superfície). Copie literalmente, no campo "objetoConhecimento", um dos títulos da lista abaixo — sem abreviar, parafrasear ou combinar dois deles. É PROIBIDO declarar um objeto de conhecimento que não esteja nesta lista:\n${itens}`;
 }
 
+/* v71 — NOTAÇÃO EM TODAS AS ÁREAS, por decisão do professor (13/09/2026).
+   Até a v70 o bloco químico só entrava em Ciências da Natureza e Matemática
+   não recebia regra NENHUMA de notação — resultado: Q0, 2^4, 10^9, "4,6 x
+   10^9" em 6 de 20 questões. Agora os dois blocos (química e matemática)
+   entram em todas as áreas: Geografia escreve CO₂ e km², Física escreve v₀ e
+   m/s², Matemática escreve 10⁻³ e Q₀. Custo: ~2 mil tokens a mais no prompt
+   do sistema, que fica em cache — na ordem de US$ 0,0005 por questão. */
+function blocoNotacao() {
+  return NOTACAO_QUIMICA + "\n" + NOTACAO_MATEMATICA;
+}
 function buildSystemPrompt(area: string) {
-  /* NOTACAO_QUIMICA só entra quando a área é Ciências da Natureza (Física,
-     Química, Biologia) — é a única área onde fórmulas/equações/notação
-     química podem aparecer de verdade. Nas outras três áreas (Linguagens,
-     Humanas, Matemática) esse bloco nunca tinha utilidade nenhuma e só
-     inflava todo prompt do sistema à toa, em toda e qualquer chamada. */
-  const notacao = area === "natureza" ? NOTACAO_QUIMICA : "";
-  return APP_DATA.universalModel + "\n\n" + APP_DATA.areaContext[area] + buildObjetosConhecimento(area) + notacao;
+  return APP_DATA.universalModel + "\n\n" + APP_DATA.areaContext[area] + buildObjetosConhecimento(area) + blocoNotacao();
 }
 
 /* v69 — PROMPT DE SISTEMA ENXUTO PARA REFAZER SÓ O RECURSO VISUAL.
@@ -163,7 +173,7 @@ function buildSystemPrompt(area: string) {
    notação química (rótulos podem ter fórmulas). O protocolo de imagem
    continua indo na mensagem (buildVisualRedoPrompt). */
 function buildSystemVisual(area: string) {
-  const notacao = area === "natureza" ? "\n\n" + NOTACAO_QUIMICA : "";
+  const notacao = "\n\n" + blocoNotacao();   // v71: todas as áreas (rótulos podem ter fórmulas e expoentes)
   return `Você é um elaborador de itens do ENEM (Inep), especialista em recursos visuais de questões: sua tarefa nesta chamada é produzir SOMENTE a especificação do recurso visual (imagem, gráfico ou tabela) de uma questão já escrita, seguindo à risca o protocolo e o formato indicados na mensagem do usuário. Não reescreva, não corrija e não comente a questão.\n\nÁrea: ${AREA_LABELS[area]}.\n\n${APP_DATA.areaContext[area]}${notacao}`;
 }
 
@@ -1610,6 +1620,7 @@ function selfTestResponse() {
      digital abaixo cobre as partes do index.ts que decidem o conteúdo. */
   const codigo = [
     NOTACAO_QUIMICA,
+    NOTACAO_MATEMATICA,
     JSON_SCHEMA_TXT,
     buildSystemPrompt.toString(),
     buildUserPrompt.toString(),
@@ -1624,6 +1635,7 @@ function selfTestResponse() {
     buildSystemPlanejamento.toString(),
     normalizarNotacaoTexto.toString(), normalizarNotacaoQuimica.toString(), qnConverteIon.toString(),
     JSON.stringify([QN_FORMULAS_COMUNS, QN_FORMULAS_DISCIPLINA, QN_GASES, QN_GASES_SEMPRE, QN_IONS]),
+    normalizarNotacaoMatematica.toString(), nmNormalizaTexto.toString(),
     buildPlanejamentoPrompt.toString(),
     buildSystemVisual.toString(),
     BUSCA_PADRAO,
@@ -1655,7 +1667,13 @@ function selfTestResponse() {
     temNormalizarCamposEstruturados: typeof normalizarCamposEstruturados === "function",
     temNormalizarNotacaoQuimica: typeof normalizarNotacaoQuimica === "function",
     notacaoAmostra: normalizarNotacaoTexto("CO2 e NO3- e Ca2+ e H10 e C3 e O+", "Biologia"),
-    notacaoTokens: { Biologia: qnTabela("Biologia").mapa.size, Quimica: qnTabela("Química").mapa.size, Fisica: qnTabela("Física").mapa.size },
+    notacaoTokens: { Biologia: qnTabela("Biologia").mapa.size, Quimica: qnTabela("Química").mapa.size, Fisica: qnTabela("Física").mapa.size, Outra: qnTabela("Matemática").mapa.size },
+    // v71: notação matemática em todas as áreas (prompt + rede de segurança).
+    temNotacaoMatematica: typeof NOTACAO_MATEMATICA === "string" && NOTACAO_MATEMATICA.length > 0,
+    notacaoMatChars: NOTACAO_MATEMATICA.length,
+    notacaoMatHash: fnv1a(NOTACAO_MATEMATICA),
+    notacaoEmTodasAsAreas: ["linguagens", "humanas", "natureza", "matematica"].every((a) => buildSystemPrompt(a).includes("NOTAÇÃO MATEMÁTICA") && buildSystemPrompt(a).includes("NOTAÇÃO QUÍMICA")),
+    notacaoMatAmostra: normalizarNotacaoMatematica({ textoBase: "Q(t) = Q0 · 2^(-t/T) e 4,6 x 10^9 anos; S = S0 . (1 + i)^t; 288 = 2^5 x 3^2; 5 m2; log10(A/A0)", resolucaoComentada: "Q0 = 200" }, "Matemática").textoBase,
   });
 }
 
@@ -1724,9 +1742,10 @@ ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferrame
       // modelo copia a grafia — foi assim que a questão 2 de 11/09 saiu com
       // "CO2". Corrige na origem (conteúdo e contexto; a habilidade é texto
       // oficial e não é tocada).
-      if (area === "natureza") {
-        recortes = recortes.map((r) => ({ ...r, conteudo: normalizarNotacaoTexto(r.conteudo, disciplina), contexto: normalizarNotacaoTexto(r.contexto, disciplina) }));
-      }
+      // v71: todas as áreas, química e depois matemática ("potências 2^4" no
+      // recorte viraria "2^4" na questão).
+      const nRec = (t: string) => nmNormalizaTexto(normalizarNotacaoTexto(t, disciplina));
+      recortes = recortes.map((r) => ({ ...r, conteudo: nRec(r.conteudo), contexto: nRec(r.contexto) }));
       const uso = resumoUso(usos);
       console.log(`[tema] planejamento "${tema}" (${disciplina}): ${recortes.length}/${quantidade} recorte(s) · ` + recortes.map((r, i) => `${i + 1}: ${r.conteudo}`).join(" · "));
       await logGeneration(area, disciplina, `[planejar recortes] ${tema}`, { recurso: "planejamento", uso });
@@ -1768,8 +1787,14 @@ ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferrame
       }
       const usoRefazer = resumoUso(usos);
       await logGeneration(area, disciplina, `[refazer visual] ${tema}`, { recurso, uso: usoRefazer });
-      // v70: descrição/título/tabela/rótulos do recurso refeito com a notação certa.
-      const visualSaida = area === "natureza" ? normalizarNotacaoVisual(visualNovo, disciplina) : visualNovo;
+      // v70/v71: descrição/título/tabela/rótulos do recurso refeito com a
+      // notação certa — química (todas as áreas) e matemática. A matemática
+      // recebe a questão inteira (texto-base, comando, alternativas,
+      // resolução), porque a regra "letra + dígito" (Q0 → Q₀) só decide com o
+      // contexto da questão; daqui sai só o visual.
+      const visualQuimica = normalizarNotacaoVisual(visualNovo, disciplina);
+      const contexto = normalizarNotacaoMatematica({ textoBase, comando, alternativas, resolucaoComentada, visual: visualQuimica }, disciplina);
+      const visualSaida = contexto && contexto.visual ? contexto.visual : visualQuimica;
       return jsonResponse({ visual: corrigirQuebrasLiterais(visualSaida), uso: usoRefazer });
     } catch (err) {
       return jsonResponse({ error: `Erro ao refazer o recurso visual: ${String((err as any)?.message || err)}` }, 502);
@@ -1878,10 +1903,13 @@ ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferrame
     // (rascunho, refazer visual, retentativas) já somadas em "usos".
     const uso = resumoUso(usos);
     await logGeneration(area, disciplina, tema, { recurso, uso });
-    // v70: índices e cargas de fórmulas da lista fechada em subscrito/sobrescrito
-    // (só Ciências da Natureza). Por último, depois de tudo o que pode ter
-    // reescrito a questão (garantia do visual, revisão matemática).
+    // v70/v71: redes de segurança da notação — química (lista fechada de
+    // fórmulas; em todas as áreas desde a v71) e depois matemática (expoentes,
+    // índices, × e ·). Por último, depois de tudo o que pode ter reescrito a
+    // questão (garantia do visual, revisão matemática). A ordem importa: a
+    // química converte H2O → H₂O antes que a matemática veja "letra + dígito".
     data = normalizarNotacaoQuimica(data, area, disciplina);
+    data = normalizarNotacaoMatematica(data, disciplina);
     return jsonResponse({ question: corrigirQuebrasLiterais(data), uso, visualDiag, diversidadeDiag });
   } catch (err) {
     return jsonResponse({ error: `Erro ao gerar questão: ${String((err as any)?.message || err)}` }, 502);

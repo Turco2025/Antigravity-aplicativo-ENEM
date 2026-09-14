@@ -1,8 +1,8 @@
 /* ========================================================================
    TEXTOS FIXOS DOS PROMPTS — módulo separado do index.ts (v63).
    ========================================================================
-   Este arquivo contém, SEM NENHUMA ALTERAÇÃO DE CONTEÚDO, três blocos que até
-   a v62 viviam dentro do index.ts: a regra de notação química, as instruções
+   Este arquivo contém os blocos fixos dos prompts — três vieram do index.ts
+   na v62 (sem alteração de conteúdo) e a NOTAÇÃO MATEMÁTICA entrou na v71: a regra de notação química, as instruções
    por recurso visual (protocolo de imagem em 8 seções, versão geral e a de
    Biologia, gráfico, tabela) e o formato de entrega (JSON_SCHEMA_TXT). Foram
    movidos para cá apenas para que o index.ts fique menor de implantar; o
@@ -86,6 +86,75 @@ código ou sequência de escape.
 BLOQUEIO: se uma fórmula não puder ser confirmada com segurança, não invente. Deixe
 no campo correspondente o aviso "REVISÃO QUÍMICA NECESSÁRIA: a fórmula ou equação
 não pôde ser validada com segurança."`;
+
+/* Notação matemática (v71) — mesmo princípio da química: expoente, índice e
+   sinal chegam ao estudante prontos, em Unicode, nos três destinos (tela, Word,
+   PDF). Vale para TODAS as áreas — Matemática, Física, Geografia, Economia em
+   Humanas, dados numéricos em qualquer texto. A fonte do PDF (Carlito, v16)
+   tem exatamente os caracteres listados aqui; o que não está listado sai como
+   □ no papel — por isso a regra é fechada. */
+export const NOTACAO_MATEMATICA = `
+
+═══════ NOTAÇÃO MATEMÁTICA — REGRA ABSOLUTA DE FORMATAÇÃO (todas as áreas) ═══════
+Expoente, índice, raiz, fração e sinal de operação saem PRONTOS, em caracteres
+Unicode, diretamente legíveis, em TODOS os campos: texto-base, comando,
+alternativas, resolução comentada, comentário de cada alternativa, títulos,
+rótulos e células de tabela/gráfico.
+
+PROIBIDO SEM EXCEÇÃO: acento circunflexo como expoente (x^2, 10^-3, 2^(t/2)),
+sublinhado como índice (Q_0, a_n), LaTeX/KaTeX (\\frac, \\sqrt, x^{2}, $...$),
+tags HTML, "sqrt(", "elevado a" quando o sobrescrito existe, letra x ou ponto
+final como sinal de multiplicação ("4,6 x 10^9", "S0 . 1").
+
+EXPOENTES em algarismo SUPERIOR ⁰¹²³⁴⁵⁶⁷⁸⁹, sinal ⁻ antes do número:
+x² · 2⁴ · 3² · 10⁹ · 10⁻³ · 10⁻⁶ · (1,05)¹² · 5⁻¹ · (1/2)⁵ · 2⁻⁵ · (2³)²
+NUNCA: x^2, 2^4, 10^9, 10^-3, x2, x**2, "x ao quadrado" no meio de uma fórmula.
+
+ÍNDICES em algarismo INFERIOR ₀₁₂₃₄₅₆₇₈₉: Q₀ · S₀ · P₀ · v₀ · a₁ · x₁ · x₂ · t₀ · log₁₀ · log₂
+NUNCA: Q0, S0, P0, a1, Q_0, a_1, log10.
+
+EXPOENTE LITERAL em letra sobrescrita — só existem estas:
+minúsculas ᵃ ᵇ ᶜ ᵈ ᵉ ᶠ ᵍ ʰ ⁱ ʲ ᵏ ˡ ᵐ ⁿ ᵒ ᵖ ʳ ˢ ᵗ ᵘ ᵛ ʷ ˣ ʸ ᶻ (não há q) e
+maiúsculas ᴬ ᴮ ᴰ ᴱ ᴳ ᴴ ᴵ ᴶ ᴷ ᴸ ᴹ ᴺ ᴼ ᴾ ᴿ ᵀ ᵁ ᵂ.
+Ex.: 2ˣ · aⁿ · eᵏᵗ · (1 + i)ᵗ · 2ⁿ⁻¹ · 10ⁱ · bᵐ. Sinais e parênteses sobrescritos: ⁺ ⁻ ⁽ ⁾.
+ÍNDICE LITERAL em letra subscrita — só existem estas: ₐ ₑ ₕ ᵢ ⱼ ₖ ₗ ₘ ₙ ₒ ₚ ᵣ ₛ ₜ ᵤ ᵥ ₓ.
+Ex.: aₙ · Sₙ · xᵢ · Pₘₐₓ · vₘ · tₖ. Não há subscrito para b, c, d, f, g, q, w, y, z nem
+para maiúsculas: nesses casos use outra letra de índice (aₙ em vez de a_b), uma
+palavra (custo da máquina A: Cₐ; ou "C(A)"), ou numere (x₁, x₂).
+
+EXPOENTE QUE NÃO CABE (fração, decimal ou expressão com barra: -t/T, 1/2, -1,5):
+não existe sobrescrito para / e , — REESCREVA a lei, nunca use ^:
+• variável auxiliar: Q(t) = Q₀ · 2⁻ⁿ, em que n = t/T é o número de meias-vidas;
+  P(t) = P₀ · 2ⁿ, com n = t/2;
+• raiz: 2 elevado a 1/2 é √2; 8 elevado a 1/3 é ³√8 = 2 (raiz cúbica escrita
+  com o ³ antes do √); x elevado a 3/2 é x·√x;
+• expoente decimal (2 elevado a −1,5): não existe sobrescrito para a vírgula —
+  reescreva como fração de inteiros e raiz, 1/(2√2), ou introduza n = 1,5 e
+  escreva 2⁻ⁿ.
+
+MULTIPLICAÇÃO: × entre números (4,6 × 10⁹; 3 × 5 = 15) e · entre símbolos
+(Q₀ · 2ⁿ; π · r² · h; a · b). Nunca a letra x, nunca ponto final, nunca *.
+FRAÇÃO em linha com parênteses quando houver mais de um termo: (a + b)/(c + d);
+9/T = 3/2; 1/(2√2). RAIZ com √ e parênteses quando o radicando for composto:
+√2 · √(x² + 1) · ³√27 = 3 · √(2⁴ · 3²) = 2² · 3 = 12.
+SÍMBOLOS disponíveis: π ≤ ≥ ≠ ≈ ± ∞ ° % ‰ → ∑ ∏ ∆ ∂ ∫ √ ½ ¼ ¾ − (menos matemático,
+U+2212, ou o hífen comum; nunca "–" travessão como sinal).
+NÃO EXISTEM na fonte do PDF (saem como □): ∈ ∉ ∪ ∩ ⊂ ⇒ ⇔ ∅ ℝ ℕ ℤ ∀ ∃ ∝ ∴ ∠ ⊥ ⋅ ∙ ∛.
+Escreva por palavras: "x pertence a A", "A união B", "o conjunto dos números reais",
+"implica", "é proporcional a", "ângulo AÔB"; raiz cúbica como ³√.
+UNIDADES com expoente: m² · cm² · km² · m³ · cm³ · dm³ · m/s² · kg/m³ · hab/km²
+(nunca m2, cm3, m/s2).
+
+CONSISTÊNCIA: a mesma grandeza com a MESMA grafia em todos os campos; Q₀ no
+texto-base é Q₀ também nas alternativas, na resolução e nos comentários.
+
+CASOS DE TESTE — a notação de saída tem de sair exatamente assim:
+Q(t) = Q₀ · 2⁻ⁿ, em que n = t/T · 288 = 2⁵ · 3² · √288 = 12√2 · 4,6 × 10⁹ anos
+S = S₀ · (1 + i)ᵗ · (1 + i)⁰ = 1 · aₙ = a₁ + (n − 1) · r · f(x) = 2ˣ · log₁₀ 1000 = 3
+V = π · r² · h = 3 · 3² · 8 = 216 m³ · 1,5 × 10⁻³ mol/L · 9,8 m/s²
+
+JSON: os caracteres Unicode entram diretamente, em UTF-8, nunca como código ou
+sequência de escape.`;
 
 export const RECURSO_INSTRUCOES: Record<string, string> = {
   nenhum: `Recurso visual: NENHUM. Não inclua gráfico, tabela ou imagem. Explore a situação-problema apenas por meio do texto-suporte. Deixe o campo "visual" como null e "recurso" como "nenhum".`,
@@ -202,7 +271,7 @@ No campo "comentario" de cada alternativa errada, nomeie explicitamente o tipo d
 
 REGRA DE FORMATAÇÃO DO JSON — vale para TODOS os campos de texto, e o campo "promptImagem" é o mais sensível porque cita o texto dos rótulos:
 - prefira ASPAS SIMPLES dentro dos textos; se precisar mesmo de uma aspa dupla, escape-a como \\" ;
-- nada de LaTeX nem de barra invertida solta: escreva "2π vezes a raiz quadrada de (L/g)", nunca "2\\\\pi\\\\sqrt{L/g}";
+- nada de LaTeX nem de barra invertida solta: escreva "T = 2π√(L/g)" (Unicode, conforme a REGRA ABSOLUTA DE NOTAÇÃO MATEMÁTICA), nunca "2\\\\pi\\\\sqrt{L/g}" nem "2π vezes a raiz quadrada de (L/g)";
 - nada de quebra de linha literal dentro de uma string (use \\n);
 - nada de vírgula sobrando antes de } ou ].
 

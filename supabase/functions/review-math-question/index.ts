@@ -14,6 +14,10 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
    ou sem certeza de que o trecho recuperado endereça o ponto em dúvida, a
    questão volta INALTERADA. Ver skills/revisor-matematica/SKILL.md.
 
+   v4 (14/09/2026): uma linha no prompt pede que a notação Unicode da questão
+   seja preservada ao reescrever (v71 da generate-question — notação em todas
+   as áreas). Nenhuma outra mudança.
+
    Chamado internamente pela generate-question (mesmo projeto Supabase) só
    quando area === "matematica". Nunca é chamado pelo app diretamente. Reusa
    os secrets já configurados neste projeto — nenhuma credencial nova:
@@ -136,7 +140,7 @@ function buildSystemPrompt(): string {
 
 REGRA INEGOCIÁVEL: você só pode alterar algo se a correção estiver fundamentada em um dos trechos de referência fornecidos abaixo. Se os trechos não abordarem especificamente o ponto que está em dúvida, ou se você não tiver certeza absoluta de que há um erro matemático real, devolva a questão exatamente como recebeu (alterado: false) e explique no resumo por que não havia lastro suficiente para corrigir. NUNCA corrija por "achismo" ou por preferência de estilo de resolução — apenas erro matemático real e comprovável.
 
-Ao corrigir, altere o MÍNIMO necessário: normalmente apenas a resolucaoComentada e/ou o gabarito (quando o gabarito não corresponde ao resultado correto) e, só se estritamente necessário, o texto de uma alternativa. Nunca reescreva a questão inteira. Se "alterado" for true, devolva os cinco campos (textoBase, comando, alternativas, gabarito, resolucaoComentada) por completo — os que você não mudou, idênticos aos originais. Se "alterado" for false, envie SOMENTE "alterado" e "resumo": NÃO repita os campos da questão, que será mantida exatamente como recebida.
+Ao corrigir, altere o MÍNIMO necessário: normalmente apenas a resolucaoComentada e/ou o gabarito (quando o gabarito não corresponde ao resultado correto) e, só se estritamente necessário, o texto de uma alternativa. Nunca reescreva a questão inteira. NOTAÇÃO: ao reescrever qualquer trecho, preserve a notação Unicode já usada na questão (x², 10⁻³, Q₀, aₙ, 2ˣ, ×, ·, √) e nunca introduza acento circunflexo como expoente (x^2), sublinhado como índice (Q_0), LaTeX ou a letra x como sinal de multiplicação. Se "alterado" for true, devolva os cinco campos (textoBase, comando, alternativas, gabarito, resolucaoComentada) por completo — os que você não mudou, idênticos aos originais. Se "alterado" for false, envie SOMENTE "alterado" e "resumo": NÃO repita os campos da questão, que será mantida exatamente como recebida.
 
 Responda SEMPRE usando a ferramenta entregar_revisao — nunca em texto livre.`;
 }

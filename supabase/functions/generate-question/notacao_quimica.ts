@@ -11,7 +11,13 @@
    "letra maiúscula + dígito", para nunca tocar em código de habilidade (H10),
    planta C3/C4, geração F2, vitamina B12/K2/D3, tipo sanguíneo O+/B−, COP30,
    CHIP28, CFC11, HIV2, PM2,5, H1N1, rótulos de Física (F2, N2, V2, T2)…
-   O que não está na lista fica como o modelo escreveu (comportamento atual). */
+   O que não está na lista fica como o modelo escreveu (comportamento atual).
+
+   v71 — TODAS AS ÁREAS, por decisão do professor (13/09/2026). Fora de
+   Biologia/Química/Física (Geografia, Matemática, Linguagens…) a tabela é a
+   mais conservadora possível: só as fórmulas neutras de dois ou mais elementos
+   (CO2, H2O, CH4, SO2…), que não colidem com rótulo nenhum. Nada de gases de um
+   elemento (O2, N2, H2 — códigos, níveis, teclas) nem de íons. */
 
 const QN_INF: Record<string, string> = { "0": "₀", "1": "₁", "2": "₂", "3": "₃", "4": "₄", "5": "₅", "6": "₆", "7": "₇", "8": "₈", "9": "₉" };
 const QN_SUP: Record<string, string> = { "0": "⁰", "1": "¹", "2": "²", "3": "³", "4": "⁴", "5": "⁵", "6": "⁶", "7": "⁷", "8": "⁸", "9": "⁹", "+": "⁺", "-": "⁻" };
@@ -78,6 +84,9 @@ function qnTabela(disciplina: string): { mapa: Map<string, string>; re: RegExp |
   if (d !== "outra") {
     QN_IONS[d].forEach((t: string) => mapa.set(t, qnConverteIon(t)));
     QN_FORMULAS_COMUNS.concat(QN_FORMULAS_DISCIPLINA[d], QN_GASES).forEach((t: string) => mapa.set(t, qnSubscreveIndices(t)));
+  } else {
+    // v71: demais disciplinas — só fórmulas neutras de 2+ elementos (sem gases, sem íons).
+    QN_FORMULAS_COMUNS.forEach((t: string) => mapa.set(t, qnSubscreveIndices(t)));
   }
   // Mais longo primeiro: "NO3-" antes de "NO3", "CO32-" antes de "CO3".
   const tokens = Array.from(mapa.keys()).sort((a: string, b: string) => b.length - a.length);
@@ -111,7 +120,7 @@ function normalizarNotacaoTexto(texto: string, disciplina: string): string {
     // 3) Fórmula neutra seguida de carga escrita em OUTRO estilo ASCII
     //    ("SO4 2-", "SO4^2-", "SO4-2"): não converter pela metade — fica para o
     //    modelo/auditoria, em vez de sair "SO₄ 2-".
-    if (!temCarga && /^(?:\^|\s?\d[+\-−](?![\p{L}\p{Nd}])|[\-−]\d|\s?\(\d?[+\-−]\)|\)\d)/u.test(depoisTxt)) return m0;   // também "SO4(2-)", "SO4 (2−)" e "(CH2O)6"
+    if (!temCarga && /^(?:\^|\s?\d[+\-−](?![\p{L}\p{Nd}])|[\-−]\d|\s?\(\d?[+\-−]\)|\)\d|[+\-−](?![\p{L}\p{Nd}(]))/u.test(depoisTxt)) return m0;   // também "SO4(2-)", "SO4 (2−)", "(CH2O)6" e "NO3-" fora da tabela de íons (v71)
     // 4) Gases/moléculas de UM elemento (O2, O3, N2, H2, Cl2, Br2, F2, I2, S8)
     //    colidem com rótulos (F2 força/geração, N2 normal/estádio, H2 habilidade,
     //    S8 celular, teclas F2, intervalo I2). Regras por disciplina, abaixo.
@@ -168,8 +177,9 @@ function normalizarNotacaoTexto(texto: string, disciplina: string): string {
 }
 
 const QN_CAMPOS_TEXTO: string[] = ["tema", "textoBase", "fonte", "comando", "resolucaoComentada"];
-function normalizarNotacaoQuimica(data: any, area: string, disciplina: string): any {
-  if (area !== "natureza" || !data || typeof data !== "object" || Array.isArray(data)) return data;
+function normalizarNotacaoQuimica(data: any, _area: string, disciplina: string): any {
+  // v71: roda em todas as áreas (a tabela por disciplina decide o quanto converte).
+  if (!data || typeof data !== "object" || Array.isArray(data)) return data;
   const N = (t: string) => normalizarNotacaoTexto(t, disciplina);
   const saida: any = { ...data };
   for (const c of QN_CAMPOS_TEXTO) if (typeof saida[c] === "string") saida[c] = N(saida[c]);

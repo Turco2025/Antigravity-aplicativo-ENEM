@@ -41,7 +41,11 @@ src/app_template.html                 → HTML/CSS base do app
 src/app.js                            → lógica do app (client-side)
 src/app_data.json                     → Matriz de Referência do ENEM + contexto pedagógico por área
 src/combine.py                        → script que combina os três arquivos acima em index.html
-supabase/functions/generate-question/ → Edge Function que gera as questões (Claude)
+src/fonts.js                          → Carlito embarcada no PDF (subconjunto; v16 com letras sobre/subscritas)
+fontwork/ampliar_carlito.py           → gera o fonts.js a partir da Carlito do sistema (documentação do subconjunto)
+nm/                                   → núcleo da notação matemática (JS compartilhado) + casos de teste + testes Node/Deno
+supabase/functions/generate-question/ → Edge Function que gera as questões (Claude) + notação (notacao_quimica.ts, notacao_matematica.ts)
+supabase/functions/review-math-question/ → revisor de matemática (contas com lastro nos livros de referência)
 supabase/functions/generate-image/    → Edge Function que gera as imagens (GPT Image)
 supabase/functions/whatsapp-webhook/  → Edge Function do WhatsApp (pareamento) + testes Deno
 supabase/migrations/                  → migrações do banco (tabelas perfis e wa_*, RLS)
@@ -55,6 +59,27 @@ Logo abaixo do cabeçalho, para usuários logados. Gera um código de 6 dígitos
 "Vincular conta 123456" pronta (link `wa.me` para o número em `WHATSAPP_NUMERO_EMPRESA`, no
 topo de `src/app.js`) e acompanha o pareamento consultando `wa_meu_status` a cada 4 s. Teste
 sem rede: `node tests/verify_whatsapp_box.js` (o supabase-js é substituído por um stub).
+
+## Notação matemática e química em Unicode, em todas as áreas (v16 / generate-question v71)
+
+Expoentes, índices, raízes e sinais chegam ao estudante prontos — x², 2⁴, 10⁻³, Q₀, aₙ, 2ˣ,
+4,6 × 10⁹, H₂SO₄ — nos três destinos (tela, Word, PDF). Nunca LaTeX nem `^`/`_`. Três camadas:
+
+1. **Prompt**: os blocos `NOTACAO_QUIMICA` e `NOTACAO_MATEMATICA` (`recurso_instrucoes.ts`)
+   entram no prompt do sistema de **todas** as áreas (até a v70 a química só entrava em
+   Natureza e a Matemática não recebia regra nenhuma — daí `Q0`, `2^4`, `10^9`).
+2. **Rede de segurança determinística**: `notacao_quimica.ts` (lista fechada de fórmulas; fora
+   de Natureza só as neutras, sem gases nem íons) e `notacao_matematica.ts` (só padrões
+   inequívocos: `x^2`→x², `10^-3`→10⁻³, `2^(n-1)`→2ⁿ⁻¹, `Q_0`→Q₀, `Q0`→Q₀ quando encostado em
+   operador em oração com "=", `m2`→m², `4,6 x 10^9`→4,6 × 10⁹, `S0 . 1`→S₀ · 1). O que for
+   ambíguo (`2^(-t/T)`) fica e é apontado pela verificação do app. O núcleo JavaScript é o
+   MESMO no backend e em `src/app.js` (entre as marcas `NM-INÍCIO`/`NM-FIM`), testado pelos
+   mesmos casos: `node nm/testa_core_node.js` e `deno run --allow-read nm/testa_core_deno.ts`.
+3. **App**: a normalização roda em toda questão que entra (backend, arquivo, refazer visual) —
+   simulados arquivados antes da v16 saem corrigidos ao reabrir. A verificação por questão
+   aponta `^`, `_`, LaTeX e letra x como × em todas as áreas. A fonte do PDF ganhou as letras
+   sobrescritas/subscritas (`fontwork/ampliar_carlito.py`). Teste no navegador, sem rede:
+   `node tests/verify_math_notation.js`.
 
 ## Reconstruindo o `index.html` após editar `src/`
 
