@@ -2485,7 +2485,7 @@ const DOMINIOS_CONTEXTO = [
   { n: "ferrovias e metrô", k: ["trem", "trens", "ferrovia", "vagao", "vagoes", "estacao de metro", "linha de metro", "trilhos da"] },
   { n: "farmácia e medicamentos", k: ["farmacia", "medicamento", "remedio", "comprimidos", "bula", "dosagem"] },
   { n: "cartografia e mapas", k: ["mapa rodoviario", "cartograf", "gps", "coordenadas geograficas", "atlas", "escala do mapa"] },
-  { n: "fotografia e impressão", k: ["fotografia", "camera fotografica", "impressora", "pixel"] },
+  { n: "fotografia e impressão", k: ["fotograf", "camera fotografica", "impressora", "grafica rapida", "pixel"], kp: ["impresso", "impressa"] },   // v18.2: "fotograf" pega fotógrafo/fotográfica; kp só para o contexto do planejador (teste real de 15/09)
   { n: "teatro e dança", k: ["teatro", "peca teatral", "danca", "palco", "espetaculo", "coreografia"] },
   { n: "livros, editoras e bibliotecas", k: ["biblioteca", "livraria", "tiragem", "feira do livro", "exemplares do livro"] },
   { n: "petróleo e combustíveis", k: ["petroleo", "gasolina", "etanol", "posto de combustivel", "refinaria", "postos de gasolina"] },
@@ -2659,6 +2659,18 @@ function planejaEixosTematicos(){
 // digitados pelo professor nas outras questões e os temas das questões já
 // entregues pela IA. Nunca inclui o tema da própria q (regenerar "mais fácil/
 // mais difícil" mantém o assunto).
+/* v18.2: o recorte planejado só viaja enquanto a questão tiver o tema para o qual
+   ele foi planejado (`recorteTema`, gravado no planejamento) — senão o modelo segue
+   o recorte e ignora o tema (incidente de 15/09/2026). Protege os simulados gerados
+   a partir desta versão, por qualquer caminho ("Regenerar", "Mais fácil/difícil",
+   "Outro contexto"). Simulado antigo não tem `recorteTema`: o recorte é aceito como
+   está — se ele estiver descasado do tema (edição feita na versão anterior), o
+   professor descarta-o abrindo "Editar" e alterando o tema. */
+function recorteParaEnvio(q){
+  if(!q || !(q.tema || "").trim() || !q.recorte) return null;
+  if(q.recorteTema != null && temaComparavel(q.recorteTema) !== temaComparavel(q.tema)) return null;
+  return q.recorte;
+}
 function temasEvitarPara(q){
   const vistos = new Set();
   const lista = [];
@@ -2674,19 +2686,23 @@ function temasEvitarPara(q){
   // Idem com tema digitado e recorte planejado: as questões do mesmo grupo
   // já receberam recortes distintos do planejamento — seus temas entregues
   // não precisam viajar de novo; os de outros grupos continuam indo.
-  const comRecorte = !!(q.recorte && proprioTema);
+  const comRecorte = !!recorteParaEnvio(q);
   const grupoProprio = grupoDeTema(q);
   state.questions.forEach(o => {
     if(o === q) return;
     // v18: questões da mesma lista do lote (conteúdos distintos, recortes
     // planejados juntos) são o mesmo grupo — nem o conteúdo digitado nem o tema
     // entregue delas viajam, como já era com o tema igual.
-    const mesmoGrupo = comRecorte && grupoDeTema(o) === grupoProprio && !!o.recorte;
+    const mesmoGrupo = comRecorte && grupoDeTema(o) === grupoProprio && !!recorteParaEnvio(o);
     const entregue = (mesmoGrupo || (soMesmoEixo && o.eixoTematico !== q.eixoTematico)) ? "" : (o.data && o.data.tema || "").trim();
     // Tema digitado em outra questão que coincide com o subtópico reservado desta
     // ("Função exponencial" × "funções exponenciais e logarítmicas") não pode virar
     // "proibido" — seria contradição direta com a reserva.
-    const digitado = mesmoGrupo ? "" : (o.tema || "").trim();
+    // v18.2: tema trocado pelo professor no painel "Editar" — os temas digitados
+    // das outras questões não viram "proibido" (o tema dela era um deles, ou um
+    // recorte deles: "Ciclo do nitrogênio" com "PROIBIDO: Ciclos Biogeoquímicos"
+    // seria contradição). Os temas ENTREGUES continuam, para não repetir questão.
+    const digitado = (mesmoGrupo || q.temaEditado) ? "" : (o.tema || "").trim();
     const candidatos = [(q.subtopico && temaCoincideComSubtopico(digitado, q.subtopico)) ? "" : digitado, entregue];
     candidatos.forEach(t => {
       if(!t) return;
@@ -2718,6 +2734,12 @@ function contextoRespeitaDominio(contexto, dominio){
   const t = normalizaTextoBusca(contexto);
   const dom = DOMINIOS_CONTEXTO.find(d => d.n === dominio);
   if(dom && dominioBateNoTexto(t, dom)) return true;
+  // v18.2: palavras extras SÓ desta checagem (kp) — flexões do nome do domínio que
+  // não podem ir para a lista k porque a auditoria de contextos repetidos usa k e
+  // palavras comuns ("impresso") criariam colisões falsas. (Uma família de palavras
+  // genérica foi testada e descartada: "família" ~ "familiar", "pessoas" ~
+  // "pessoais", "informações" ~ "informática" aceitariam quase tudo.)
+  if(dom && Array.isArray(dom.kp) && dominioBateNoTexto(t, { k: dom.kp })) return true;
   const palavras = normalizaTextoBusca(dominio).split(/[^a-z]+/).filter(w => w.length >= 5).map(radicalPalavra);
   const tw = new Set(t.split(/[^a-z]+/).map(radicalPalavra));
   return palavras.some(w => tw.has(w));
@@ -2729,7 +2751,7 @@ function recorteTexto(r, q){
   // Se o professor fixou competência/habilidade na questão, a dele manda —
   // a habilidade sugerida pelo planejamento fica de fora para não conflitar.
   if(r && r.habilidade && !q.habilidadeCod && !q.competenciaNum) partes.push(`habilidade: ${String(r.habilidade).trim()}`);
-  return partes.join(" · ").slice(0, 600) || null;
+  return partes.join(" · ").slice(0, 800) || null;   // v18.2: era 600 (backend v74.2 deixa o contexto ir a 320)
 }
 
 // v18: o recorte planejado fica dentro do conteúdo distribuído para a questão?
@@ -2768,7 +2790,9 @@ function recorteRespeitaItem(r, item, outrosItens){
 }
 
 async function planejaRecortesPorTema(){
-  state.questions.forEach(q => { q.recorte = null; });
+  // v18.2: novo "Gerar" — o tema do formulário manda; a origem do recorte e a marca
+  // de "tema editado nos resultados" recomeçam junto com o recorte.
+  state.questions.forEach(q => { q.recorte = null; q.recorteTema = null; q.temaEditado = false; });
   const grupos = new Map();
   state.questions.forEach(q => {
     const t = (q.tema || "").trim();
@@ -2859,6 +2883,8 @@ async function planejaRecortesPorTema(){
           } else contextosAceitos.push(ctx);
         }
         q.recorte = r ? recorteTexto(r, q) : null;
+        // v18.2: tema para o qual este recorte foi planejado (ver recorteParaEnvio).
+        q.recorteTema = r ? q.tema : null;
       });
       console.log(`[tema] recortes planejados para "${g.tema}" (${payload.recortes.length}/${g.qs.length}): ` + g.qs.map(q => `${state.questions.indexOf(q) + 1}: ${q.recorte}`).join(" · "));
     }catch(e){
@@ -3100,7 +3126,7 @@ async function generateQuestion(q){
           eixoTematico: (q.tema || "").trim() ? null : (q.eixoTematico || null),
           // Recorte planejado (backend v64): só com tema digitado, e só quando
           // há 2+ questões com o mesmo tema (ver planejaRecortesPorTema).
-          recorte: (q.tema || "").trim() ? (q.recorte || null) : null,
+          recorte: recorteParaEnvio(q),
           temasEvitar: temasEvitarPara(q),
           // v17 — diversidade sem custo: subtópico oficial dentro do eixo (só
           // sem tema), domínio de contexto reservado (principal e alternativo),
@@ -4498,16 +4524,36 @@ function toggleEdit(cardEl, q, idx){
   });
   editWrap.querySelector(".edit-cancel").addEventListener("click", () => { editWrap.classList.add("hidden"); editWrap.innerHTML=""; });
   editWrap.querySelector(".edit-save").addEventListener("click", () => {
-    q.tema = editWrap.querySelector(".edit-tema").value;
+    const temaAntes = temaComparavel(q.tema);
+    const temaNovo = editWrap.querySelector(".edit-tema").value;
+    const temaMudou = temaComparavel(temaNovo) !== temaAntes;
+    // Só espaços/maiúsculas/acentos diferentes: fica a string original, para a
+    // questão continuar no grupo das irmãs (grupoDeTema compara o texto exato).
+    if(temaMudou) q.tema = temaNovo;
     q.dificuldade = editWrap.querySelector(".edit-dif").value;
     q.recurso = recSel.value;
     q.instrucoesVisual = editWrap.querySelector(".edit-instr-visual").value;
     q.competenciaNum = compSel.value ? parseInt(compSel.value) : null;
     q.habilidadeCod = habSel.value || null;
+    /* v18.2: o recorte planejado da leva (conteúdo + contexto + habilidade) foi
+       feito para o tema ANTERIOR desta questão, e o backend manda o modelo
+       segui-lo ("DEVE seguir este recorte"). Tema alterado aqui → o texto do
+       professor manda e o recorte sai; sem isso o modelo obedecia ao recorte
+       antigo e a edição parecia ignorada (caso real de 15/09/2026: Biologia,
+       questão 10, "Ciclo do nitrogênio…" gerou "Ciclo do carbono…" de novo).
+       Tema igual → o recorte fica (a questão continua no seu lugar da leva),
+       só sem a habilidade sugerida quando o professor escolheu a dele. */
+    if(temaMudou){ q.recorte = null; q.recorteTema = null; q.temaEditado = true; }
+    else if(q.recorte && (q.habilidadeCod || q.competenciaNum)) q.recorte = q.recorte.split(" · ").filter(p => !/^habilidade:/i.test(p)).join(" · ") || null;
     editWrap.classList.add("hidden"); editWrap.innerHTML = "";
-    generateQuestion(q);
+    // v18.2: como "Regenerar": espera a imagem e atualiza o simulado já
+    // arquivado — antes a questão editada não era regravada em "Meus
+    // Simulados" e voltava à versão antiga ao reabrir.
+    regenerarQuestaoEArquivar(q);
   });
 }
+// Tema "igual" para efeito de edição: espaços, maiúsculas e acentos não contam.
+function temaComparavel(t){ return normalizaTextoBusca(t).trim(); }
 
 function buildQuestionBody(data, q){
   const wrap = document.createElement("div");

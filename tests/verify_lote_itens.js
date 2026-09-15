@@ -1,4 +1,4 @@
-// v18 — vários conteúdos no "Tema do lote": leitura da lista, rodízio na ordem digitada, exibição
+// v18/v18.2 — vários conteúdos no "Tema do lote": leitura da lista, rodízio na ordem digitada, exibição
 // por questão e no painel, planejamento ÚNICO com temasPorQuestao (backend v74), recorte fora do
 // conteúdo descartado (backend antigo), temasEvitar sem crescer, sincronização ao "Gerar", nome e
 // cabeçalho, simulado reaberto. Sem rede (backend e supabase-js simulados).
@@ -306,6 +306,31 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   // simulado antigo (sem temaLote): nada de lista
   const G = await page.evaluate(() => { const salvo = state.questions; state.questions = [{ tema: 'Exponenciação' }, { tema: 'Exponenciação' }]; const r = { loteComum: temaLoteComum(), titulo: temaDaLevaParaTitulo(), grupo: grupoDeTema(state.questions[0]) }; state.questions = salvo; return r; });
   ok(G.loteComum === null && G.titulo === 'Exponenciação' && G.grupo === 'exponenciação', 'G1 questões sem temaLote: comportamento antigo (grupo = tema)', JSON.stringify(G));
+
+  // ---------- (H) v18.2: contexto do planejador × domínio reservado — família da palavra ----------
+  const H = await page.evaluate(() => ({
+    fotografo: contextoRespeitaDominio('Um fotógrafo profissional precisa calcular o fator de ampliação linear de uma imagem quadrada ao comparar a área impressa final com a área do negativo original.', 'fotografia e impressão'),
+    impressa: contextoRespeitaDominio('A gráfica compara a área impressa de dois cartazes.', 'fotografia e impressão'),
+    fotografica: contextoRespeitaDominio('Uma exposição fotográfica reúne 40 imagens ampliadas.', 'fotografia e impressão'),
+    foraDoDominio: contextoRespeitaDominio('Uma transportadora divide caixas em lotes iguais para as vans.', 'fotografia e impressão'),
+    reflorestamento: contextoRespeitaDominio('Mudas nativas são plantadas para reflorestar uma encosta.', 'florestas e reflorestamento'),
+    apicultor: contextoRespeitaDominio('Um apicultor pesa a produção das colmeias.', 'apicultura e produção de mel'),
+    curtas: contextoRespeitaDominio('Ele foi ao mar.', 'pesca e aquicultura'),
+    palavrasCurtasNaoContam: contextoRespeitaDominio('A prova de 100 metros teve nove atletas.', 'clima e meteorologia'),
+    // palavras comuns NÃO podem abrir o domínio (uma família genérica de palavras faria isso)
+    familia: contextoRespeitaDominio('Uma família compara o consumo de energia de dois aparelhos.', 'agricultura familiar e cooperativas rurais'),
+    pessoas: contextoRespeitaDominio('Duzentas pessoas responderam à pesquisa.', 'finanças pessoais e crédito'),
+    informacoes: contextoRespeitaDominio('Com base nas informações da tabela, calcule a média.', 'informática e centros de dados'),
+    transpiracao: contextoRespeitaDominio('A transpiração das plantas aumenta com a temperatura.', 'transporte e logística de cargas'),
+    impressoNaAuditoria: dominioBateNoTexto(normalizaTextoBusca('O relatório impresso foi entregue.'), DOMINIOS_CONTEXTO.find(d => d.n === 'fotografia e impressão')),
+    teto: recorteTexto({ conteudo: 'C'.repeat(200), contexto: 'X'.repeat(320), habilidade: 'H'.repeat(200) }, {}).length,
+    tetoAntigo: recorteTexto({ conteudo: 'c', contexto: 'x', habilidade: 'h' }, {}),
+    auditoriaNaoMudou: !dominioBateNoTexto(normalizaTextoBusca('O relatório impresso foi entregue na escola.'), DOMINIOS_CONTEXTO.find(d => d.n === 'fotografia e impressão')) && dominioBateNoTexto(normalizaTextoBusca('Um fotógrafo ampliou a foto.'), DOMINIOS_CONTEXTO.find(d => d.n === 'fotografia e impressão')),
+  }));
+  ok(H.fotografo && H.impressa && H.fotografica, 'H1 "fotógrafo", "área impressa" e "exposição fotográfica" caem em "fotografia e impressão" (caso real de 15/09: contexto da q8 era descartado)', JSON.stringify(H));
+  ok(!H.foraDoDominio && H.reflorestamento && H.apicultor && !H.curtas && !H.palavrasCurtasNaoContam && !H.familia && !H.pessoas && !H.informacoes && !H.transpiracao && !H.impressoNaAuditoria, 'H2 fora do domínio continua fora; "reflorestar"/"apicultor" entram pelas listas k; palavras comuns (família, pessoas, informações, transpiração) NÃO abrem domínio; "impresso" só vale para o planejador, não para a auditoria', JSON.stringify(H));
+  ok(H.teto === 'conteúdo: '.length + 200 + ' · contexto: '.length + 320 + ' · habilidade: '.length + 200 && H.teto > 600 && H.tetoAntigo === 'conteúdo: c · contexto: x · habilidade: h', 'H3 recorte com os tetos máximos do backend v74.2 (200 + 320 + 200) passa inteiro no app (teto 800; com 600 seria cortado) e a montagem não mudou', JSON.stringify({ teto: H.teto, tetoAntigo: H.tetoAntigo }));
+  ok(H.auditoriaNaoMudou, 'H4 a auditoria de contextos repetidos (dominioBateNoTexto) não passou a disparar com "impresso"; "fotógrafo" agora dispara o domínio certo', JSON.stringify(H.auditoriaNaoMudou));
 
   const errosReais = erros.filter(e => !/favicon|net::ERR|Failed to load resource|supabase/i.test(e));
   ok(errosReais.length === 0, 'Z sem erros de JavaScript no console', errosReais.join('\n     '));

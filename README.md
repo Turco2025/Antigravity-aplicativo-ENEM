@@ -92,7 +92,7 @@ Expoentes, índices, raízes e sinais chegam ao estudante prontos — x², 2⁴,
    sobrescritas/subscritas (`fontwork/ampliar_carlito.py`). Teste no navegador, sem rede:
    `node tests/verify_math_notation.js`.
 
-## Diversidade de exemplos em levas, sem custo (v17 / generate-question v73; v18 / v74)
+## Diversidade de exemplos em levas, sem custo (v17 / generate-question v73; v18 / v74; v18.2 / v74.2)
 
 Problema real (leva 538678f0, 20 de Matemática sem tema, 14/09/2026): "fábrica de componentes
 eletrônicos" com linhas A/B 60%/40% em duas questões, "transportadora" em três, "cooperativa
@@ -169,6 +169,44 @@ sem chamada nova à IA, sem campo novo na resposta e sem aumentar o prompt da le
    único descritivo que contenha vírgula ("Funções do 1.º e 2.º graus, gráficos") agora vira
    dois conteúdos — o aviso do "Aplicar" e o painel mostram a divisão; use travessão ou "e".
    Teste: `node tests/verify_lote_itens.js` — 48 verificações. No teste real de 15/09 o planejador criou um recorte a mais e deslocou os seguintes; por isso o app casa cada recorte com a sua questão pelo conteúdo (posição → número declarado → conteúdo com contexto no domínio → conteúdo), e o backend (v74.1) lista os conteúdos um por linha, pede o campo `numero` e devolve até 2 recortes extras.
+
+8. **"Editar" numa questão já gerada respeita o tema novo (v18.2)**: o recorte planejado da leva
+   (conteúdo · contexto · habilidade) pertence ao tema que a questão tinha quando a leva foi
+   planejada, e o backend manda o modelo segui-lo. Se o professor troca o tema no painel
+   "Editar" e clica em "Salvar e gerar novamente", o recorte antigo é descartado e o texto dele
+   manda (o domínio de contexto reservado continua, só como cenário). Sem isso, o modelo seguia o
+   recorte antigo e a edição parecia ignorada — caso real de 15/09/2026 (Biologia, questão 10:
+   "Ciclo do nitrogênio…" voltou como "Ciclo do carbono…"). Tema igual (espaços, maiúsculas e
+   acentos não contam) mantém o recorte — só sem a habilidade sugerida quando o professor escolhe
+   competência/habilidade no painel. O "Salvar e gerar novamente" passa a usar o mesmo caminho de
+   "Regenerar": espera a imagem e regrava o simulado em "Meus Simulados" (antes a questão editada
+   não era regravada e voltava à versão antiga ao reabrir). Guardas extras: cada recorte guarda o tema para o qual foi planejado (`recorteTema`) e só
+   viaja enquanto a questão tiver esse tema — vale para "Regenerar"/"Mais fácil"/"Mais difícil"
+   nos simulados gerados a partir desta versão (um simulado antigo não tem `recorteTema` e o
+   recorte é aceito como está; se ele estiver descasado por uma edição feita na versão anterior,
+   "Editar" com o tema alterado o descarta); e, para a questão com tema trocado no painel
+   (`temaEditado`), os temas digitados das outras não viram "assunto proibido" (só os entregues —
+   se outra questão já entregou algo próximo do tema novo, ela continua na lista, para não sair
+   questão duplicada). Teste: `node tests/verify_editar_questao.js` — 21 verificações (no app
+   anterior 11 falham, entre elas as que reproduzem o defeito).
+
+9. **Contexto do planejador × domínio reservado, e contexto sem corte no meio da frase (v18.2 /
+   generate-question v74.2)**: no teste real de 15/09 (10 × "MDC, MMC, radiciação, exponenciação,
+   grandezas") o contexto da questão 8 — "um fotógrafo … a área impressa" — foi descartado pelo app
+   porque as palavras do domínio "fotografia e impressão" eram só "fotografia", "impressora",
+   "pixel", e a checagem reserva comparava o singular exato. Agora o domínio tem "fotograf"
+   (prefixo: fotografia, fotógrafo, fotográfica) e uma lista `kp` usada SÓ por essa checagem
+   (`contextoRespeitaDominio`): "impresso", "impressa". A auditoria de contextos repetidos
+   (`dominioBateNoTexto`) continua usando só `k` — palavras comuns não podem entrar lá, senão
+   "relatório impresso" criaria colisões falsas. Uma família genérica de palavras foi testada e
+   descartada na revisão: "família" ~ "familiar", "pessoas" ~ "pessoais", "informações" ~
+   "informática" abririam quase todos os domínios. No backend, o contexto do recorte era cortado em 250 caracteres onde
+   caísse (duas frases da leva foram para o prompt terminando em "…uma situação em qu"); o prompt do
+   planejador agora pede contextos de até 200 caracteres e, se passar, `cortaLimpo` corta no último
+   fim de frase (pontuação seguida de espaço no texto original — "3.400 sacas" não conta) depois da
+   metade do limite, ou no último espaço, com teto 320; os tetos do recorte
+   inteiro subiram de 600 para 800 (app e backend) para nada ser cortado de novo na montagem.
+   Selftest: `planejamentoV74.contextoCurto` e `corteLimpo`. Testes: `verify_lote_itens.js` (H1–H4).
 
 Testes: `node tests/verify_diversidade.js` (catálogo, reservas, corpos enviados, auditoria com
 as duas levas reais em `tests/fixtures/`, frases típicas de Física/Biologia, Humanas, leva mista, simulado antigo, botão, leitor numérico) — 49 verificações; `node tests/teste_real_fase_d.js` roda o app inteiro com as 10 questões reais. Ordem de publicação: backend v73 antes do app v17 (o app novo já encurta a lista de assuntos contando com o subtópico/domínio).

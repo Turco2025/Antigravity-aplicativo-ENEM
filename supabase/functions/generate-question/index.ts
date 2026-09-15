@@ -518,7 +518,7 @@ Entregue EXATAMENTE ${opts.quantidade} recortes: o recorte de número n é sobre
 
 Cada recorte é o plano de UMA questão e tem três partes:
 - "conteudo": ${conteudoDesc}
-- "contexto": a situação-problema concreta e real em que a questão vai se apoiar — do cotidiano, do trabalho, da ciência, da tecnologia, do ambiente ou da sociedade brasileira, no espírito das provas reais do ENEM 2015-2025. Os ${opts.quantidade} contextos devem ser TODOS diferentes: nunca o mesmo aparelho, objeto, cenário ou experimento em dois recortes.
+- "contexto": a situação-problema concreta e real em que a questão vai se apoiar — do cotidiano, do trabalho, da ciência, da tecnologia, do ambiente ou da sociedade brasileira, no espírito das provas reais do ENEM 2015-2025. Uma ou duas frases curtas, até 200 caracteres: só o cenário e o que se pede (os números e detalhes ficam para a questão). Os ${opts.quantidade} contextos devem ser TODOS diferentes: nunca o mesmo aparelho, objeto, cenário ou experimento em dois recortes.
 - "habilidade": o código e o texto de UMA habilidade da Matriz (lista no prompt do sistema) que a questão vai exigir. Varie as habilidades ao longo da lista (cálculo, leitura de gráfico/tabela/esquema, comparação de procedimentos, análise de impacto social ou ambiental, etc.), sem concentrar todas na mesma; a habilidade deve corresponder à operação cognitiva do recorte, não só ao assunto.
 
 Regras: fique DENTRO do tema pedido${comLista ? " e, em cada número, DENTRO do conteúdo fixado para ele" : ""} (nunca migre para outro tema da disciplina); prefira recortes frequentes nas provas reais${comLista ? " (a ordem das questões já está fixada pelos conteúdos acima)" : ", ordenados do mais frequente ao menos frequente"}; recortes de nível "Fácil" pedem contextos diretos e uma etapa de raciocínio, "Difícil" pedem combinar informações ou uma armadilha conceitual fina; escreva em português, de forma específica (nada de "aplicações no cotidiano" — diga qual).${blocoDominios} Entregue chamando a ferramenta "entregar_recortes", com exatamente ${opts.quantidade} itens, na ordem das questões.`;
@@ -537,7 +537,7 @@ const FERRAMENTA_RECORTES = {
           properties: {
             numero: { type: "integer", description: "Número da questão a que este recorte pertence (1 = primeira), na ordem pedida. Obrigatório quando houver conteúdo fixado por questão." },
             conteudo: { type: "string", description: "Subtópico/conceito específico dentro do tema (com conteúdo fixado por questão: comece pelo nome do conteúdo como o professor escreveu)." },
-            contexto: { type: "string", description: "Situação-problema concreta e real, diferente das demais e, quando houver domínio reservado para este índice, dentro dele (nomeando o domínio)." },
+            contexto: { type: "string", description: "Situação-problema concreta e real, em até 200 caracteres, diferente das demais e, quando houver domínio reservado para este índice, dentro dele (nomeando o domínio)." },
             habilidade: { type: "string", description: "Código e texto de uma habilidade da Matriz (ex.: \"H21: ...\")." },
           },
           required: ["conteudo", "contexto", "habilidade"],
@@ -588,6 +588,23 @@ function listaDeRecortes(data: unknown): unknown[] {
   return Array.isArray(bruto) ? bruto : [];
 }
 type Recorte = { conteudo: string; contexto: string; habilidade: string; numero?: number };
+/* v74.2: corte sem interromper palavra ou frase. Até a v74.1 o contexto era cortado
+   em 250 caracteres onde caísse ("…considerando também uma situação em qu") e o
+   fragmento ia assim para o prompt da questão. Agora o prompt pede contextos de até
+   200 caracteres e, se ainda assim passar do limite, fica até o último fim de frase
+   depois da metade do limite — ou, sem fim de frase, até o último espaço. */
+function cortaLimpo(texto: string, max: number): string {
+  const t = texto.trim();
+  if (t.length <= max) return t;
+  const base = t.slice(0, max);
+  let corte = -1;
+  // Fim de frase = pontuação seguida de espaço NO TEXTO ORIGINAL (não na fatia):
+  // "3.400 sacas" cortado logo depois do ponto de milhar não é fim de frase.
+  for (const m of base.matchAll(/[.;!?]/g)) { const i = m.index ?? -1; if (i + 1 >= max / 2 && /\s/.test(t[i + 1] ?? " ")) corte = i + 1; }
+  if (corte > 0) return base.slice(0, corte).trim();
+  const esp = base.lastIndexOf(" ");
+  return (esp > max / 2 ? base.slice(0, esp) : base).replace(/[\s,;:(\u2013\u2014-]+$/, "").trim();
+}
 function normalizarRecortes(bruto: unknown, quantidade: number): Recorte[] {
   const lista = listaDeRecortes(bruto);
   const saida: Recorte[] = [];
@@ -595,7 +612,7 @@ function normalizarRecortes(bruto: unknown, quantidade: number): Recorte[] {
     if (!r || typeof r !== "object") continue;
     const obj = r as Record<string, unknown>;
     const conteudo = campoDoRecorte(obj, "conteudo").slice(0, 200);
-    const contexto = campoDoRecorte(obj, "contexto").slice(0, 250);
+    const contexto = cortaLimpo(campoDoRecorte(obj, "contexto"), 320);
     const habilidade = campoDoRecorte(obj, "habilidade").slice(0, 200);
     if (!conteudo && !contexto) continue;
     // v74.1: número da questão declarado pelo modelo (só inteiros 1..quantidade).
@@ -1767,6 +1784,14 @@ function selfTestResponse() {
         mantemDominios: comLista.includes("DOMÍNIOS DE CONTEXTO RESERVADOS") && comLista.includes("1: pesca e aquicultura"),
         semListaIgualAoV73: semLista.includes('TODAS as questões são sobre o tema pedido pelo professor: "Exponenciação"') && !semLista.includes("JÁ DISTRIBUIU"),
         umConteudoSoNaoFixa: !umSo.includes("JÁ DISTRIBUIU"),
+        // v74.2: contexto curto no prompt e corte limpo no normalizador.
+        contextoCurto: semLista.includes("até 200 caracteres") && FERRAMENTA_RECORTES.input_schema.properties.recortes.items.properties.contexto.description.includes("até 200 caracteres"),
+        corteLimpo: cortaLimpo("Primeira frase completa e um pouco mais longa. Segunda frase que seria cortada no meio por ser longa demais", 60) === "Primeira frase completa e um pouco mais longa."
+          && cortaLimpo("Uma frase sem ponto final que continua e continua até passar do limite estabelecido", 50) === "Uma frase sem ponto final que continua e continua"
+          && cortaLimpo("Curta.", 60) === "Curta."
+          && cortaLimpo("A cooperativa colheu 1.200 sacas de soja e 3.400 de milho nesta safra recorde", 45) === "A cooperativa colheu 1.200 sacas de soja e"
+          && cortaLimpo("Valor de R$ 3.14 por unidade em uma compra grande de material para a obra da escola", 40) === "Valor de R$ 3.14 por unidade em uma"
+          && !/[\s,;:(\u2013\u2014-]$/.test(cortaLimpo("Texto com vírgula, no lugar do corte, que continua além do limite estabelecido aqui", 45)),
         chars: comLista.length - semLista.length,
       };
     })(),
@@ -1930,7 +1955,7 @@ ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferrame
   // assuntos a evitar continuam valendo se o app os mandar.
   const eixoTematico = tema ? "" : (body.eixoTematico || "").toString().trim().slice(0, 300);
   // v64 — recorte planejado (ver planejarRecortes): só com tema digitado.
-  const recorte = tema ? (body.recorte || "").toString().trim().slice(0, 600) : "";
+  const recorte = tema ? (body.recorte || "").toString().trim().slice(0, 800) : "";   // v74.2: era 600 (contexto passou de 250 para 320)
   // v73: teto 40 (era 30) e itens de 120 caracteres — ver temasEvitarPara no app.
   const listaCurta = (v: unknown, maxItens: number, maxChars: number): string[] => Array.isArray(v)
     ? Array.from(new Set(v.map((t: unknown) => String(t || "").trim().slice(0, maxChars)).filter((t: string) => t))).slice(0, maxItens) as string[]
