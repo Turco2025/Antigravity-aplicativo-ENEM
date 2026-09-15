@@ -1,4 +1,4 @@
-// v17.1 — "Tema do lote" × tema das questões (leva 1eb71207, 14/09/2026): o que vai à IA é o
+// v17.1 (+ v18: textos SEM vírgula, porque a vírgula passou a separar conteúdos — ver verify_lote_itens.js) — "Tema do lote" × tema das questões (leva 1eb71207, 14/09/2026): o que vai à IA é o
 // tema guardado em cada questão; a caixa do lote só valia ao clicar em "Aplicar". Agora, ao
 // clicar em "Gerar": (1) caixa com texto e questões sem tema → o texto vale para todas;
 // (2) caixa editada depois de "Aplicar" (todas as questões ainda com o tema antigo) → o texto
@@ -70,8 +70,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     return page.evaluate(() => ({ temas: state.questions.map(q => q.tema), toasts: window.__toasts.map(t => t.msg), resumo: document.getElementById('resultsSummary').textContent, blocos: Array.from(document.querySelectorAll('.in-tema')).map(e => e.value) }));
   };
   const voltar = async () => { await page.click('#btnBackToForm'); await sleep(200); };
-  const TEMA_A = 'Grandezas inversamente proporcionais, MMC, MDC, Escala';
-  const TEMA_B = 'Grandezas inversamente proporcionais, MMC, MDC, Escala, Radiciação';
+  const TEMA_A = 'Grandezas inversamente proporcionais e escala';
+  const TEMA_B = 'Grandezas inversamente proporcionais e escala com Radiciação';
 
   // (1) caixa preenchida, sem clicar em "Aplicar", questões sem tema → o texto vale para todas
   await page.fill('#loteTema', TEMA_A);
@@ -91,7 +91,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await page.fill('#loteTema', TEMA_A);
   r = await gerar();
   ok(r.temas.every(t => t === TEMA_A) && corpos.every(b => b.tema === TEMA_A) && !corpos.some(b => /Radiciação/.test(b.tema)) && r.blocos.every(v => v === TEMA_A), '2 caixa editada depois de "Aplicar" (todas com o tema antigo): o texto novo vale para todas — "Radiciação" não vai à IA; blocos atualizados', JSON.stringify({ temas: r.temas, corpos: corpos.map(b => b.tema), blocos: r.blocos }));
-  ok(r.toasts.some(m => /Tema do lote atualizado nas 3 questões: "Grandezas inversamente proporcionais, MMC, MDC, Escala, Rad…" → "/.test(m) && m.includes(TEMA_A)), '2b aviso "Tema do lote atualizado" mostra o tema anterior (encurtado) → o novo', JSON.stringify(r.toasts));
+  ok(r.toasts.some(m => /Tema do lote atualizado nas 3 questões: "Grandezas inversamente proporcionais e escala com Radiciação" → "/.test(m) && m.includes(TEMA_A)), '2b aviso "Tema do lote atualizado" mostra o tema anterior → o novo', JSON.stringify(r.toasts));
   await voltar();
 
   // (3) questões ajustadas uma a uma (temas diferentes) → a caixa não mexe em nada
@@ -155,12 +155,12 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await voltar();
 
   // (10) P4: tema com caracteres especiais aparece intacto nos blocos (escapeHtml) e não gera aviso em loop
-  const TEMA_ESP = 'Potenciação \nRadiciação & "MMC" < MDC > 5';
+  const TEMA_ESP = 'Potenciação & Radiciação "MMC" < MDC > 5 (1,5)';
   await page.fill('#loteTema', TEMA_ESP);
   await page.click('#btnAplicarLote');
   await sleep(200);
   const blocosEsp = await page.evaluate(() => ({ blocos: Array.from(document.querySelectorAll('.in-tema')).map(e => e.value), temas: state.questions.map(q => q.tema), xss: !!window.__xss }));
-  ok(blocosEsp.blocos.every(v => v === TEMA_ESP) && blocosEsp.temas.every(t => t === TEMA_ESP), '10 tema com &, <, >, aspas e quebra de linha: blocos mostram o texto intacto', JSON.stringify(blocosEsp));
+  ok(blocosEsp.blocos.every(v => v === TEMA_ESP) && blocosEsp.temas.every(t => t === TEMA_ESP), '10 tema com &, <, >, aspas e vírgula decimal: blocos mostram o texto intacto (um item só)', JSON.stringify(blocosEsp));
   await page.evaluate(() => { state.questions[0].tema = '</textarea><img src=x onerror="window.__xss=1">'; renderQuestionBlocks(); });
   await sleep(300);
   const xss = await page.evaluate(() => ({ xss: !!window.__xss, valor: document.querySelectorAll('.in-tema')[0].value }));

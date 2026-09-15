@@ -92,7 +92,7 @@ Expoentes, índices, raízes e sinais chegam ao estudante prontos — x², 2⁴,
    sobrescritas/subscritas (`fontwork/ampliar_carlito.py`). Teste no navegador, sem rede:
    `node tests/verify_math_notation.js`.
 
-## Diversidade de exemplos em levas, sem custo (v17 / generate-question v73)
+## Diversidade de exemplos em levas, sem custo (v17 / generate-question v73; v18 / v74)
 
 Problema real (leva 538678f0, 20 de Matemática sem tema, 14/09/2026): "fábrica de componentes
 eletrônicos" com linhas A/B 60%/40% em duas questões, "transportadora" em três, "cooperativa
@@ -149,6 +149,26 @@ sem chamada nova à IA, sem campo novo na resposta e sem aumentar o prompt da le
    para todas, com aviso na tela; questões ajustadas uma a uma nunca são sobrescritas. O aviso
    do "Aplicar" e o cabeçalho dos resultados ("tema pedido: …") mostram o texto que foi usado.
    Teste: `node tests/verify_tema_lote.js` — 20 verificações. Ao reabrir um simulado salvo, a caixa passa a mostrar o tema dele.
+
+7. **Vários conteúdos no "Tema do lote", distribuídos em rodízio (v18 / generate-question v74)**:
+   o professor lista os conteúdos ("MDC, MMC, radiciação, exponenciação, grandezas" ou um por
+   linha; ponto e vírgula também separa; "1,5" e vírgulas dentro de parênteses não) e, ao
+   "Aplicar", cada questão recebe **um** conteúdo, na ordem digitada e recomeçando (1.º → q1,
+   2.º → q2, …): 10 questões × 5 conteúdos dá 2 de cada, misturados. O campo de tema de cada
+   questão mostra só o seu conteúdo (com a dica "distribuído do lote"), o painel mostra
+   "MDC → 1, 6 · MMC → 2, 7 · …", e o professor pode trocar qualquer um. Mais conteúdos do que
+   questões: os últimos ficam de fora, com aviso. A lista fica guardada em `temaLote` (nome do
+   simulado, cabeçalho, caixa ao reabrir). Ao "Gerar", as questões da mesma lista continuam
+   formando **um** pedido ao planejador, que recebe `temasPorQuestao` e detalha o recorte
+   dentro do conteúdo fixado de cada número (backend v74; o prompt sem lista é idêntico ao v73);
+   o app confere cada recorte (`recorteRespeitaItem`: item inteiro no texto, ou maioria das
+   palavras e nenhum outro item do grupo pontuando mais) e descarta o que sair do conteúdo —
+   com um backend antigo a questão segue só com o seu conteúdo e o domínio. Custo por leva:
+   o mesmo número de chamadas; os prompts de geração ficam menores (tema = um conteúdo, e os
+   conteúdos irmãos não viajam como "assuntos a evitar" quando há recorte). Atenção: um tema
+   único descritivo que contenha vírgula ("Funções do 1.º e 2.º graus, gráficos") agora vira
+   dois conteúdos — o aviso do "Aplicar" e o painel mostram a divisão; use travessão ou "e".
+   Teste: `node tests/verify_lote_itens.js` — 45 verificações.
 
 Testes: `node tests/verify_diversidade.js` (catálogo, reservas, corpos enviados, auditoria com
 as duas levas reais em `tests/fixtures/`, frases típicas de Física/Biologia, Humanas, leva mista, simulado antigo, botão, leitor numérico) — 49 verificações; `node tests/teste_real_fase_d.js` roda o app inteiro com as 10 questões reais. Ordem de publicação: backend v73 antes do app v17 (o app novo já encurta a lista de assuntos contando com o subtópico/domínio).

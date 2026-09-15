@@ -483,8 +483,20 @@ MATRIZ DE REFERÊNCIA — ${AREA_LABELS[area]} (competências e habilidades ofic
 ${listaHabilidadesDaArea(area)}`;
 }
 
-function buildPlanejamentoPrompt(opts: { area: string; disciplina: string; tema: string; quantidade: number; dificuldades: string[]; dominios?: (string | null)[]; dominiosAlternativos?: (string | null)[] }): string {
+function buildPlanejamentoPrompt(opts: { area: string; disciplina: string; tema: string; quantidade: number; dificuldades: string[]; dominios?: (string | null)[]; dominiosAlternativos?: (string | null)[]; temasPorQuestao?: (string | null)[] }): string {
   const niveis = opts.dificuldades.length ? opts.dificuldades.map((d, i) => `${i + 1}: ${d}`).join(", ") : "todas Médio";
+  // v74: o app já distribuiu os conteúdos da lista do professor entre as
+  // questões (rodízio) — o planejador detalha o recorte DENTRO do conteúdo de
+  // cada número, em vez de decidir sozinho qual conteúdo cabe a cada questão.
+  const porQuestao = (opts.temasPorQuestao || []).map((t) => String(t || "").replace(/\s+/g, " ").trim());
+  const temaLinha = String(opts.tema || "").replace(/\s+/g, " ").trim();
+  const comLista = porQuestao.filter(Boolean).length >= 2 && new Set(porQuestao.filter(Boolean).map((t) => t.toLowerCase())).size >= 2;
+  const aberturaTema = comLista
+    ? `O professor pediu um simulado sobre esta lista de conteúdos: "${temaLinha}". O aplicativo JÁ DISTRIBUIU os conteúdos entre as questões — o conteúdo de cada número está fixado abaixo e o recorte daquele número tem de ficar DENTRO dele, sem migrar para o conteúdo de outra questão: ${porQuestao.map((t, i) => `${i + 1}: ${t || "(qualquer conteúdo da lista)"}`).join("; ")}.`
+    : `TODAS as questões são sobre o tema pedido pelo professor: "${opts.tema}".`;
+  const conteudoDesc = comLista
+    ? `o subtópico ou conceito específico, DENTRO do conteúdo fixado para o número da questão, que ela vai mobilizar. Comece o campo pelo nome do conteúdo exatamente como o professor escreveu, seguido de um travessão e do subtópico (ex.: "MDC — divisão em lotes iguais sem sobra"). Questões com o mesmo conteúdo fixado precisam de subtópicos, contextos e habilidades diferentes entre si.`
+    : `o subtópico ou conceito específico, dentro do tema, que a questão vai mobilizar. Os ${opts.quantidade} conteúdos devem ser diferentes entre si; se o tema for estreito e não comportar ${opts.quantidade} conteúdos distintos, repita um conteúdo apenas quando o contexto e a habilidade forem claramente diferentes.`;
   // v73: domínios de contexto reservados pelo app (um por questão, exclusivos),
   // com um alternativo para quando conteúdo e domínio não casam.
   const alts = opts.dominiosAlternativos || [];
@@ -492,14 +504,14 @@ function buildPlanejamentoPrompt(opts: { area: string; disciplina: string; tema:
   const blocoDominios = doms.length
     ? `\n\nDOMÍNIOS DE CONTEXTO RESERVADOS (um por recorte, na ordem das questões): o "contexto" de cada recorte DEVE se passar dentro do domínio indicado para o seu número — um cenário concreto e verossímil desse domínio, nomeando-o — e nunca no domínio de outro recorte. Quando houver um domínio entre parênteses, é o alternativo: use-o só se o conteúdo não couber com naturalidade no principal. Domínios: ${doms.join("; ")}.`
     : "";
-  return `Planeje ${opts.quantidade} recortes DISTINTOS para um simulado de ${AREA_LABELS[opts.area]}, disciplina ${opts.disciplina}. TODAS as questões são sobre o tema pedido pelo professor: "${opts.tema}". Nível de dificuldade pedido por questão: ${niveis}.
+  return `Planeje ${opts.quantidade} recortes DISTINTOS para um simulado de ${AREA_LABELS[opts.area]}, disciplina ${opts.disciplina}. ${aberturaTema} Nível de dificuldade pedido por questão: ${niveis}.
 
 Cada recorte é o plano de UMA questão e tem três partes:
-- "conteudo": o subtópico ou conceito específico, dentro do tema, que a questão vai mobilizar. Os ${opts.quantidade} conteúdos devem ser diferentes entre si; se o tema for estreito e não comportar ${opts.quantidade} conteúdos distintos, repita um conteúdo apenas quando o contexto e a habilidade forem claramente diferentes.
+- "conteudo": ${conteudoDesc}
 - "contexto": a situação-problema concreta e real em que a questão vai se apoiar — do cotidiano, do trabalho, da ciência, da tecnologia, do ambiente ou da sociedade brasileira, no espírito das provas reais do ENEM 2015-2025. Os ${opts.quantidade} contextos devem ser TODOS diferentes: nunca o mesmo aparelho, objeto, cenário ou experimento em dois recortes.
 - "habilidade": o código e o texto de UMA habilidade da Matriz (lista no prompt do sistema) que a questão vai exigir. Varie as habilidades ao longo da lista (cálculo, leitura de gráfico/tabela/esquema, comparação de procedimentos, análise de impacto social ou ambiental, etc.), sem concentrar todas na mesma; a habilidade deve corresponder à operação cognitiva do recorte, não só ao assunto.
 
-Regras: fique DENTRO do tema pedido (nunca migre para outro tema da disciplina); prefira recortes frequentes nas provas reais, ordenados do mais frequente ao menos frequente; recortes de nível "Fácil" pedem contextos diretos e uma etapa de raciocínio, "Difícil" pedem combinar informações ou uma armadilha conceitual fina; escreva em português, de forma específica (nada de "aplicações no cotidiano" — diga qual).${blocoDominios} Entregue chamando a ferramenta "entregar_recortes", com exatamente ${opts.quantidade} itens, na ordem das questões.`;
+Regras: fique DENTRO do tema pedido${comLista ? " e, em cada número, DENTRO do conteúdo fixado para ele" : ""} (nunca migre para outro tema da disciplina); prefira recortes frequentes nas provas reais${comLista ? " (a ordem das questões já está fixada pelos conteúdos acima)" : ", ordenados do mais frequente ao menos frequente"}; recortes de nível "Fácil" pedem contextos diretos e uma etapa de raciocínio, "Difícil" pedem combinar informações ou uma armadilha conceitual fina; escreva em português, de forma específica (nada de "aplicações no cotidiano" — diga qual).${blocoDominios} Entregue chamando a ferramenta "entregar_recortes", com exatamente ${opts.quantidade} itens, na ordem das questões.`;
 }
 
 const FERRAMENTA_RECORTES = {
@@ -1726,6 +1738,20 @@ function selfTestResponse() {
       const semContexto = buildDiversidadeTematica("", [], "Função exponencial", "conteúdo: x · habilidade: H21: y", { dominioContexto: "pesca e aquicultura" });
       return { subtopico: b.includes('subtópico "porcentagem e juros"'), dominio: b.includes('em "pesca e aquicultura"'), alternativo: b.includes('alternativo "correios e encomendas"'), proibidos: /NÃO use: transporte e logística de cargas\./.test(b), cenarios: b.includes("fábrica de componentes eletrônicos"), dominioOmitidoComRecorte: !semRecorte.includes("DOMÍNIO DE CONTEXTO"), dominioVoltaAposColisao: aposColisao.includes("DOMÍNIO DE CONTEXTO") && aposColisao.includes("marcenaria"), dominioComRecorteSemContexto: semContexto.includes("DOMÍNIO DE CONTEXTO"), chars: b.length };
     })(),
+    // v74: planejamento com conteúdos já distribuídos pelo app (lista do lote em rodízio).
+    planejamentoV74: (() => {
+      const base = { area: "matematica", disciplina: "Matemática", quantidade: 4, dificuldades: ["Médio", "Médio", "Fácil", "Difícil"], dominios: ["pesca e aquicultura", null, null, null], dominiosAlternativos: [] };
+      const comLista = buildPlanejamentoPrompt({ ...base, tema: "MDC\nMMC\nradiciação", temasPorQuestao: ["MDC", "MMC", "radiciação\n", "MDC"] });
+      const semLista = buildPlanejamentoPrompt({ ...base, tema: "Exponenciação" });
+      const umSo = buildPlanejamentoPrompt({ ...base, tema: "Exponenciação", temasPorQuestao: ["Exponenciação", "Exponenciação", "Exponenciação", "Exponenciação"] });
+      return {
+        fixaConteudos: comLista.includes("1: MDC; 2: MMC; 3: radiciação; 4: MDC") && comLista.includes("JÁ DISTRIBUIU") && comLista.includes("Comece o campo pelo nome do conteúdo") && comLista.includes('lista de conteúdos: "MDC MMC radiciação"') && !/conteúdos: "[^"]*\n/.test(comLista),
+        mantemDominios: comLista.includes("DOMÍNIOS DE CONTEXTO RESERVADOS") && comLista.includes("1: pesca e aquicultura"),
+        semListaIgualAoV73: semLista.includes('TODAS as questões são sobre o tema pedido pelo professor: "Exponenciação"') && !semLista.includes("JÁ DISTRIBUIU"),
+        umConteudoSoNaoFixa: !umSo.includes("JÁ DISTRIBUIU"),
+        chars: comLista.length - semLista.length,
+      };
+    })(),
   });
 }
 
@@ -1793,11 +1819,15 @@ Deno.serve(async (req: Request) => {
       : [];
     const dominios = limpaDominios(body.dominios);
     const dominiosAlternativos = limpaDominios(body.dominiosAlternativos);
+    // v74: conteúdo já distribuído pelo app para cada questão (lista do lote em rodízio).
+    const temasPorQuestao: (string | null)[] = Array.isArray(body.temasPorQuestao)
+      ? body.temasPorQuestao.slice(0, quantidade).map((t: unknown) => { const v = String(t || "").replace(/\s+/g, " ").trim().slice(0, 120); return v || null; })
+      : [];
     const usos: any[] = [];
     try {
       // Sem cache_control de propósito: o prompt é pequeno e a chamada é única.
       const system: SistemaPrompt = [{ type: "text", text: buildSystemPlanejamento(area) }];
-      const userMsg = buildPlanejamentoPrompt({ area, disciplina, tema, quantidade, dificuldades, dominios, dominiosAlternativos });
+      const userMsg = buildPlanejamentoPrompt({ area, disciplina, tema, quantidade, dificuldades, dominios, dominiosAlternativos, temasPorQuestao });
       let data = await callClaudeForJSON(system, userMsg, false, usos, FERRAMENTA_RECORTES);
       let recortes = normalizarRecortes(data, quantidade);
       if (!recortes.length) {
@@ -1820,7 +1850,7 @@ ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferrame
       const nRec = (t: string) => nmNormalizaTexto(normalizarNotacaoTexto(t, disciplina));
       recortes = recortes.map((r) => ({ ...r, conteudo: nRec(r.conteudo), contexto: nRec(r.contexto) }));
       const uso = resumoUso(usos);
-      console.log(`[tema] planejamento "${tema}" (${disciplina}): ${recortes.length}/${quantidade} recorte(s) · ` + recortes.map((r, i) => `${i + 1}: ${r.conteudo}`).join(" · "));
+      console.log(`[tema] planejamento "${tema}" (${disciplina})${temasPorQuestao.filter(Boolean).length ? ` · conteúdos fixados: ${temasPorQuestao.map((t, i) => `${i + 1}: ${t || "—"}`).join(", ")}` : ""}: ${recortes.length}/${quantidade} recorte(s) · ` + recortes.map((r, i) => `${i + 1}: ${r.conteudo}`).join(" · "));
       await logGeneration(area, disciplina, `[planejar recortes] ${tema}`, { recurso: "planejamento", uso });
       return jsonResponse({ recortes, uso });
     } catch (err) {

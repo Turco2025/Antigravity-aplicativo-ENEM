@@ -468,9 +468,11 @@ body.mode-professor .qcard{box-shadow:0 25px 60px -25px rgba(0,0,0,.6), 0 0 0 1.
            gerar (ver planejaRecortesPorTema, no app.js). -->
       <div class="lote-panel" id="lotePanel">
         <div class="lote-head">⚡ Configurar todas as questões de uma vez</div>
-        <p class="hint" style="margin:0 0 12px;">Preenche as questões abaixo com o mesmo tema e o mesmo recurso visual, e distribui as quantidades de cada nível em ordem embaralhada. Os contadores mostram sempre a situação real das questões abaixo: mude o nível de uma questão lá embaixo e eles se atualizam. A IA planeja um recorte diferente (conteúdo, contexto e habilidade) para cada questão do tema.</p>
+        <p class="hint" style="margin:0 0 12px;">Preenche as questões abaixo com o tema (ou distribui a lista de conteúdos, um por questão) e o mesmo recurso visual, e distribui as quantidades de cada nível em ordem embaralhada. Os contadores mostram sempre a situação real das questões abaixo: mude o nível de uma questão lá embaixo e eles se atualizam. A IA planeja um recorte diferente (conteúdo, contexto e habilidade) para cada questão do tema.</p>
         <label class="field-label">Tema do lote</label>
-        <textarea id="loteTema" placeholder="Ex.: Eletricidade – Eletrodinâmica"></textarea>
+        <textarea id="loteTema" placeholder="Ex.: Eletricidade – Eletrodinâmica&#10;ou vários conteúdos: MDC, MMC, radiciação, exponenciação (ou um por linha)"></textarea>
+        <p class="hint" style="margin:4px 0 0;">Um conteúdo só, ou vários separados por vírgula, ponto e vírgula ou um por linha. Com vários, o app distribui em rodízio na ordem digitada (1.º → questão 1, 2.º → questão 2, …, e recomeça) e mostra o conteúdo de cada questão abaixo — você pode trocar qualquer um.</p>
+        <p class="hint" id="loteDistribuicao" style="margin:6px 0 0;display:none;"></p>
         <div class="qgrid" style="margin-top:12px;">
           <div>
             <label class="field-label">Quantidade de questões por nível</label>
@@ -1182,7 +1184,7 @@ async function salvarSimuladoAtual(){
   const nomeArea = (AREA_META[state.area] && AREA_META[state.area].label) || state.area || "";
   const linha = {
     user_id: currentUser.id,
-    nome: `Simulado de ${state.disciplina || state.area || "ENEM"}` + (temaComumDaLeva() ? ` — ${temaComumDaLeva().slice(0, 80)}` : ""),
+    nome: `Simulado de ${state.disciplina || state.area || "ENEM"}` + (temaDaLevaParaTitulo() ? ` — ${resumoTema(temaDaLevaParaTitulo(), 80)}` : ""),
     area: state.area,
     area_label: nomeArea,
     disciplina: state.disciplina,
@@ -1352,7 +1354,7 @@ async function abrirSimuladoSalvo(id){
     // v17.1: a caixa "Tema do lote" passa a refletir o simulado reaberto (e
     // conta como o último "Aplicar"), para um texto antigo deixado na caixa
     // não vencer o tema dele ao clicar em "Gerar" de volta no formulário.
-    const temaReaberto = temaComumDaLeva() || "";
+    const temaReaberto = temaDaLevaParaTitulo() || "";
     const caixaLote = document.getElementById("loteTema");
     if(caixaLote) caixaLote.value = temaReaberto;
     loteTemaAplicado = temaReaberto;
@@ -1933,8 +1935,9 @@ function aplicarLoteATodas(){
   const contagem = { ...loteContadores };
   const plano = distribuiNiveis(contagem);
   loteTemaAplicado = tema;
+  // v18: vários conteúdos na caixa → um por questão, em rodízio (ver aplicaTemaDoLote).
+  const dist = aplicaTemaDoLote(tema);
   state.questions.forEach((q, i) => {
-    q.tema = tema;
     q.dificuldade = plano[i];
     q.recurso = recurso;
     // O lote redefine o recurso de todas: uma instrução de imagem antiga não
@@ -1944,8 +1947,120 @@ function aplicarLoteATodas(){
   renderQuestionBlocks();
   sincronizaContadoresLote();
   const resumo = textoContagem(contagem);
-  console.log(`[lote] aplicado a ${total} questões · tema "${tema || "(em branco)"}" · recurso ${recurso} · níveis ${resumo} · ordem: ${plano.join(", ")}`);
-  toast(`Configuração aplicada às ${total} questões (${resumo}${tema ? `; tema: "${resumoTema(tema, 120)}"` : "; tema em branco — a IA distribui os objetos de conhecimento"}). Ajuste qualquer questão abaixo, se quiser.`, "ok");
+  console.log(`[lote] aplicado a ${total} questões · tema "${tema || "(em branco)"}" · recurso ${recurso} · níveis ${resumo} · ordem: ${plano.join(", ")}` + (dist.itens.length > 1 ? ` · ${dist.itens.length} conteúdos em rodízio: ${textoDistribuicaoLote()}` : ""));
+  const temaTxt = !tema ? "; tema em branco — a IA distribui os objetos de conhecimento"
+    : dist.itens.length > 1 ? `; ${dist.itens.length} conteúdos em rodízio: ${resumoTema(textoDistribuicaoLote(), 220)}`
+    : `; tema: "${resumoTema(tema, 120)}"`;
+  toast(`Configuração aplicada às ${total} questões (${resumo}${temaTxt}). Ajuste qualquer questão abaixo, se quiser.`, "ok");
+  if(dist.sobras.length) toast(`Você listou ${dist.itens.length} conteúdos para ${total} ${total === 1 ? "questão" : "questões"}: ${dist.sobras.length === 1 ? "ficou de fora" : "ficaram de fora"} ${dist.sobras.map(t => `"${resumoTema(t, 40)}"`).join(", ")}. Aumente a quantidade de questões ou remova conteúdos da lista.`, "err");
+}
+
+/* ---------------- v18: vários conteúdos no "Tema do lote" ----------------
+   O professor lista os conteúdos do simulado ("MDC, MMC, radiciação" ou um
+   por linha) e o app — sem IA, sem custo — dá um conteúdo a cada questão em
+   rodízio, na ordem digitada (1º → questão 1, 2º → questão 2, …, e recomeça),
+   mostra a distribuição em cada questão e no painel do lote, e o professor
+   pode trocar qualquer uma. Até a v17 a lista inteira ia igual para as N
+   questões e só o planejador (IA) decidia, escondido, qual conteúdo cabia a
+   cada uma (leva 1eb71207, 14/09/2026). Agora o planejador recebe a
+   distribuição pronta (temasPorQuestao, backend v74) e só detalha o recorte
+   dentro do conteúdo de cada questão — a mesma chamada única de antes.
+   Cada questão guarda o SEU conteúdo em q.tema (é o que vai à IA) e a lista
+   original em q.temaLote (agrupa as questões do mesmo lote para o
+   planejamento, dá nome ao simulado e preenche a caixa ao reabrir). */
+
+// Quebra o texto da caixa em itens. Com quebras de linha: uma linha por item
+// (marcadores "-", "*", "•", "1." e um "e" inicial sobrando são removidos).
+// Numa linha só: por ";" ou, na falta, por "," — "1,5" (vírgula entre dígitos)
+// e vírgulas dentro de parênteses não separam. Um item só → lista de 1.
+function tiraPontuacaoFinal(s){
+  let fim = s.length;
+  while(fim > 0 && /[\s.;,]/.test(s[fim - 1])) fim--;
+  return s.slice(0, fim);
+}
+function itensDoTemaDoLote(texto){
+  const t = String(texto || "").replace(/\r\n?/g, "\n").trim();
+  if(!t) return [];
+  const limpa = s => tiraPontuacaoFinal(s.trim().replace(/^(?:[-*•–—]\s*|\d{1,2}[.)]\s+)/, "").replace(/^(?:e|E)\s+(?=\S)/, "")).trim();
+  const linhas = t.split("\n").map(limpa).filter(x => x.length >= 2);
+  if(!linhas.length) return [];
+  let partes;
+  if(linhas.length >= 2){
+    partes = linhas;
+  }else{
+    const linha = linhas[0];
+    const sep = /;/.test(linha) ? ";" : ",";
+    partes = []; let atual = ""; let nivel = 0;
+    for(let i = 0; i < linha.length; i++){
+      const c = linha[i];
+      if(c === "(" || c === "[") nivel++;
+      else if(c === ")" || c === "]") nivel = Math.max(0, nivel - 1);
+      const decimal = c === "," && /\d/.test(linha[i - 1] || "") && /\d/.test(linha[i + 1] || "");
+      const separa = c === sep && nivel === 0 && !decimal;
+      if(separa){ partes.push(atual); atual = ""; } else atual += c;
+    }
+    partes.push(atual);
+    partes = partes.map(limpa).filter(x => x.length >= 2);
+  }
+  if(partes.length <= 1) return [linhas.length === 1 ? linhas[0] : partes[0] || t];
+  return partes.slice(0, 40);
+}
+// Rodízio: n temas, um por questão, na ordem digitada. Devolve também os
+// itens que não couberam (mais conteúdos do que questões).
+function distribuiTemaDoLote(texto, n){
+  const itens = itensDoTemaDoLote(texto);
+  const temas = [];
+  for(let i = 0; i < n; i++) temas.push(itens.length ? itens[i % itens.length] : "");
+  return { itens, temas, sobras: itens.length > n ? itens.slice(n) : [] };
+}
+// Forma canônica da lista: itens separados por ", " (uma lista digitada em
+// linhas e a mesma em vírgulas são a mesma lista — mesmo grupo, mesmo título).
+function listaCanonica(texto){
+  const itens = itensDoTemaDoLote(texto);
+  return itens.length > 1 ? itens.join(", ") : String(texto || "").replace(/\s+/g, " ").trim();
+}
+// Aplica o texto da caixa a todas as questões (rodízio quando há 2+ itens).
+function aplicaTemaDoLote(texto){
+  const dist = distribuiTemaDoLote(texto, state.questions.length);
+  const lista = dist.itens.length > 1 ? listaCanonica(texto) : null;
+  state.questions.forEach((q, i) => { q.tema = dist.temas[i]; q.temaLote = lista; });
+  return dist;
+}
+// Chave de grupo para o planejamento: a lista do lote (quando houver) ou o tema.
+function grupoDeTema(q){
+  if(q && q.temaLote) return listaCanonica(q.temaLote).toLowerCase();
+  return String((q && q.tema) || "").trim().toLowerCase();
+}
+// Lista do lote comum a TODAS as questões (ou null), na forma canônica.
+function temaLoteComum(){
+  if(!state.questions.length) return null;
+  const listas = state.questions.map(q => q && q.temaLote ? listaCanonica(q.temaLote) : "");
+  if(listas.some(l => !l)) return null;
+  return listas.every(l => l.toLowerCase() === listas[0].toLowerCase()) ? listas[0] : null;
+}
+// Título da leva: a lista do lote (forma canônica), ou o tema comum, ou null.
+function temaDaLevaParaTitulo(){
+  return temaLoteComum() || temaComumDaLeva();
+}
+// "MDC → 1, 6 · MMC → 2, 7 · …" a partir do estado atual das questões.
+function textoDistribuicaoLote(){
+  const grupos = new Map();
+  state.questions.forEach((q, i) => {
+    const t = String(q && q.tema || "").trim();
+    const chave = t.toLowerCase() || "(sem tema)";
+    if(!grupos.has(chave)) grupos.set(chave, { rotulo: t || "(sem tema)", ns: [] });
+    grupos.get(chave).ns.push(i + 1);
+  });
+  return Array.from(grupos.values()).map(g => `${resumoTema(g.rotulo, 60)} → ${g.ns.join(", ")}`).join(" · ");
+}
+// Linha "Distribuição atual" no painel do lote — só quando há lista aplicada.
+function atualizaDistribuicaoLote(){
+  const el = document.getElementById("loteDistribuicao");
+  if(!el) return;
+  const lista = temaLoteComum() || state.questions.some(q => q && q.temaLote);
+  if(!lista){ el.textContent = ""; el.style.display = "none"; return; }
+  el.style.display = "";
+  el.textContent = `Distribuição atual (rodízio, na ordem digitada): ${textoDistribuicaoLote()}`;
 }
 
 /* O texto de "Tema do lote" só chega às questões quando o professor clica em
@@ -1965,14 +2080,38 @@ function sincronizaTemaDoLote(){
   const caixa = document.getElementById("loteTema");
   const novo = ((caixa && caixa.value) || "").trim();
   if(!novo || !state.questions.length) return null;
-  if(loteTemaAplicado !== null && novo === loteTemaAplicado) return null;
-  const temas = state.questions.map(q => String(q && q.tema || "").trim());
-  if(!temas.every(t => t.toLowerCase() === temas[0].toLowerCase())) return { estado: "individuais" };
-  if(temas[0] === novo) return null;
-  state.questions.forEach(q => { q.tema = novo; });
+  const n = state.questions.length;
+  const baixa = t => String(t || "").trim().toLowerCase();
+  const temas = state.questions.map(q => baixa(q && q.tema));
+  if(loteTemaAplicado !== null && novo === loteTemaAplicado){
+    // Caixa igual ao último "Aplicar": as questões mandam — salvo as que nasceram
+    // vazias depois (quantidade aumentada): essas entram no rodízio já aplicado.
+    const dist = distribuiTemaDoLote(novo, n);
+    const vazias = temas.map((t, i) => t ? -1 : i).filter(i => i >= 0);
+    const demaisBatem = temas.every((t, i) => !t || t === baixa(dist.temas[i]));
+    if(vazias.length && vazias.length < n && demaisBatem){
+      const irma = state.questions.find(q => q && q.temaLote);
+      const lista = irma ? listaCanonica(irma.temaLote) : (dist.itens.length > 1 ? listaCanonica(novo) : null);
+      vazias.forEach(i => { state.questions[i].tema = dist.temas[i]; state.questions[i].temaLote = lista; });
+      renderQuestionBlocks();
+      return { estado: "completado", novas: vazias.length, novo, itens: dist.itens.length };
+    }
+    return null;
+  }
+  const iguais = temas.every(t => t === temas[0]);
+  // v18: as questões ainda refletem a última distribuição aplicada (ou estão
+  // vazias, ex.: quantidade aumentada depois do "Aplicar")? Então a caixa
+  // editada é a intenção mais recente e vale para todas.
+  const aplicada = loteTemaAplicado ? distribuiTemaDoLote(loteTemaAplicado, n).temas.map(baixa) : null;
+  const intocadas = temas.every((t, i) => !t || (aplicada && t === aplicada[i]));
+  if(!iguais && !intocadas) return { estado: "individuais" };
+  const nova = distribuiTemaDoLote(novo, n);
+  if(temas.every((t, i) => t === baixa(nova.temas[i]))) return null;   // já está assim
+  const anterior = iguais ? String(state.questions[0].tema || "").trim() : (loteTemaAplicado || "");
+  aplicaTemaDoLote(novo);
   renderQuestionBlocks();
   loteTemaAplicado = novo;
-  return { estado: temas[0] ? "atualizado" : "aplicado", anterior: temas[0], novo };
+  return { estado: anterior ? "atualizado" : "aplicado", anterior, novo, itens: nova.itens.length, sobras: nova.sobras };
 }
 function resumoTema(t, max){
   const s = String(t || "").replace(/\s+/g, " ").trim();
@@ -2057,6 +2196,7 @@ function renderQuestionBlocks(){
   if(!state.area){ wrap.innerHTML = `<p class="hint">Selecione a área do conhecimento para configurar as questões.</p>`; return; }
   syncQuestionsArrayLength();
   state.questions.forEach((q, idx) => wrap.appendChild(buildQuestionBlock(q, idx)));
+  atualizaDistribuicaoLote();
 }
 
 function buildQuestionBlock(q, idx){
@@ -2068,6 +2208,7 @@ function buildQuestionBlock(q, idx){
     </div>
     <label class="field-label">Tema / conteúdo desta questão</label>
     <textarea class="in-tema" placeholder="Ex.: sistema circulatório — regulação da pressão arterial durante o exercício">${escapeHtml(q.tema || "")}</textarea>
+    ${q.temaLote ? `<div class="hint lote-origem" style="margin-top:4px;">Conteúdo distribuído do lote em rodízio — pode ser trocado aqui.</div>` : ""}
     <div class="qgrid" style="margin-top:12px;">
       <div>
         <label class="field-label">Nível de dificuldade</label>
@@ -2108,7 +2249,7 @@ function buildQuestionBlock(q, idx){
   const instrBlock = el.querySelector(".visual-instr-block");
   const instrLabel = instrBlock.querySelector(".field-label");
 
-  el.querySelector(".in-tema").addEventListener("input", e => { q.tema = e.target.value; });
+  el.querySelector(".in-tema").addEventListener("input", e => { q.tema = e.target.value; atualizaDistribuicaoLote(); });
   el.querySelector(".in-instr-visual").addEventListener("input", e => { q.instrucoesVisual = e.target.value; });
   el.querySelectorAll(".diff-opt").forEach(d => d.addEventListener("click", () => {
     q.dificuldade = d.dataset.d;
@@ -2534,14 +2675,18 @@ function temasEvitarPara(q){
   // já receberam recortes distintos do planejamento — seus temas entregues
   // não precisam viajar de novo; os de outros grupos continuam indo.
   const comRecorte = !!(q.recorte && proprioTema);
+  const grupoProprio = grupoDeTema(q);
   state.questions.forEach(o => {
     if(o === q) return;
-    const mesmoGrupo = comRecorte && (o.tema || "").trim().toLowerCase() === proprioTema && !!o.recorte;
+    // v18: questões da mesma lista do lote (conteúdos distintos, recortes
+    // planejados juntos) são o mesmo grupo — nem o conteúdo digitado nem o tema
+    // entregue delas viajam, como já era com o tema igual.
+    const mesmoGrupo = comRecorte && grupoDeTema(o) === grupoProprio && !!o.recorte;
     const entregue = (mesmoGrupo || (soMesmoEixo && o.eixoTematico !== q.eixoTematico)) ? "" : (o.data && o.data.tema || "").trim();
     // Tema digitado em outra questão que coincide com o subtópico reservado desta
     // ("Função exponencial" × "funções exponenciais e logarítmicas") não pode virar
     // "proibido" — seria contradição direta com a reserva.
-    const digitado = (o.tema || "").trim();
+    const digitado = mesmoGrupo ? "" : (o.tema || "").trim();
     const candidatos = [(q.subtopico && temaCoincideComSubtopico(digitado, q.subtopico)) ? "" : digitado, entregue];
     candidatos.forEach(t => {
       if(!t) return;
@@ -2587,14 +2732,51 @@ function recorteTexto(r, q){
   return partes.join(" · ").slice(0, 600) || null;
 }
 
+// v18: o recorte planejado fica dentro do conteúdo distribuído para a questão?
+// Pontua cada item do grupo pelas palavras presentes no recorte (palavras curtas
+// e siglas — "PA", "MMC", "1" — só valem inteiras; as demais valem pela família:
+// "exponenciação" ~ "exponencial"). O recorte é da questão se o item inteiro
+// aparece no texto, ou se o item dela pontua pelo menos metade E nenhum OUTRO
+// item do grupo pontua mais ("Função do 2.º grau — vértice" não serve para
+// "Função do 1.º grau"; "Grandezas diretamente proporcionais" não serve para
+// "Grandezas inversamente proporcionais").
+function palavrasDoItem(item){
+  return normalizaTextoBusca(String(item || "")).split(/[^a-z0-9]+/).filter(w => w && !PALAVRAS_VAZIAS.has(w) && !/^(do|da|de|em|no|na|o|a|e|ou|um|uma|os|as|ao)$/.test(w));
+}
+function pontuacaoDoItem(texto, item){
+  const pw = palavrasDoItem(item);
+  if(!pw.length) return 0;
+  const tw = texto.split(/[^a-z0-9]+/).filter(Boolean);
+  const twRad = tw.map(radicalPalavra);
+  let presentes = 0;
+  pw.forEach(w => {
+    const curta = w.length <= 3 || /^\d+$/.test(w);
+    const achou = curta ? tw.includes(w) : twRad.some(t => t === radicalPalavra(w) || mesmaFamiliaDePalavra(w, t));
+    if(achou) presentes++;
+  });
+  return presentes / pw.length;
+}
+function recorteRespeitaItem(r, item, outrosItens){
+  const it = normalizaTextoBusca(String(item || "")).trim();
+  if(!it) return true;
+  const texto = normalizaTextoBusca(`${r && r.conteudo || ""} ${r && r.contexto || ""}`);
+  if(new RegExp("(^|[^a-z0-9])" + escapeRegExp(it) + "([^a-z0-9]|$)").test(texto)) return true;
+  const propria = pontuacaoDoItem(texto, item);
+  if(propria < 0.5) return false;
+  const rival = (outrosItens || []).filter(o => normalizaTextoBusca(String(o || "")).trim() !== it).reduce((m, o) => Math.max(m, pontuacaoDoItem(texto, o)), 0);
+  return propria >= rival;
+}
+
 async function planejaRecortesPorTema(){
   state.questions.forEach(q => { q.recorte = null; });
   const grupos = new Map();
   state.questions.forEach(q => {
     const t = (q.tema || "").trim();
     if(!t) return;
-    const chave = t.toLowerCase();
-    if(!grupos.has(chave)) grupos.set(chave, { tema: t, qs: [] });
+    // v18: as questões de uma mesma lista do lote formam UM grupo (uma chamada),
+    // cada uma com o seu conteúdo; sem lista, o grupo é o tema igual, como antes.
+    const chave = grupoDeTema(q);
+    if(!grupos.has(chave)) grupos.set(chave, { tema: (q.temaLote || t).trim(), lista: !!q.temaLote, qs: [] });
     grupos.get(chave).qs.push(q);
   });
   for(const g of grupos.values()){
@@ -2615,6 +2797,9 @@ async function planejaRecortesPorTema(){
           // naturalidade, o alternativo. Nenhuma chamada a mais.
           dominios: g.qs.map(q => q.dominio || null),
           dominiosAlternativos: g.qs.map(q => q.dominioAlt || null),
+          // v18: conteúdo já distribuído pelo app para cada questão (backend v74
+          // planeja o recorte dentro dele; o v73 ignora e o app filtra abaixo).
+          temasPorQuestao: g.lista ? g.qs.map(q => String(q.tema || "").replace(/\s+/g, " ").trim()) : undefined,
         }),
       });
       let payload = {};
@@ -2631,7 +2816,14 @@ async function planejaRecortesPorTema(){
       // recorte e o backend ambienta pelo domínio.
       const contextosAceitos = [];
       g.qs.forEach((q, i) => {
-        const r = i < payload.recortes.length ? Object.assign({}, payload.recortes[i]) : null;
+        let r = i < payload.recortes.length ? Object.assign({}, payload.recortes[i]) : null;
+        // v18: com lista do lote, o recorte tem de ficar no conteúdo desta questão;
+        // se o planejador (ou um backend antigo) trocou os conteúdos, o recorte
+        // inteiro sai — o tema da questão e o domínio reservado bastam.
+        if(r && g.lista && !recorteRespeitaItem(r, q.tema, g.qs.map(o => o.tema))){
+          console.warn(`[tema] recorte ${state.questions.indexOf(q) + 1}: fora do conteúdo distribuído ("${q.tema}") — descartado: "${String(r.conteudo || "").slice(0, 120)}"`);
+          r = null;
+        }
         if(r && r.contexto){
           const ctx = String(r.contexto);
           const noDominio = !q.dominio || contextoRespeitaDominio(ctx, q.dominio) || contextoRespeitaDominio(ctx, q.dominioAlt);
@@ -3909,9 +4101,10 @@ function updateProgress(){
   const done = state.questions.filter(q => q.status === "done" || q.status === "error").length;
   const pct = total ? Math.round((done/total)*100) : 0;
   document.getElementById("genProgressFill").style.width = pct + "%";
-  const temaComum = temaComumDaLeva();
+  const temaComum = temaDaLevaParaTitulo();
+  const rodizio = temaLoteComum() ? ` · distribuição: ${resumoTema(textoDistribuicaoLote(), 200)}` : "";
   document.getElementById("resultsSummary").textContent =
-    `${AREA_META[state.area].label} · ${state.disciplina} · ${total} questão(ões) · ${done}/${total} concluídas` + (temaComum ? ` · tema pedido: "${resumoTema(temaComum, 140)}"` : "");
+    `${AREA_META[state.area].label} · ${state.disciplina} · ${total} questão(ões) · ${done}/${total} concluídas` + (temaComum ? ` · tema pedido: "${resumoTema(temaComum, 140)}"` : "") + rodizio;
 }
 
 /* ---------------- Results rendering ---------------- */
@@ -7547,8 +7740,10 @@ function init(){
     if(!state.disciplina){ toast("Selecione a disciplina.", "err"); return; }
     simuladoAbertoId = null; // simulado novo, não é edição de um já arquivado
     const sync = sincronizaTemaDoLote();
-    if(sync && sync.estado === "aplicado") toast(`Tema do lote aplicado às ${state.questions.length} questões: "${resumoTema(sync.novo, 120)}".`, "ok");
-    if(sync && sync.estado === "atualizado") toast(`Tema do lote atualizado nas ${state.questions.length} questões: "${resumoTema(sync.anterior, 60)}" → "${resumoTema(sync.novo, 120)}".`, "ok");
+    if(sync && sync.estado === "aplicado") toast(`Tema do lote aplicado às ${state.questions.length} questões: "${resumoTema(sync.novo, 120)}"${sync.itens > 1 ? ` (${sync.itens} conteúdos em rodízio: ${resumoTema(textoDistribuicaoLote(), 160)})` : ""}.`, "ok");
+    if(sync && sync.estado === "atualizado") toast(`Tema do lote atualizado nas ${state.questions.length} questões: "${resumoTema(sync.anterior, 60)}" → "${resumoTema(sync.novo, 120)}"${sync.itens > 1 ? ` (${sync.itens} conteúdos em rodízio: ${resumoTema(textoDistribuicaoLote(), 160)})` : ""}.`, "ok");
+    if(sync && sync.sobras && sync.sobras.length) toast(`Você listou ${sync.itens} conteúdos para ${state.questions.length} questões: ${sync.sobras.length === 1 ? "ficou de fora" : "ficaram de fora"} ${sync.sobras.map(t => `"${resumoTema(t, 40)}"`).join(", ")}.`, "err");
+    if(sync && sync.estado === "completado") toast(`Tema do lote aplicado ${sync.novas === 1 ? "à 1 questão que estava" : `às ${sync.novas} questões que estavam`} sem tema${sync.itens > 1 ? ` (rodízio: ${resumoTema(textoDistribuicaoLote(), 160)})` : `: "${resumoTema(sync.novo, 120)}"`}.`, "ok");
     if(sync && sync.estado === "individuais") toast(`A caixa "Tema do lote" foi alterada, mas as questões têm temas diferentes entre si — nenhuma foi alterada. Para sobrescrever todas, use "Aplicar".`, "info");
     generateAll();
   });
