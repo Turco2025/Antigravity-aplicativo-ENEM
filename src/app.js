@@ -643,6 +643,13 @@ async function abrirSimuladoSalvo(id){
     }
     state.gabaritoPlan = dados.gabaritoPlan || null;
     simuladoAbertoId = data.id;
+    // v17.1: a caixa "Tema do lote" passa a refletir o simulado reaberto (e
+    // conta como o último "Aplicar"), para um texto antigo deixado na caixa
+    // não vencer o tema dele ao clicar em "Gerar" de volta no formulário.
+    const temaReaberto = temaComumDaLeva() || "";
+    const caixaLote = document.getElementById("loteTema");
+    if(caixaLote) caixaLote.value = temaReaberto;
+    loteTemaAplicado = temaReaberto;
     document.getElementById("chkValidacao").checked = !!data.validacao_dupla;
     document.getElementById("simuladosPanel").style.display = "none";
     document.getElementById("formPanel").style.display = "none";
@@ -1219,6 +1226,7 @@ function aplicarLoteATodas(){
   const recurso = recursoDoLote();
   const contagem = { ...loteContadores };
   const plano = distribuiNiveis(contagem);
+  loteTemaAplicado = tema;
   state.questions.forEach((q, i) => {
     q.tema = tema;
     q.dificuldade = plano[i];
@@ -1231,13 +1239,44 @@ function aplicarLoteATodas(){
   sincronizaContadoresLote();
   const resumo = textoContagem(contagem);
   console.log(`[lote] aplicado a ${total} questões · tema "${tema || "(em branco)"}" · recurso ${recurso} · níveis ${resumo} · ordem: ${plano.join(", ")}`);
-  toast(`Configuração aplicada às ${total} questões (${resumo}${tema ? "" : "; tema em branco — a IA distribui os objetos de conhecimento"}). Ajuste qualquer questão abaixo, se quiser.`, "ok");
+  toast(`Configuração aplicada às ${total} questões (${resumo}${tema ? `; tema: "${resumoTema(tema, 120)}"` : "; tema em branco — a IA distribui os objetos de conhecimento"}). Ajuste qualquer questão abaixo, se quiser.`, "ok");
+}
+
+/* O texto de "Tema do lote" só chega às questões quando o professor clica em
+   "Aplicar às N questões": o que é enviado à IA é o tema guardado em CADA
+   questão (state.questions[i].tema), não o da caixa. Na leva 1eb71207
+   (14/09/2026) as 10 questões saíram com um assunto que o professor não
+   reconhecia como pedido — o assunto estava no tema das 10 questões, e uma
+   edição posterior da caixa do lote não muda as questões. Regra, na hora de
+   gerar: se a caixa tem texto e TODAS as questões estão com o mesmo tema (ou
+   todas sem tema), a caixa é a intenção mais recente e vale para todas; se as
+   questões já foram ajustadas uma a uma (temas diferentes entre si), nada é
+   alterado; e se a caixa ainda tem exatamente o texto do último "Aplicar", as
+   questões é que mandam (podem ter vindo de um simulado reaberto). Devolve o
+   que fez, para o aviso na tela. */
+let loteTemaAplicado = null; // texto da caixa no último "Aplicar" desta sessão
+function sincronizaTemaDoLote(){
+  const caixa = document.getElementById("loteTema");
+  const novo = ((caixa && caixa.value) || "").trim();
+  if(!novo || !state.questions.length) return null;
+  if(loteTemaAplicado !== null && novo === loteTemaAplicado) return null;
+  const temas = state.questions.map(q => String(q && q.tema || "").trim());
+  if(!temas.every(t => t.toLowerCase() === temas[0].toLowerCase())) return { estado: "individuais" };
+  if(temas[0] === novo) return null;
+  state.questions.forEach(q => { q.tema = novo; });
+  renderQuestionBlocks();
+  loteTemaAplicado = novo;
+  return { estado: temas[0] ? "atualizado" : "aplicado", anterior: temas[0], novo };
+}
+function resumoTema(t, max){
+  const s = String(t || "").replace(/\s+/g, " ").trim();
+  return s.length > (max || 100) ? s.slice(0, (max || 100) - 1) + "…" : s;
 }
 
 // Tema comum a TODAS as questões da leva (ou null): dá nome ao simulado.
 function temaComumDaLeva(){
   if(!state.questions.length) return null;
-  const temas = state.questions.map(q => (q.tema || "").trim());
+  const temas = state.questions.map(q => String(q && q.tema || "").trim());
   if(temas.some(t => !t)) return null;
   const chave = temas[0].toLowerCase();
   return temas.every(t => t.toLowerCase() === chave) ? temas[0] : null;
@@ -1322,7 +1361,7 @@ function buildQuestionBlock(q, idx){
       <div class="qb-num"><span class="dot">${idx+1}</span> Questão ${idx+1}</div>
     </div>
     <label class="field-label">Tema / conteúdo desta questão</label>
-    <textarea class="in-tema" placeholder="Ex.: sistema circulatório — regulação da pressão arterial durante o exercício">${q.tema}</textarea>
+    <textarea class="in-tema" placeholder="Ex.: sistema circulatório — regulação da pressão arterial durante o exercício">${escapeHtml(q.tema || "")}</textarea>
     <div class="qgrid" style="margin-top:12px;">
       <div>
         <label class="field-label">Nível de dificuldade</label>
@@ -3164,8 +3203,9 @@ function updateProgress(){
   const done = state.questions.filter(q => q.status === "done" || q.status === "error").length;
   const pct = total ? Math.round((done/total)*100) : 0;
   document.getElementById("genProgressFill").style.width = pct + "%";
+  const temaComum = temaComumDaLeva();
   document.getElementById("resultsSummary").textContent =
-    `${AREA_META[state.area].label} · ${state.disciplina} · ${total} questão(ões) · ${done}/${total} concluídas`;
+    `${AREA_META[state.area].label} · ${state.disciplina} · ${total} questão(ões) · ${done}/${total} concluídas` + (temaComum ? ` · tema pedido: "${resumoTema(temaComum, 140)}"` : "");
 }
 
 /* ---------------- Results rendering ---------------- */
@@ -6800,6 +6840,10 @@ function init(){
     if(!state.area){ toast("Selecione a área do conhecimento.", "err"); return; }
     if(!state.disciplina){ toast("Selecione a disciplina.", "err"); return; }
     simuladoAbertoId = null; // simulado novo, não é edição de um já arquivado
+    const sync = sincronizaTemaDoLote();
+    if(sync && sync.estado === "aplicado") toast(`Tema do lote aplicado às ${state.questions.length} questões: "${resumoTema(sync.novo, 120)}".`, "ok");
+    if(sync && sync.estado === "atualizado") toast(`Tema do lote atualizado nas ${state.questions.length} questões: "${resumoTema(sync.anterior, 60)}" → "${resumoTema(sync.novo, 120)}".`, "ok");
+    if(sync && sync.estado === "individuais") toast(`A caixa "Tema do lote" foi alterada, mas as questões têm temas diferentes entre si — nenhuma foi alterada. Para sobrescrever todas, use "Aplicar".`, "info");
     generateAll();
   });
 

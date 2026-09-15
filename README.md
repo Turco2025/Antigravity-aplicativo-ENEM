@@ -141,6 +141,15 @@ sem chamada nova à IA, sem campo novo na resposta e sem aumentar o prompt da le
    valor repetido vira observação); (c) "FONTE: elaborado para fins didáticos" no começo de
    uma linha conta como fonte.
 
+6. **Tema do lote × tema das questões (v17.1)**: o que vai à IA é o tema guardado em cada
+   questão, e a caixa "Tema do lote" só era copiada para elas ao clicar em "Aplicar" — uma
+   edição posterior da caixa (ou esquecer o "Aplicar") gerava a leva com o texto antigo, sem
+   aviso (leva 1eb71207). Agora, ao clicar em "Gerar", se a caixa tem texto diferente do último
+   "Aplicar" e todas as questões estão com o mesmo tema (ou sem tema), o texto da caixa vale
+   para todas, com aviso na tela; questões ajustadas uma a uma nunca são sobrescritas. O aviso
+   do "Aplicar" e o cabeçalho dos resultados ("tema pedido: …") mostram o texto que foi usado.
+   Teste: `node tests/verify_tema_lote.js` — 20 verificações. Ao reabrir um simulado salvo, a caixa passa a mostrar o tema dele.
+
 Testes: `node tests/verify_diversidade.js` (catálogo, reservas, corpos enviados, auditoria com
 as duas levas reais em `tests/fixtures/`, frases típicas de Física/Biologia, Humanas, leva mista, simulado antigo, botão, leitor numérico) — 49 verificações; `node tests/teste_real_fase_d.js` roda o app inteiro com as 10 questões reais. Ordem de publicação: backend v73 antes do app v17 (o app novo já encurta a lista de assuntos contando com o subtópico/domínio).
 
