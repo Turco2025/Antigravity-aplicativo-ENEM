@@ -2329,6 +2329,12 @@ function alternativasNumericasOrdenadas(alts){
    modo que a correta caia lá respeitando a ordem lógica. Só usamos a troca
    quando ela não quebra a ordem numérica das alternativas.
    Devolve "ok" | "mantido" | "impossivel".                                    */
+/* Atenção (v18.3): quando a letra entregue erra o alvo e as alternativas NÃO são numéricas,
+   esta função troca duas de lugar. Isso pode desfazer a ordem "da mais curta para a mais longa"
+   que o prompt do backend pede (REGRA DAS CINCO ALTERNATIVAS, item 3) — a ordem de alternativas
+   de texto é, portanto, best-effort, e nenhum teste deve exigi-la. A paridade não é afetada: a
+   troca não muda o conjunto de comprimentos nem o comprimento da correta, que é o que a
+   auditoria local mede. */
 function aplicaGabaritoAlvo(data, alvo){
   if(!alvo || !data || !data.gabarito) return "mantido";
   if(data.gabarito === alvo) return "ok";
@@ -3583,12 +3589,30 @@ function auditaQuestaoLocal(q){
   const absol = L.filter(k => ABSOLUTISTAS_RE.test(txt(k)));
   if(absol.length) info("Linguagem absolutista em " + absol.join(", ") + " — confira se não entrega/denuncia a resposta.");
 
-  // Correta muito mais longa que as demais
+  /* PARIDADE DAS ALTERNATIVAS (Guia do Inep) — v18.3. O critério anterior (correta acima
+     de 1,6x a MÉDIA das outras) nunca disparava: nas 20 questões reais das levas de 14/09
+     (Matemática) e 15/09 (Biologia) o maior valor observado foi 1,42, e ficaram de fora as
+     duas questões em que o gabarito realmente se denunciava (261 contra 199 caracteres e
+     245 contra 184). A comparação passa a ser com a SEGUNDA MAIOR — que é o que o candidato
+     enxerga ao bater o olho. Quem protege as alternativas curtas — onde poucos caracteres
+     viram uma razão alta sem significado — é o piso de 40 caracteres; os 25 caracteres são
+     um gatilho ADICIONAL, para o regime de alternativas longas (ver o comentário abaixo). */
   if(L.includes(d.gabarito) && txt(d.gabarito)){
-    const outras = L.filter(k => k !== d.gabarito && txt(k)).map(k => txt(k).length);
-    if(outras.length){
-      const media = outras.reduce((a, b) => a + b, 0) / outras.length;
-      if(txt(d.gabarito).length > 1.6 * media && txt(d.gabarito).length > 40) info("A alternativa correta é bem mais longa que as demais (pode denunciar a resposta).");
+    const tams = L.filter(k => txt(k)).map(k => ({ k: k, n: txt(k).length }));
+    const g = txt(d.gabarito).length;
+    const outras = tams.filter(x => x.k !== d.gabarito).map(x => x.n);
+    const segunda = outras.length ? Math.max.apply(null, outras) : 0;
+    const menor = tams.length ? Math.min.apply(null, tams.map(x => x.n)) : 0;
+    const maior = tams.length ? Math.max.apply(null, tams.map(x => x.n)) : 0;
+    /* Razão OU margem absoluta (não "e"): no regime de alternativas longas que o gerador
+       produz hoje, exigir as duas ao mesmo tempo abre um buraco — 500 contra 404 caracteres
+       é só 1,24x, mas são 96 caracteres a mais que TODOS os distratores. Qualquer um dos dois
+       ramos já implica que a correta é a maior de todas, então a frase do aviso é sempre
+       verdadeira. Nas 20 questões reais o resultado é o mesmo com "e" ou com "ou". */
+    if(g > 40 && segunda && (g > 1.25 * segunda || (g - segunda) >= 25)){
+      aviso(`A alternativa correta (${d.gabarito}) é a mais longa da questão: ${g} caracteres contra ${segunda} da segunda maior. O Guia do Inep pede paridade entre as cinco — do jeito que está, o tamanho pode entregar a resposta. Use "Regenerar".`);
+    } else if(menor > 40 && maior > 1.30 * menor){   // 1,25 é a paridade que o prompt pede; 1,30 dá a tolerância
+      info(`Alternativas com extensões desiguais (de ${menor} a ${maior} caracteres) — o Guia do Inep pede paridade técnica entre as cinco.`);
     }
   }
 

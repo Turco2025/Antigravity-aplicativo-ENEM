@@ -249,9 +249,9 @@ function buildGabaritoAlvo(L: string | null) {
 
 Como cumprir sem quebrar nenhuma outra regra:
 1. Escreva a correta e os quatro distratores, cada um com o seu erro de raciocínio específico.
-2. Distribua-os de modo que a correta caia em ${L} RESPEITANDO a ordem lógica exigida pelo Guia do Inep: numéricas em ordem crescente, as demais da mais curta para a mais longa. Se a ordem lógica empurrar a correta para outra posição, REESCREVA os valores ou a redação dos distratores (nunca a correta) até que ordem lógica e posição ${L} coincidam.
+2. Distribua-os de modo que a correta caia em ${L} RESPEITANDO a ordem lógica da REGRA DAS CINCO ALTERNATIVAS (no prompt do sistema): numéricas em ordem crescente, as de texto da mais curta para a mais longa. Se a ordem lógica empurrar a correta para outra posição, reescreva a REDAÇÃO dos distratores de texto (nunca a da correta) até que ordem lógica e posição ${L} coincidam. Em alternativas NUMÉRICAS, escolha outros VALORES de distrator — cada um continuando a carregar o seu erro de raciocínio — de modo que a correta caia em ${L} já na ordem crescente; a ordem crescente nunca cede.
 3. NUNCA troque as alternativas de lugar no fim: uma lista de números fora de ordem crescente denuncia a manipulação.
-4. A correta em ${L} continua não podendo ser mais longa, mais completa nem mais bem redigida que os distratores (regra 4.4).
+4. A letra ${L} NÃO autoriza quebrar a paridade: mesmo caindo em ${L}, a correta não pode ser a mais completa nem a mais bem redigida e, sendo de TEXTO, não pode se destacar por tamanho — nunca mais de 25% nem mais de 25 caracteres acima da segunda mais longa (item 2 da REGRA DAS CINCO ALTERNATIVAS). Cumprida a paridade, qualquer letra cabe em qualquer posição da ordem, inclusive a última — é assim que as duas exigências convivem.
 5. Se ainda assim for impossível, escolha OUTRO recorte de conteúdo para a questão em vez de entregar o gabarito em posição diferente.
 
 Motivo: gabaritos repetidos em sequência deixam o candidato acertar por padrão, não por domínio da habilidade — e destroem a validade do simulado.
@@ -372,6 +372,33 @@ function buildDiversidadeTematica(eixoTematico: string, temasEvitar: string[], t
    elas; nenhuma instrução foi cortada, resumida ou reescrita. O que muda é
    quem paga: cache lido (US$ 0,20/M) em vez de entrada nova (US$ 2/M).
    O prompt do usuário fica só com o que é desta questão. */
+/* v74.3 — PARIDADE DAS ALTERNATIVAS. Até a v74.2, a única menção ao tamanho das
+   alternativas e à ordem lógica vivia dentro de buildGabaritoAlvo (prompt do usuário,
+   itens 2 a 4), num bloco cujo título fala da LETRA do gabarito — e citava uma "regra
+   4.4" que não existe em nenhum texto do prompt. No teste real de 15/09 (10 questões de
+   Biologia, alternativas de texto) nenhuma questão saiu ordenada e em 5 o gabarito era a
+   alternativa mais longa; nas levas de Matemática o defeito não aparecia porque as
+   alternativas numéricas são curtas e o modelo já as ordena.
+   A regra passa a viver aqui, no bloco FIXO (prompt do sistema, com cache_control), e a
+   ênfase muda de "ordenar por tamanho" para PARIDADE: com as cinco do mesmo tamanho, a
+   ordem por tamanho deixa de entregar a resposta e deixa de brigar com a letra reservada
+   (com letra A a ordenação exigiria a correta mais curta; com E, a mais longa — o que a
+   própria regra do Guia proíbe). Nenhuma chamada nova à IA. Custo: o texto NOVO (≈2,4 mil
+   caracteres) nasce aqui, no bloco cacheado (US$ 0,20/M na leitura); o bloco do gabarito,
+   no prompt do usuário, cresceu ≈315 caracteres (US$ 2/M). Saldo por questão: cerca de
+   +US$ 0,0003 — e uma regravação de cache (~US$ 0,02) na primeira chamada de cada
+   combinação disciplina × recurso depois do deploy. Não é economia: é o preço de a regra
+   passar a existir nas duas pontas. */
+function buildRegraAlternativas(): string {
+  return `REGRA DAS CINCO ALTERNATIVAS (Guia de Elaboração e Revisão de Itens do Inep — paridade técnica e ordem lógica)
+
+1. PARIDADE (alternativas de TEXTO). As cinco têm de ter o MESMO grau de elaboração: mesma extensão aproximada, mesmo nível de detalhe técnico e a mesma quantidade de justificativa embutida. A mais longa não deve passar de cerca de 1,25 vez a mais curta. Nenhuma pode ser a única com uma explicação extra, uma ressalva ou um segundo período.
+2. O GABARITO NÃO PODE SE DENUNCIAR. A alternativa correta nunca é a mais completa, a mais qualificada nem a mais bem redigida do conjunto. Em alternativas de TEXTO ela também nunca se destaca por tamanho: não pode passar de 25% nem de 25 caracteres acima da segunda mais longa. (Em alternativas NUMÉRICAS o tamanho do número é irrelevante — ali manda a ordem crescente do item 3, e os valores não se mexem por causa de tamanho.) Um candidato que não domine a habilidade tem de errar por não dominá-la — jamais por escolher a alternativa visivelmente mais trabalhada.
+3. ORDEM LÓGICA. Alternativas NUMÉRICAS vão sempre em ordem crescente de valor — essa ordem manda, e os valores de cada distrator (que carregam o erro de raciocínio específico dele) nunca podem ser alterados para acertar tamanho de texto. As de TEXTO vão da mais curta para a mais longa; cumprida a paridade do item 1, a diferença entre vizinhas é de poucos caracteres e não sinaliza nada.
+4. COMO ESCREVER PARA CUMPRIR OS TRÊS (alternativas de TEXTO). Decida o tamanho ANTES: fixe UMA extensão-alvo para as cinco — a que a alternativa correta precisa para ficar completa e sem sobra — e escreva todas nessa mesma medida, cada uma com o seu erro de raciocínio próprio. Se uma delas estiver ficando maior que as outras, ENCURTE-A — nunca alongue as demais para alcançá-la, e nunca deixe uma sozinha maior. (Esta regra é sobre as cinco serem IGUAIS entre si; o tamanho absoluto continua sendo o da CALIBRAÇÃO DE EXTENSÃO acima, com a tolerância que ela mesma admite.)
+5. FORMA IGUAL PARA AS CINCO (é o que garante o item 1 na hora de escrever, alternativas de TEXTO). Cada alternativa é UMA única oração, sem segundo período. Proibido em qualquer uma delas: oração explicativa emendada no fim, puxada por "já que", "uma vez que", "algo que", "de modo que" ou travessão; e um segundo argumento somado ao primeiro. E não acrescente à alternativa CORRETA nenhum reforço final do tipo "o que garante…", "algo que os demais não fazem" ou "de forma duradoura" para deixá-la mais convincente que os distratores: é exatamente assim que o gabarito se denuncia.`;
+}
+
 function buildBlocoFixo(opts: {
   area: string; disciplina: string; recurso: string;
   competenciaNum: number | null; habilidadeCod: string | null;
@@ -386,6 +413,8 @@ function buildBlocoFixo(opts: {
 As instruções abaixo valem para a questão pedida no prompt do usuário e devem ser seguidas integralmente junto com ele.
 ${buildRegraFontesReais(opts.disciplina)}
 ${buildCalibracaoExtensao(opts.disciplina)}
+
+${buildRegraAlternativas()}
 
 ${instrucoesImagem(opts.recurso, opts.disciplina)}${matrizFixa}
 
@@ -605,15 +634,37 @@ function cortaLimpo(texto: string, max: number): string {
   const esp = base.lastIndexOf(" ");
   return (esp > max / 2 ? base.slice(0, esp) : base).replace(/[\s,;:(\u2013\u2014-]+$/, "").trim();
 }
+/* Igual ao cortaLimpo, mas recusa o corte por fim de frase que jogue fora mais de 15%
+   do limite — para campos em que a segunda frase carrega informação (o "conteudo"). */
+function cortaConteudo(texto: string, max: number): string {
+  const t = texto.trim();
+  if (t.length <= max) return t;
+  const porFrase = cortaLimpo(t, max);
+  if (porFrase.length >= Math.floor(max * 0.85)) return porFrase;
+  const base = t.slice(0, max);
+  const esp = base.lastIndexOf(" ");
+  return (esp > max / 2 ? base.slice(0, esp) : base).replace(/[\s,;:(\u2013\u2014-]+$/, "").trim();
+}
 function normalizarRecortes(bruto: unknown, quantidade: number): Recorte[] {
   const lista = listaDeRecortes(bruto);
   const saida: Recorte[] = [];
   for (const r of lista) {
     if (!r || typeof r !== "object") continue;
     const obj = r as Record<string, unknown>;
-    const conteudo = campoDoRecorte(obj, "conteudo").slice(0, 200);
+    // v74.3 (revisto): o corte limpo entrou aqui junto com o de "habilidade", mas o
+    // "conteudo" é a linha que diferencia um recorte do outro — recuar até o último fim
+    // de frase pode decepar a segunda metade dele. Com a guarda, o corte por frase só
+    // vale quando preserva pelo menos 85% do limite; abaixo disso cai no corte por
+    // palavra inteira. Nos 10 recortes reais de 15/09 o campo tinha 43 a 82 caracteres
+    // e nenhum dos dois caminhos chega a disparar.
+    const conteudo = cortaConteudo(campoDoRecorte(obj, "conteudo"), 200);
     const contexto = cortaLimpo(campoDoRecorte(obj, "contexto"), 320);
-    const habilidade = campoDoRecorte(obj, "habilidade").slice(0, 200);
+    // v74.3: 240 (era 200) com corte limpo. São 120 habilidades oficiais (30 por área) e a
+    // maior, com o prefixo "H__: ", tem 230 caracteres — com 240 NENHUMA é cortada (com 200
+    // eram cinco; duas chegaram truncadas no teste real de 15/09, em "…relações matem" e
+    // "…físicos ne"). O recorte montado pelo app cabe no teto de 800: 200 + 320 + 240 mais
+    // 38 de rótulos e separadores = 798.
+    const habilidade = cortaLimpo(campoDoRecorte(obj, "habilidade"), 240);
     if (!conteudo && !contexto) continue;
     // v74.1: número da questão declarado pelo modelo (só inteiros 1..quantidade).
     const nRaw = typeof obj.numero === "number" ? obj.numero : Number(campoDoRecorte(obj, "numero") || NaN);
@@ -1722,6 +1773,8 @@ function selfTestResponse() {
     buildMatrizInstrucoes.toString(),
     buildObjetosConhecimento.toString(),
     buildDiversidadeTematica.toString(),
+    buildRegraAlternativas.toString(),
+    cortaLimpo.toString(), cortaConteudo.toString(),   // v74.3 (revisto): o corte dos recortes entra na impressão digital
     buildSystemPlanejamento.toString(),
     normalizarNotacaoTexto.toString(), normalizarNotacaoQuimica.toString(), qnConverteIon.toString(),
     JSON.stringify([QN_FORMULAS_COMUNS, QN_FORMULAS_DISCIPLINA, QN_GASES, QN_GASES_SEMPRE, QN_IONS]),
@@ -1784,6 +1837,58 @@ function selfTestResponse() {
         mantemDominios: comLista.includes("DOMÍNIOS DE CONTEXTO RESERVADOS") && comLista.includes("1: pesca e aquicultura"),
         semListaIgualAoV73: semLista.includes('TODAS as questões são sobre o tema pedido pelo professor: "Exponenciação"') && !semLista.includes("JÁ DISTRIBUIU"),
         umConteudoSoNaoFixa: !umSo.includes("JÁ DISTRIBUIU"),
+        // v74.3: regra das alternativas no bloco FIXO (cacheado) e sem referência morta.
+        regraAlternativas: (() => {
+          const fixo = buildBlocoFixo({ area: "natureza", disciplina: "Biologia", recurso: "imagem", competenciaNum: null, habilidadeCod: null });
+          const alvo = buildGabaritoAlvo("E");
+          const usuario = buildUserPrompt({ area: "natureza", disciplina: "Biologia", tema: "t", dificuldade: "Médio", recurso: "nenhum", competenciaNum: null, habilidadeCod: null, gabaritoAlvo: "E" });
+          return fixo.includes("REGRA DAS CINCO ALTERNATIVAS")
+            && fixo.includes("1,25 vez a mais curta")
+            && fixo.includes("25% nem de 25 caracteres acima da segunda mais longa")
+            && fixo.includes("nunca podem ser alterados para acertar tamanho de texto")
+            && fixo.includes("ENCURTE-A")
+            && !/regra 4\.4/i.test(alvo)
+            && !/regra 4\.4/i.test(fixo)
+            && alvo.includes("NÃO autoriza quebrar a paridade")
+            && buildGabaritoAlvo(null) === ""
+            // O CORPO da regra vive só no bloco cacheado; o prompt do usuário (pago por
+            // questão) apenas a cita pelo nome, dentro do bloco do gabarito.
+            && !usuario.includes("1,25 vez a mais curta")
+            && !usuario.includes("ENCURTE-A")
+            && usuario.includes("REGRA DAS CINCO ALTERNATIVAS")
+            /* v74.3 (revisto) — ESCOPO. A paridade e o teto de tamanho valem para
+               alternativas de TEXTO. Sem esta marca no item 2, em Matemática a regra
+               mandaria igualar o número de caracteres de "R$ 12,50" e "R$ 1.234.567,89",
+               ou seja, distorcer os VALORES — que é o que o item 3 proíbe. Os itens 1, 4
+               e 5 já vinham marcados; 2 e o item 4 do gabarito não vinham. */
+            && /2\. O GABARITO NÃO PODE SE DENUNCIAR[^]*?alternativas de TEXTO[^]*?3\. ORDEM LÓGICA/.test(fixo)
+            && fixo.includes("Em alternativas NUMÉRICAS o tamanho do número é irrelevante")
+            && alvo.includes("sendo de TEXTO, não pode se destacar por tamanho")
+            && alvo.includes("a ordem crescente nunca cede");
+        })(),
+        /* v74.3 (revisto) — o corte por fim de frase não pode decepar o "conteudo", que é a
+           linha que diferencia um recorte do outro. Com ponto final logo depois da metade do
+           limite, o cortaLimpo devolvia 120 de 200; o cortaConteudo recusa qualquer corte por
+           frase que preserve menos de 85% e cai no corte por palavra inteira. */
+        corteConteudo: (() => {
+          const t = "Progressoes aritmeticas e a soma dos n primeiros termos aplicada a previsao de producao mensal crescente de uma fabrica. Uso do modelo para estimar o total acumulado ao longo de um ano inteiro de operacao da unidade.";
+          const r = normalizarRecortes({ recortes: [{ numero: 1, conteudo: t, contexto: "x", habilidade: "h" }] }, 1);
+          const c = r[0].conteudo;
+          return cortaLimpo(t, 200).length === 120           // o que a v74.3 entregava
+            && c.length === 195 && c.endsWith("ao longo de um ano inteiro de")
+            && !/\s$/.test(c) && t.startsWith(c)             // palavra inteira, sem sobra
+            // e o caminho normal (fim de frase perto do limite) continua valendo
+            && cortaConteudo("Primeira frase completa e um pouco mais longa aqui. Segunda", 55) === "Primeira frase completa e um pouco mais longa aqui.";
+        })(),
+        // v74.3: habilidade e conteúdo também saem sem corte no meio da palavra.
+        corteHabilidade: (() => {
+          const longa = "H30: " + "palavra ".repeat(60);   // 485 caracteres, sem ponto final
+          const r = normalizarRecortes({ recortes: [{ numero: 1, conteudo: "c", contexto: "x", habilidade: longa }] }, 1);
+          const h = r[0].habilidade;
+          // o teto subiu de 200 para 240 E o corte cai em palavra inteira (com .slice(0,200) o
+          // campo terminava em "pal" e tinha exatamente 200 caracteres)
+          return r.length === 1 && h.length > 200 && h.length <= 240 && h.endsWith("palavra") && longa.startsWith(h);
+        })(),
         // v74.2: contexto curto no prompt e corte limpo no normalizador.
         contextoCurto: semLista.includes("até 200 caracteres") && FERRAMENTA_RECORTES.input_schema.properties.recortes.items.properties.contexto.description.includes("até 200 caracteres"),
         corteLimpo: cortaLimpo("Primeira frase completa e um pouco mais longa. Segunda frase que seria cortada no meio por ser longa demais", 60) === "Primeira frase completa e um pouco mais longa."

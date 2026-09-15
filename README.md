@@ -92,7 +92,7 @@ Expoentes, índices, raízes e sinais chegam ao estudante prontos — x², 2⁴,
    sobrescritas/subscritas (`fontwork/ampliar_carlito.py`). Teste no navegador, sem rede:
    `node tests/verify_math_notation.js`.
 
-## Diversidade de exemplos em levas, sem custo (v17 / generate-question v73; v18 / v74; v18.2 / v74.2)
+## Diversidade de exemplos em levas, sem custo (v17 / generate-question v73; v18 / v74; v18.2 / v74.2; v18.3 / v74.3)
 
 Problema real (leva 538678f0, 20 de Matemática sem tema, 14/09/2026): "fábrica de componentes
 eletrônicos" com linhas A/B 60%/40% em duas questões, "transportadora" em três, "cooperativa
@@ -207,6 +207,71 @@ sem chamada nova à IA, sem campo novo na resposta e sem aumentar o prompt da le
    metade do limite, ou no último espaço, com teto 320; os tetos do recorte
    inteiro subiram de 600 para 800 (app e backend) para nada ser cortado de novo na montagem.
    Selftest: `planejamentoV74.contextoCurto` e `corteLimpo`. Testes: `verify_lote_itens.js` (H1–H4).
+
+10. **Paridade das alternativas (v18.3 / generate-question v74.3)**: no teste real de 15/09 (10
+   questões de Biologia, `tests/fixtures/teste_real_v74_2/`) nenhuma questão saiu com as
+   alternativas ordenadas da mais curta para a mais longa, e em 5 das 10 a correta era a mais
+   longa — na questão 7 com 261 caracteres contra 199 da segunda, na 10 com 245 contra 184. Não
+   era regressão: nas levas de Matemática o defeito não aparecia porque 7 de 10 questões têm
+   alternativas numéricas, curtas e já ordenadas. A causa estava na estrutura do prompt: a única
+   menção ao tamanho e à ordem das alternativas vivia dentro de `buildGabaritoAlvo` (prompt do
+   usuário), em itens de um bloco cujo título fala da LETRA do gabarito, e citava uma "regra 4.4"
+   **que não existe em nenhum texto do prompt**. Pior: com a letra fixada pelo app, exigir ordem
+   por tamanho é contraditório — com gabarito A a correta teria de ser a mais curta; com E, a mais
+   longa, que é justamente o que o Guia proíbe.
+   A correção move a regra para o bloco FIXO do prompt do sistema (`buildRegraAlternativas`,
+   cacheado) e troca a ênfase de "ordenar por tamanho" para **paridade**: as cinco com a mesma
+   extensão (a mais longa até ~1,25× a mais curta), a correta nunca se destacando por tamanho (no
+   máximo 25% ou 25 caracteres acima da segunda mais longa — a mesma tolerância que a auditoria do
+   app usa), e uma forma única para as cinco (uma oração cada, sem segundo período e sem explicação
+   emendada no fim), que é o que produz a paridade na hora de escrever. Com paridade, a ordem por
+   tamanho deixa de entregar a resposta e deixa de brigar com a letra reservada. `buildGabaritoAlvo` perde a referência morta e passa a dizer que a letra não
+   autoriza quebrar a paridade. Custo: o texto novo (≈436 tokens) vive no bloco cacheado e o prompt
+   por questão cresce ≈57 tokens — o saldo real é cerca de **+US$ 0,0003 por questão**, mais uma
+   regravação de cache (~US$ 0,02) na primeira chamada de cada combinação depois do deploy. Não é
+   economia: é o preço de a regra passar a existir nas duas pontas.
+   **Escopo (revisão de 15/09, antes da publicação):** a paridade e o teto de tamanho valem para
+   alternativas de **TEXTO**. Os itens 1, 4 e 5 já vinham marcados assim; o item 2 ("o gabarito não
+   pode se denunciar") e o item 4 do bloco do gabarito não vinham, e lidos ao pé da letra mandariam
+   igualar o número de caracteres de "R$ 12,50" e "R$ 1.234.567,89" — isto é, distorcer os VALORES,
+   que é o que o item 3 proíbe. Os dois ganharam a marca de escopo e uma frase para numéricas ("em
+   numéricas o tamanho do número é irrelevante; manda a ordem crescente"), e o passo 2 do bloco do
+   gabarito passou a separar os dois casos: em texto reescreve-se a **redação** dos distratores, em
+   numéricas escolhem-se outros **valores** — a ordem crescente nunca cede à letra. O selftest
+   (`regraAlternativas`) passou a exigir essas marcas.
+   No app, a auditoria local ganhou dentes: o critério anterior (correta acima de 1,6× a **média**
+   das outras) **nunca disparava** — nas 20 questões reais das duas levas o maior valor observado
+   foi 1,42. Agora a comparação é com a **segunda maior** — mais de 1,25× **ou** pelo menos 25
+   caracteres de diferença, razão ou margem e não as duas juntas, senão 500 contra 404 caracteres
+   escaparia por ser "só" 1,24× — e há uma observação separada quando as cinco ficam desiguais
+   (mais de 1,30× entre a maior e a menor: 1,25× é a paridade que o prompt pede, 1,30 é ela com
+   tolerância). Nas mesmas 20 questões o alerta sai exatamente nas duas em que o gabarito se
+   denuncia (Bio q07 e q10) e a observação na única que a merece (Bio q04, de 76 a 102 caracteres),
+   sem nenhum falso positivo. O corte limpo passou a valer também para `habilidade`
+   do recorte (`cortaLimpo`, 240 caracteres: as 120 habilidades oficiais cabem inteiras; com o teto
+   antigo de 200 cinco eram cortadas, e duas chegaram assim no teste real de 15/09 — "…relações
+   matem", "…físicos ne") e para `conteudo`, este com uma guarda própria (`cortaConteudo`): recuar
+   até o último fim de frase é bom para a habilidade, mas no `conteudo` — que é a linha que
+   diferencia um recorte do outro — um ponto final logo depois da metade do limite decepava a
+   segunda frase (medido: 120 caracteres entregues de um teto de 200). A guarda só aceita o corte
+   por frase quando ele preserva pelo menos 85% do limite; abaixo disso cai no corte por palavra
+   inteira. Nos 10 recortes reais de 15/09 o campo tinha de 43 a 82 caracteres e nenhum dos dois
+   caminhos chega a disparar — a guarda é para o caso que ainda não apareceu.
+   Por que a regra fixa a forma em vez de mandar conferir no fim: o modelo entrega a questão numa
+   única chamada de ferramenta, sem rascunho — quando escreve a alternativa E, as outras quatro já
+   são texto comprometido, então "conte os caracteres antes de entregar" não é executável (foi
+   exatamente esse tipo de instrução que a v74.2 tinha e que as 10 questões ignoraram). O escopo é sempre **alternativas de texto**: em numéricas manda a
+   ordem crescente, e os valores dos distratores (que carregam o erro de raciocínio de cada um)
+   nunca podem ser mexidos para acertar tamanho — sem essa ressalva a regra estragaria Matemática,
+   onde 7 de 10 questões têm alternativas numéricas de 1 a 10 caracteres.
+   Duas limitações conhecidas, registradas de propósito: `aplicaGabaritoAlvo` (app) troca duas
+   alternativas de lugar quando a letra entregue erra o alvo, o que pode desfazer a ordem por
+   tamanho — a ordem de alternativas de texto é best-effort e nenhum teste a exige (a paridade não
+   é afetada, porque a troca não muda os comprimentos); e `tests/verify_app.js` aponta para um
+   artefato de 13/09 fora do repositório e falha por timeout desde então.
+   Selftest: `planejamentoV74.regraAlternativas` e `corteHabilidade`.
+   Teste: `node tests/verify_paridade_alternativas.js` — 13 verificações sobre as 20 questões reais
+   (`fixtures/teste_real_v73` e `fixtures/teste_real_v74_2`) e sete casos de fronteira.
 
 Testes: `node tests/verify_diversidade.js` (catálogo, reservas, corpos enviados, auditoria com
 as duas levas reais em `tests/fixtures/`, frases típicas de Física/Biologia, Humanas, leva mista, simulado antigo, botão, leitor numérico) — 49 verificações; `node tests/teste_real_fase_d.js` roda o app inteiro com as 10 questões reais. Ordem de publicação: backend v73 antes do app v17 (o app novo já encurta a lista de assuntos contando com o subtópico/domínio).
