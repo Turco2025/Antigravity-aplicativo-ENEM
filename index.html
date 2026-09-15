@@ -2814,16 +2814,41 @@ async function planejaRecortesPorTema(){
       // de cada recorte só é aproveitado se cair no domínio reservado (principal
       // ou alternativo) e não repetir o de outro recorte do grupo — senão sai do
       // recorte e o backend ambienta pelo domínio.
+      // v18: com lista do lote, cada recorte é casado com a SUA questão pelo
+      // conteúdo — não só pela posição. No teste real de 15/09/2026 o planejador
+      // criou um recorte a mais no meio e deslocou os seguintes: pela posição,
+      // 7 de 10 seriam descartados; casando pelo conteúdo (e preferindo o recorte
+      // cujo contexto cai no domínio da questão), quase todos são aproveitados.
+      // Um recorte fora de qualquer conteúdo da questão não entra: o tema dela
+      // e o domínio reservado bastam.
+      const itens = g.qs.map(o => o.tema);
+      const escolhidos = g.qs.map((q, i) => g.lista ? null : (i < payload.recortes.length ? payload.recortes[i] : null));
+      if(g.lista){
+        const usados = new Set();
+        const cabe = (r, q) => r && recorteRespeitaItem(r, q.tema, itens);
+        const noDominio = (r, q) => !q.dominio || !r.contexto || contextoRespeitaDominio(String(r.contexto), q.dominio) || contextoRespeitaDominio(String(r.contexto), q.dominioAlt);
+        // Um recorte "cabe melhor" em outra questão ainda sem recorte? (itens
+        // pai/filho: "Grandezas" × "Grandezas inversamente proporcionais")
+        const outraPrefere = (r, i) => { const texto = normalizaTextoBusca(`${r.conteudo || ""} ${r.contexto || ""}`); const minha = pontuacaoDoItem(texto, g.qs[i].tema); return g.qs.some((o, j) => j !== i && !escolhidos[j] && pontuacaoDoItem(texto, o.tema) > minha); };
+        const passadas = [
+          (q, i) => (k, r) => k === i && cabe(r, q) && noDominio(r, q) && !outraPrefere(r, i),   // 1) mesma posição, contexto no domínio
+          (q, i) => (k, r) => r && r.numero === i + 1 && cabe(r, q) && noDominio(r, q),          // 2) número declarado pelo planejador
+          (q) => (k, r) => cabe(r, q) && noDominio(r, q),                                        // 3) mesmo conteúdo, contexto no domínio
+          (q) => (k, r) => cabe(r, q),                                                           // 4) mesmo conteúdo
+        ];
+        passadas.forEach(regra => {
+          g.qs.forEach((q, i) => {
+            if(escolhidos[i]) return;
+            const teste = regra(q, i);
+            const k = payload.recortes.findIndex((r, idx) => !usados.has(idx) && teste(idx, r));
+            if(k >= 0){ escolhidos[i] = payload.recortes[k]; usados.add(k); if(k !== i) console.log(`[tema] recorte da questão ${state.questions.indexOf(q) + 1} ("${q.tema}") veio na posição ${k + 1} do planejador`); }
+          });
+        });
+        payload.recortes.forEach((r, k) => { if(!usados.has(k)) console.warn(`[tema] recorte ${k + 1} do planejador não coube em nenhuma questão — descartado: "${String(r && r.conteudo || "").slice(0, 120)}"`); });
+      }
       const contextosAceitos = [];
       g.qs.forEach((q, i) => {
-        let r = i < payload.recortes.length ? Object.assign({}, payload.recortes[i]) : null;
-        // v18: com lista do lote, o recorte tem de ficar no conteúdo desta questão;
-        // se o planejador (ou um backend antigo) trocou os conteúdos, o recorte
-        // inteiro sai — o tema da questão e o domínio reservado bastam.
-        if(r && g.lista && !recorteRespeitaItem(r, q.tema, g.qs.map(o => o.tema))){
-          console.warn(`[tema] recorte ${state.questions.indexOf(q) + 1}: fora do conteúdo distribuído ("${q.tema}") — descartado: "${String(r.conteudo || "").slice(0, 120)}"`);
-          r = null;
-        }
+        let r = escolhidos[i] ? Object.assign({}, escolhidos[i]) : null;
         if(r && r.contexto){
           const ctx = String(r.contexto);
           const noDominio = !q.dominio || contextoRespeitaDominio(ctx, q.dominio) || contextoRespeitaDominio(ctx, q.dominioAlt);

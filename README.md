@@ -168,7 +168,7 @@ sem chamada nova à IA, sem campo novo na resposta e sem aumentar o prompt da le
    conteúdos irmãos não viajam como "assuntos a evitar" quando há recorte). Atenção: um tema
    único descritivo que contenha vírgula ("Funções do 1.º e 2.º graus, gráficos") agora vira
    dois conteúdos — o aviso do "Aplicar" e o painel mostram a divisão; use travessão ou "e".
-   Teste: `node tests/verify_lote_itens.js` — 45 verificações.
+   Teste: `node tests/verify_lote_itens.js` — 48 verificações. No teste real de 15/09 o planejador criou um recorte a mais e deslocou os seguintes; por isso o app casa cada recorte com a sua questão pelo conteúdo (posição → número declarado → conteúdo com contexto no domínio → conteúdo), e o backend (v74.1) lista os conteúdos um por linha, pede o campo `numero` e devolve até 2 recortes extras.
 
 Testes: `node tests/verify_diversidade.js` (catálogo, reservas, corpos enviados, auditoria com
 as duas levas reais em `tests/fixtures/`, frases típicas de Física/Biologia, Humanas, leva mista, simulado antigo, botão, leitor numérico) — 49 verificações; `node tests/teste_real_fase_d.js` roda o app inteiro com as 10 questões reais. Ordem de publicação: backend v73 antes do app v17 (o app novo já encurta a lista de assuntos contando com o subtópico/domínio).

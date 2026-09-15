@@ -491,8 +491,18 @@ function buildPlanejamentoPrompt(opts: { area: string; disciplina: string; tema:
   const porQuestao = (opts.temasPorQuestao || []).map((t) => String(t || "").replace(/\s+/g, " ").trim());
   const temaLinha = String(opts.tema || "").replace(/\s+/g, " ").trim();
   const comLista = porQuestao.filter(Boolean).length >= 2 && new Set(porQuestao.filter(Boolean).map((t) => t.toLowerCase())).size >= 2;
+  // v74.1: no teste real de 15/09/2026 o modelo, com a lista em uma linha só,
+  // criou um recorte a mais para o domínio alternativo e deslocou todos os
+  // seguintes (7 de 10 fora do conteúdo fixado). A lista agora vai uma por
+  // linha, com a regra "um recorte por número" explícita, e cada recorte
+  // devolve o seu "numero" — o app confere e realinha pelo conteúdo.
   const aberturaTema = comLista
-    ? `O professor pediu um simulado sobre esta lista de conteúdos: "${temaLinha}". O aplicativo JÁ DISTRIBUIU os conteúdos entre as questões — o conteúdo de cada número está fixado abaixo e o recorte daquele número tem de ficar DENTRO dele, sem migrar para o conteúdo de outra questão: ${porQuestao.map((t, i) => `${i + 1}: ${t || "(qualquer conteúdo da lista)"}`).join("; ")}.`
+    ? `O professor pediu um simulado sobre esta lista de conteúdos: "${temaLinha}". O aplicativo JÁ DISTRIBUIU os conteúdos entre as questões — o conteúdo de cada número está FIXADO abaixo e o recorte daquele número tem de ficar DENTRO dele, sem migrar para o conteúdo de outra questão.
+
+CONTEÚDO FIXADO POR QUESTÃO (não altere a ordem, não troque, não acrescente nem remova números):
+${porQuestao.map((t, i) => `${i + 1}: ${t || "(qualquer conteúdo da lista)"}`).join("\n")}
+
+Entregue EXATAMENTE ${opts.quantidade} recortes: o recorte de número n é sobre o conteúdo fixado para n e traz o campo "numero" igual a n. Cada número gera UM único recorte — um domínio entre parênteses (abaixo) é só um substituto para o contexto daquele mesmo número, nunca um segundo recorte.`
     : `TODAS as questões são sobre o tema pedido pelo professor: "${opts.tema}".`;
   const conteudoDesc = comLista
     ? `o subtópico ou conceito específico, DENTRO do conteúdo fixado para o número da questão, que ela vai mobilizar. Comece o campo pelo nome do conteúdo exatamente como o professor escreveu, seguido de um travessão e do subtópico (ex.: "MDC — divisão em lotes iguais sem sobra"). Questões com o mesmo conteúdo fixado precisam de subtópicos, contextos e habilidades diferentes entre si.`
@@ -525,7 +535,8 @@ const FERRAMENTA_RECORTES = {
         items: {
           type: "object",
           properties: {
-            conteudo: { type: "string", description: "Subtópico/conceito específico dentro do tema." },
+            numero: { type: "integer", description: "Número da questão a que este recorte pertence (1 = primeira), na ordem pedida. Obrigatório quando houver conteúdo fixado por questão." },
+            conteudo: { type: "string", description: "Subtópico/conceito específico dentro do tema (com conteúdo fixado por questão: comece pelo nome do conteúdo como o professor escreveu)." },
             contexto: { type: "string", description: "Situação-problema concreta e real, diferente das demais e, quando houver domínio reservado para este índice, dentro dele (nomeando o domínio)." },
             habilidade: { type: "string", description: "Código e texto de uma habilidade da Matriz (ex.: \"H21: ...\")." },
           },
@@ -576,9 +587,10 @@ function listaDeRecortes(data: unknown): unknown[] {
   }
   return Array.isArray(bruto) ? bruto : [];
 }
-function normalizarRecortes(bruto: unknown, quantidade: number): Array<{ conteudo: string; contexto: string; habilidade: string }> {
+type Recorte = { conteudo: string; contexto: string; habilidade: string; numero?: number };
+function normalizarRecortes(bruto: unknown, quantidade: number): Recorte[] {
   const lista = listaDeRecortes(bruto);
-  const saida: Array<{ conteudo: string; contexto: string; habilidade: string }> = [];
+  const saida: Recorte[] = [];
   for (const r of lista) {
     if (!r || typeof r !== "object") continue;
     const obj = r as Record<string, unknown>;
@@ -586,8 +598,14 @@ function normalizarRecortes(bruto: unknown, quantidade: number): Array<{ conteud
     const contexto = campoDoRecorte(obj, "contexto").slice(0, 250);
     const habilidade = campoDoRecorte(obj, "habilidade").slice(0, 200);
     if (!conteudo && !contexto) continue;
-    saida.push({ conteudo, contexto, habilidade });
-    if (saida.length >= quantidade) break;
+    // v74.1: número da questão declarado pelo modelo (só inteiros 1..quantidade).
+    const nRaw = typeof obj.numero === "number" ? obj.numero : Number(campoDoRecorte(obj, "numero") || NaN);
+    const item: Recorte = { conteudo, contexto, habilidade };
+    if (Number.isInteger(nRaw) && nRaw >= 1 && nRaw <= quantidade) item.numero = nRaw;
+    saida.push(item);
+    // v74.1: até 2 recortes a mais são devolvidos (o modelo às vezes cria um
+    // extra e desloca os seguintes); o app casa cada recorte com a sua questão.
+    if (saida.length >= quantidade + 2) break;
   }
   return saida;
 }
@@ -1745,7 +1763,7 @@ function selfTestResponse() {
       const semLista = buildPlanejamentoPrompt({ ...base, tema: "Exponenciação" });
       const umSo = buildPlanejamentoPrompt({ ...base, tema: "Exponenciação", temasPorQuestao: ["Exponenciação", "Exponenciação", "Exponenciação", "Exponenciação"] });
       return {
-        fixaConteudos: comLista.includes("1: MDC; 2: MMC; 3: radiciação; 4: MDC") && comLista.includes("JÁ DISTRIBUIU") && comLista.includes("Comece o campo pelo nome do conteúdo") && comLista.includes('lista de conteúdos: "MDC MMC radiciação"') && !/conteúdos: "[^"]*\n/.test(comLista),
+        fixaConteudos: comLista.includes("1: MDC\n2: MMC\n3: radiciação\n4: MDC") && comLista.includes("JÁ DISTRIBUIU") && comLista.includes("Comece o campo pelo nome do conteúdo") && comLista.includes('lista de conteúdos: "MDC MMC radiciação"') && !/conteúdos: "[^"]*\n/.test(comLista) && comLista.includes('traz o campo "numero" igual a n') && comLista.includes("nunca um segundo recorte") && FERRAMENTA_RECORTES.input_schema.properties.recortes.items.properties.numero !== undefined,
         mantemDominios: comLista.includes("DOMÍNIOS DE CONTEXTO RESERVADOS") && comLista.includes("1: pesca e aquicultura"),
         semListaIgualAoV73: semLista.includes('TODAS as questões são sobre o tema pedido pelo professor: "Exponenciação"') && !semLista.includes("JÁ DISTRIBUIU"),
         umConteudoSoNaoFixa: !umSo.includes("JÁ DISTRIBUIU"),
@@ -1850,7 +1868,7 @@ ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferrame
       const nRec = (t: string) => nmNormalizaTexto(normalizarNotacaoTexto(t, disciplina));
       recortes = recortes.map((r) => ({ ...r, conteudo: nRec(r.conteudo), contexto: nRec(r.contexto) }));
       const uso = resumoUso(usos);
-      console.log(`[tema] planejamento "${tema}" (${disciplina})${temasPorQuestao.filter(Boolean).length ? ` · conteúdos fixados: ${temasPorQuestao.map((t, i) => `${i + 1}: ${t || "—"}`).join(", ")}` : ""}: ${recortes.length}/${quantidade} recorte(s) · ` + recortes.map((r, i) => `${i + 1}: ${r.conteudo}`).join(" · "));
+      console.log(`[tema] planejamento "${tema}" (${disciplina})${temasPorQuestao.filter(Boolean).length ? ` · conteúdos fixados: ${temasPorQuestao.map((t, i) => `${i + 1}: ${t || "—"}`).join(", ")}` : ""}: ${recortes.length}/${quantidade} recorte(s) · ` + recortes.map((r, i) => `${i + 1}${r.numero ? ` (nº ${r.numero})` : ""}: ${r.conteudo}`).join(" · "));
       await logGeneration(area, disciplina, `[planejar recortes] ${tema}`, { recurso: "planejamento", uso });
       return jsonResponse({ recortes, uso });
     } catch (err) {

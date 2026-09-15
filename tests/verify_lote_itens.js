@@ -30,6 +30,11 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   // com `planejadorAntigo`, distribui por conta própria (v73) — os recortes vêm com
   // conteúdos trocados; um caso "sinônimo" ("raiz quadrada" para "radiciação").
   let planejadorAntigo = false;
+  // `planejadorDeslocado` reproduz o caso real de 15/09/2026: o modelo criou um recorte
+  // a mais para o domínio alternativo da questão 3 e deslocou todos os seguintes.
+  let planejadorDeslocado = false;
+  // `planejadorTroca`: posições certas, mas os contextos dos dois "MDC" (q1 e q6) vêm trocados
+  let planejadorTroca = false;
   await page.route('**/*', route => {
     const url = route.request().url();
     if(url.startsWith('file://')) return route.continue();
@@ -39,11 +44,26 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       if(body.planejarRecortes){
         planejamentos.push(body);
         const itens = Array.isArray(body.temasPorQuestao) ? body.temasPorQuestao : [];
-        const recortes = Array.from({ length: body.quantidade }, (_, i) => {
+        let recortes = Array.from({ length: body.quantidade }, (_, i) => {
           let item = itens[i] || body.tema;
           if(planejadorAntigo){ item = itens[(i + 1) % itens.length] || body.tema; if(/radicia/i.test(itens[i] || '')) item = 'raiz quadrada'; }
-          return { conteudo: `${item} — subtópico ${i + 1}`, contexto: `contexto ${i + 1} em ${(body.dominios || [])[i] || 'livre'}`, habilidade: 'H1: Teste' };
+          return { numero: i + 1, conteudo: `${item} — subtópico ${i + 1}`, contexto: `contexto ${i + 1} em ${(body.dominios || [])[i] || 'livre'}`, habilidade: 'H1: Teste' };
         });
+        if(planejadorTroca && itens.length >= 6){
+          const doms = body.dominios || [];
+          const c0 = recortes[0].contexto, c5 = recortes[5].contexto;
+          recortes[0].contexto = `contexto em ${doms[5] || 'livre'}`; recortes[5].contexto = `contexto em ${doms[0] || 'livre'}`;
+          void c0; void c5;
+        }
+        if(planejadorDeslocado && itens.length >= 4){
+          const doms = body.dominios || [], alts = body.dominiosAlternativos || [];
+          recortes = [];
+          for(let i = 0; i < body.quantidade; i++){
+            recortes.push({ numero: recortes.length + 1, conteudo: `${itens[i]} — subtópico ${i + 1}`, contexto: `contexto em ${doms[i] || 'livre'}`, habilidade: 'H1: Teste' });
+            if(i === 2) recortes.push({ numero: recortes.length + 1, conteudo: `${itens[i]} — propriedades (extra)`, contexto: `contexto em ${alts[i] || 'livre'}`, habilidade: 'H4: Teste' });
+          }
+          recortes = recortes.slice(0, body.quantidade + 2);   // como o backend v74.1 devolve
+        }
         return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ recortes, uso: { chamadas: 1 } }) });
       }
       corpos.push(body);
@@ -178,8 +198,26 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   planejadorAntigo = true;
   D = await gerar();
   planejadorAntigo = false;
-  ok(D.recortes.every(r => r === null) && corpos.every(b => b.recorte === null) && corpos.every(b => B.dez5.temas.includes(b.tema)), 'D8 backend antigo troca os conteúdos: todos os recortes fora do item são descartados e a questão segue só com o seu conteúdo + domínio', JSON.stringify(D.recortes));
-  ok(corpos.every(b => b.temasEvitar.length >= 4), 'D9 sem recorte, os outros conteúdos da lista voltam a viajar como assuntos a evitar (comportamento antigo)', JSON.stringify(corpos.slice(0, 2).map(b => b.temasEvitar)));
+  // no mock "antigo", os recortes que seriam de exponenciação viram "raiz quadrada" → as 2 questões de exponenciação ficam sem recorte; as demais são casadas pelo conteúdo
+  const semIdx = B.dez5.temas.map((t, i) => t === 'exponenciação' ? i : -1).filter(i => i >= 0);
+  ok(D.recortes.every((r, i) => semIdx.includes(i) ? r === null : (r && r.startsWith(`conteúdo: ${B.dez5.temas[i]} —`))) && corpos.every(b => B.dez5.temas.includes(b.tema)), 'D8 backend antigo troca os conteúdos: cada recorte é casado com a questão do SEU conteúdo (8 aproveitados); recorte sem raiz comum com o item não serve (2 sem recorte)', JSON.stringify(D.recortes));
+  ok(D.recortes.filter(r => r && /contexto:/.test(r)).length <= 2, 'D8b recorte casado por conteúdo com contexto fora do domínio da questão: o contexto sai, o conteúdo fica (no máximo coincidências de palavra)', JSON.stringify(D.recortes.filter(r => r && /contexto:/.test(r))));
+  ok(corpos.filter(b => b.recorte === null).every(b => b.temasEvitar.length >= 1) && corpos.filter(b => b.recorte).every(b => b.temasEvitar.length <= 2), 'D9 sem recorte, os outros conteúdos voltam a viajar como assuntos a evitar; com recorte, só os das questões sem recorte', JSON.stringify(corpos.map(b => b.temasEvitar.length)));
+  await voltar();
+
+  // dois itens iguais (MDC em q1 e q6) com os contextos trocados pelo planejador → cada questão fica com o contexto do SEU domínio
+  planejadorTroca = true;
+  D = await gerar();
+  planejadorTroca = false;
+  const dTroca = await page.evaluate(() => ({ d1: state.questions[0].dominio, d6: state.questions[5].dominio }));
+  ok(D.recortes[0] && D.recortes[0].includes(`contexto: contexto em ${dTroca.d1}`) && D.recortes[5] && D.recortes[5].includes(`contexto: contexto em ${dTroca.d6}`), 'D8d dois "MDC" com contextos trocados: o casamento devolve a cada questão o contexto do seu domínio (nenhum contexto perdido)', JSON.stringify([D.recortes[0], D.recortes[5], dTroca]));
+  await voltar();
+
+  // caso real de 15/09/2026: recorte extra no meio, todos os seguintes deslocados → realinhados pelo conteúdo, contextos no domínio preservados
+  planejadorDeslocado = true;
+  D = await gerar();
+  planejadorDeslocado = false;
+  ok(D.recortes.every((r, i) => r && r.startsWith(`conteúdo: ${B.dez5.temas[i]} —`)) && D.recortes.filter(r => /contexto:/.test(r)).length >= 9 && corpos.every(b => b.recorte && b.recorte.includes(`conteúdo: ${b.tema} —`)), 'D8c planejador desloca a lista (caso real): as 10 questões recebem o recorte do seu conteúdo e os contextos dentro do domínio são mantidos', JSON.stringify(D.recortes.map(r => r && r.slice(0, 50))));
   await voltar();
 
   // recorteRespeitaItem direto
