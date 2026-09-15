@@ -92,6 +92,44 @@ Expoentes, índices, raízes e sinais chegam ao estudante prontos — x², 2⁴,
    sobrescritas/subscritas (`fontwork/ampliar_carlito.py`). Teste no navegador, sem rede:
    `node tests/verify_math_notation.js`.
 
+## Conteúdos de uma disciplina gerados como outra (v18.4, 15/09/2026)
+
+O professor digitou sete conteúdos de **Química** — Radioatividade, Tabela Periódica, Modelos
+Atômicos, Funções Orgânicas, Reação de Esterificação ou Saponificação, Propriedades Coligativas,
+Polímeros — e o app gerou e cobrou as sete como **Matemática**, sem uma palavra. O cabeçalho saiu
+`Matemática e suas Tecnologias · Matemática · 7 questão(ões)`.
+
+**Causa de raiz, reproduzida em navegador real:** o botão "← Novo simulado" (`btnBackToForm`)
+chamava `renderQuestionBlocks()` e `sincronizaContadoresLote()`, mas **não** `renderAreaGrid()`
+nem `renderDisciplinaChips()`. Quem abrisse um simulado arquivado de outra área e voltasse ao
+formulário ficava com a grade de áreas e os chips de disciplina mostrando a seleção **anterior**,
+enquanto `state.area`/`state.disciplina` já eram os do arquivo — e é o **estado** que vai para o
+backend. Na reprodução: tela mostrando "🧬 Ciências da Natureza · Química", estado
+`matematica/Matemática`, e as sete chamadas saindo como `matematica/Matemática`.
+
+A correção tem duas pontas:
+
+1. **A tela não pode divergir do estado.** `btnBackToForm` e `abrirSimuladoSalvo` passaram a
+   chamar `renderAreaGrid()`, `renderDisciplinaChips()` e `atualizaOpcoesPorArea()`. Depois da
+   correção, a mesma sequência mostra "📐 Matemática · Matemática" — o que o estado de fato tem.
+2. **Rede de segurança antes de gastar.** `conteudosForaDaDisciplina()` compara os conteúdos
+   digitados com marcadores de alta precisão por disciplina (Matemática, Química, Física,
+   Biologia), reaproveitando `palavrasChaveTema` + `radicalPalavra` + `mesmaFamiliaDePalavra` —
+   então plural, acento e flexão não atrapalham ("Funções Orgânicas" bate "funcao organica").
+   O aviso só sai no caso indiscutível: **nenhum** conteúdo é da disciplina escolhida **e** a
+   maioria (≥60%, mínimo 2) é claramente de **uma** outra. Disciplina sem marcadores nunca acusa.
+   E ele **não bloqueia de vez**: para a primeira tentativa, explica, e o segundo clique em
+   "Gerar" manda assim mesmo — uma questão de Matemática ambientada em Química é legítima.
+
+Mensagem entregue no caso real: *"Você selecionou Matemática, mas nenhum dos 7 conteúdos é de
+Matemática — todos parecem de Química. Confira a área e a disciplina acima. Se for mesmo o que
+você quer, clique em 'Gerar' de novo."*
+
+Verificação: `tests/verify_disciplina_conteudo.js` (13 asserções) cobre a divergência tela/estado,
+o caso real (0 chamadas pagas no primeiro clique, 7 no segundo), e a ausência de falso positivo em
+Matemática, Química, Biologia, lista mista e disciplina sem marcadores. A classificação foi medida
+em 33 conteúdos reais das quatro disciplinas: **0 classificações erradas**.
+
 ## Ligação orgânica escrita como carga (v74.4, 15/09/2026)
 
 Defeito relatado pelo professor: a ligação da amida, do éster e do carbonato chegaram como

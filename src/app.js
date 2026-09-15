@@ -623,6 +623,11 @@ async function abrirSimuladoSalvo(id){
     const dados = data.dados || {};
     state.area = dados.area || data.area;
     state.disciplina = dados.disciplina || data.disciplina;
+    // v18.4: grade de áreas e chips de disciplina acompanham o arquivo aberto
+    // (ver o comentário em btnBackToForm) — a tela nunca mostra outra coisa.
+    renderAreaGrid();
+    renderDisciplinaChips();
+    atualizaOpcoesPorArea();
     state.qty = dados.qty || (dados.questions ? dados.questions.length : 1);
     state.questions = (dados.questions || []).map(q => {
       if(q && q.data){ normalizaCamposEstruturados(q.data); q.data = corrigirQuebrasLiterais(q.data); normalizaVisualQuestao(q.data); nmAplicaNaQuestao(q); }   // v16: notação matemática também no arquivo
@@ -1006,6 +1011,7 @@ function somaUsoImagem(u){
 
 let uidCounter = 1;
 function uid(){ return "q" + (uidCounter++); }
+let confirmaDisciplinaEm = 0;   // v18.4: instante do aviso de disciplina (ver btnGenerate)
 
 /* ---------------- Armazenamento local (opcional, à prova de falhas) ----------------
    Algumas telas de pré-visualização (ex.: pré-visualização de artefatos) bloqueiam
@@ -2253,6 +2259,61 @@ function auditaDiversidadeTemas(){
   return pares;
 }
 
+/* ---------------- v18.4: os conteúdos são da disciplina escolhida? ----------------
+   Em 15/09/2026 o professor digitou sete conteúdos de Química — Radioatividade,
+   Tabela Periódica, Modelos Atômicos, Funções Orgânicas, Esterificação/Saponificação,
+   Propriedades Coligativas, Polímeros — com o formulário em MATEMÁTICA, e o app gerou
+   as sete e cobrou por elas sem dizer uma palavra. A causa de raiz (a tela mostrando
+   uma disciplina e o estado guardando outra) está corrigida em btnBackToForm, mas o
+   professor também pode simplesmente esquecer de trocar a área — e aí o dinheiro vai
+   embora do mesmo jeito.
+   Esta é a rede de segurança. Marcadores de alta precisão por disciplina; a checagem
+   só acusa no caso indiscutível: NENHUM dos conteúdos é da disciplina escolhida E a
+   maioria deles é claramente de UMA outra. Disciplina sem marcadores nunca acusa —
+   ausência de marcador não é evidência de erro. E o aviso NÃO bloqueia de vez: ele
+   para a primeira tentativa e explica; clicar em "Gerar" de novo manda assim mesmo,
+   porque uma questão de Matemática ambientada em Química é legítima. */
+const MARCADORES_DISCIPLINA = {
+  "Matemática": ["funcao afim","funcao quadratica","funcao exponencial","funcao logaritmica","funcao grau","funcao polinomial","equacao","inequacao","logaritmo","progressao aritmetica","progressao geometrica","matriz","determinante","polinomio","trigonometria","seno","cosseno","tangente","geometria","poligono","circunferencia","perimetro","probabilidade","estatistica","mediana","desvio padrao","porcentagem","juro","proporcao","radiciacao","potenciacao","exponenciacao","combinatoria","permutacao","fatorial","plano cartesiano","escala","grandeza proporcional"],
+  "Química": ["radioatividade","tabela periodica","modelo atomico","atomistica","funcao organica","esterificacao","saponificacao","coligativa","polimero","estequiometria","molaridade","ligacao ionica","ligacao covalente","ligacao metalica","oxirreducao","eletroquimica","eletrolise","entalpia","termoquimica","cinetica quimica","equilibrio quimico","hidrocarboneto","alcano","alceno","alcino","aldeido","cetona","amida","amina","isomeria","alotropia","isotopo","distribuicao eletronica","solubilidade","titulacao","oxidacao","reacao quimica","transformacao quimica","separacao de misturas","gas ideal","mol","acido","base","sal","oxido"],
+  "Física": ["cinematica","movimento uniforme","aceleracao","forca resultante","newton","atrito","trabalho e energia","energia cinetica","energia potencial","quantidade de movimento","impulso","hidrostatica","empuxo","termologia","dilatacao","calorimetria","termodinamica","ondulatoria","ondas","acustica","optica","espelho","lente","refracao","reflexao","eletrostatica","campo eletrico","corrente eletrica","resistor","circuito","magnetismo","inducao","gravitacao","lancamento obliquo","potencia eletrica"],
+  "Biologia": ["celula","citologia","mitose","meiose","genetica","hereditariedade","dna","rna","proteina","enzima","fotossintese","respiracao celular","ecologia","ecossistema","cadeia alimentar","bioma","evolucao","selecao natural","especiacao","taxonomia","botanica","zoologia","fisiologia","sistema nervoso","sistema digestorio","sistema circulatorio","imunologia","virus","bacteria","fungo","protozoario","embriologia","biotecnologia","ciclo biogeoquimico","parasitose"],
+};
+/* Quais disciplinas este conteúdo marca? Usa as mesmas peças já existentes
+   (palavrasChaveTema + radicalPalavra + mesmaFamiliaDePalavra), então plural,
+   acento e flexão não atrapalham: "Funções Orgânicas" bate "funcao organica". */
+function disciplinasDoConteudo(tema){
+  const palavras = Array.from(palavrasChaveTema(tema)).map(radicalPalavra);
+  if(!palavras.length) return [];
+  const saida = [];
+  for(const disc of Object.keys(MARCADORES_DISCIPLINA)){
+    const bate = MARCADORES_DISCIPLINA[disc].some(marca =>
+      marca.split(" ").map(radicalPalavra).every(pt => palavras.some(w => mesmaFamiliaDePalavra(w, pt))));
+    if(bate) saida.push(disc);
+  }
+  return saida;
+}
+/* Devolve null quando está tudo bem, ou { outra, quantos, total } quando NENHUM
+   conteúdo é da disciplina escolhida e a maioria é claramente de outra. */
+function conteudosForaDaDisciplina(){
+  const sel = state.disciplina;
+  if(!sel || !MARCADORES_DISCIPLINA[sel]) return null;          // sem marcadores: nunca acusa
+  const temas = state.questions.map(q => String(q.tema || "").trim()).filter(Boolean);
+  if(temas.length < 2) return null;                              // com um conteúdo só não há "maioria"
+  const porDisc = {};
+  let daSelecionada = 0;
+  for(const t of temas){
+    const ds = disciplinasDoConteudo(t);
+    if(ds.includes(sel)) daSelecionada++;
+    for(const d of ds) if(d !== sel) porDisc[d] = (porDisc[d] || 0) + 1;
+  }
+  if(daSelecionada > 0) return null;                             // algum é da disciplina: não acusa
+  const piso = Math.max(2, Math.ceil(temas.length * 0.6));
+  let outra = null, quantos = 0;
+  for(const d of Object.keys(porDisc)) if(porDisc[d] > quantos){ outra = d; quantos = porDisc[d]; }
+  if(!outra || quantos < piso) return null;
+  return { outra: outra, quantos: quantos, total: temas.length };
+}
 function gabaritoAlvoDe(idx){
   if(!Array.isArray(state.gabaritoPlan) || state.gabaritoPlan.length <= idx){
     state.gabaritoPlan = planejaGabaritos(Math.max(state.questions.length, idx + 1));
@@ -7132,6 +7193,16 @@ function init(){
     if(sync && sync.sobras && sync.sobras.length) toast(`Você listou ${sync.itens} conteúdos para ${state.questions.length} questões: ${sync.sobras.length === 1 ? "ficou de fora" : "ficaram de fora"} ${sync.sobras.map(t => `"${resumoTema(t, 40)}"`).join(", ")}.`, "err");
     if(sync && sync.estado === "completado") toast(`Tema do lote aplicado ${sync.novas === 1 ? "à 1 questão que estava" : `às ${sync.novas} questões que estavam`} sem tema${sync.itens > 1 ? ` (rodízio: ${resumoTema(textoDistribuicaoLote(), 160)})` : `: "${resumoTema(sync.novo, 120)}"`}.`, "ok");
     if(sync && sync.estado === "individuais") toast(`A caixa "Tema do lote" foi alterada, mas as questões têm temas diferentes entre si — nenhuma foi alterada. Para sobrescrever todas, use "Aplicar".`, "info");
+    /* v18.4: rede de segurança da disciplina (ver conteudosForaDaDisciplina).
+       Para a PRIMEIRA tentativa e explica; o segundo clique, dentro de 30 s, gera
+       assim mesmo — questão de Matemática ambientada em Química é legítima. */
+    const fora = conteudosForaDaDisciplina();
+    if(fora && Date.now() - confirmaDisciplinaEm > 30000){
+      confirmaDisciplinaEm = Date.now();
+      toast(`Você selecionou ${state.disciplina}, mas ${fora.quantos === fora.total ? "nenhum dos" : `${fora.total - fora.quantos} de ${fora.total}`} ${fora.total} conteúdos é de ${state.disciplina} — ${fora.quantos === fora.total ? "todos parecem" : "a maioria parece"} de ${fora.outra}. Confira a área e a disciplina acima. Se for mesmo o que você quer, clique em "Gerar" de novo.`, "err");
+      return;
+    }
+    confirmaDisciplinaEm = 0;
     generateAll();
   });
 
@@ -7139,6 +7210,15 @@ function init(){
     simuladoAbertoId = null;
     document.getElementById("formPanel").style.display = "block";
     document.getElementById("resultsPanel").style.display = "none";
+    /* v18.4: a ÁREA e a DISCIPLINA também vêm do estado. Sem estas duas linhas,
+       abrir um simulado arquivado de outra área e voltar aqui deixava a grade e
+       os chips mostrando a seleção ANTERIOR enquanto state.area/state.disciplina
+       já eram os do arquivo — e é o ESTADO que vai para o backend. Foi assim que
+       7 conteúdos de Química saíram gerados como Matemática em 15/09/2026: a tela
+       mostrava "Ciências da Natureza · Química" e o estado era "matematica". */
+    renderAreaGrid();
+    renderDisciplinaChips();
+    atualizaOpcoesPorArea();
     // Os blocos são reconstruídos a partir do estado: o que foi editado na
     // tela de resultados (tema, nível, recurso) aparece aqui também.
     renderQuestionBlocks();
