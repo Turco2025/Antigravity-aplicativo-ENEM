@@ -92,6 +92,45 @@ Expoentes, índices, raízes e sinais chegam ao estudante prontos — x², 2⁴,
    sobrescritas/subscritas (`fontwork/ampliar_carlito.py`). Teste no navegador, sem rede:
    `node tests/verify_math_notation.js`.
 
+## Ligação orgânica escrita como carga (v74.4, 15/09/2026)
+
+Defeito relatado pelo professor: a ligação da amida, do éster e do carbonato chegaram como
+`⁻NH⁻CO⁻`, `⁻CO⁻O⁻` e `⁻O⁻CO⁻O⁻` — com o **menos sobrescrito** (U+207B), que é o sinal de
+**carga**, no lugar do **travessão de ligação** (U+2013). Lido assim, cada traço vira uma carga
+negativa: quimicamente falso, e impresso na prova do aluno.
+
+**Não foi regressão do deploy da v74.3.** Os quatro módulos de notação (`notacao_quimica.ts`,
+`notacao_matematica.ts`, `recurso_instrucoes.ts`, `app_data.json`) são **byte a byte idênticos**
+entre os commits `a29642a2` (v74.2) e `95dbbd23` (v74.3), e o diff do `index.ts` entre as duas
+versões (6 blocos, 165 linhas) **não toca uma única linha** de notação, química, ligação,
+sobrescrito ou carga. O que havia era uma lacuna que ninguém tinha coberto ainda.
+
+Por que acontecia: a seção CARGAS do prompt mostra `⁻` **nove vezes** colada numa fórmula
+(`Cl⁻`, `OH⁻`, `NO₃⁻`, `SO₄²⁻`, `CO₃²⁻`, `PO₄³⁻`, `MnO₄⁻`, `Cr₂O₇²⁻`, `[Fe(CN)₆]⁴⁻`), enquanto a
+seção ORGÂNICA era **a única do bloco sem uma lista "NUNCA"** — ÍNDICES, CARGAS e SETAS todas
+têm a sua — e sem nenhum exemplo de ligação **solta na ponta**: os exemplos (`CH₃–CH₃`,
+`CH₃–CO–CH₃`) têm grupo dos dois lados, e os casos que falharam são justamente os de grupo
+funcional com a ligação livre. Nada cobria isso: nem prompt, nem normalizador, nem auditoria do
+app, nem teste.
+
+A correção tem duas pontas:
+
+1. **Rede de segurança determinística** (`qnLigacaoOrganica`, em `notacao_quimica.ts`, rodando
+   para **todas** as disciplinas antes da tabela — a amida aparece em Biologia tanto quanto em
+   Química). A regra: um `⁻` seguido **imediatamente de letra** é ligação, porque uma carga nunca
+   é seguida de letra — ela encerra a espécie (`Cl⁻ `, `SO₄²⁻(aq)`, `e⁻`, `β⁻`). Identificado o
+   fragmento, todos os `⁻` dele viram `–`, inclusive o da ponta, que sozinho seria indistinguível
+   de carga. Expoentes matemáticos não são tocados: em `10⁻³`, `2⁻ⁿ` e `2ⁿ⁻¹` o `⁻` é seguido de
+   sobrescrito, não de letra.
+2. **Regra no prompt**: a seção ORGÂNICA ganhou a lista de grupos com ligação solta
+   (`–NH–CO–`, `–CO–O–`, `–O–CO–O–`, `–OH`, `–COOH`, `–NH₂`, `–CHO`, `–SO₃H`) e o "NUNCA"
+   explícito contra o menos sobrescrito.
+
+Verificação: 56 asserções — os 5 casos do defeito consertados no pipeline real (química →
+matemática, 5 passadas, idempotente), 11 cargas reais e 5 expoentes intactos, e **0 alterações**
+nos 727 campos de texto das 20 questões reais das fixtures. A chave `ligacaoOrganica` do
+`GET ?selftest=1` prova, em produção, que a correção está no ar.
+
 ## Diversidade de exemplos em levas, sem custo (v17 / generate-question v73; v18 / v74; v18.2 / v74.2; v18.3 / v74.3)
 
 Problema real (leva 538678f0, 20 de Matemática sem tema, 14/09/2026): "fábrica de componentes

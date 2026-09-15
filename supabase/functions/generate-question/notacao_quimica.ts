@@ -105,8 +105,32 @@ function qnTabela(disciplina: string): { mapa: Map<string, string>; re: RegExp |
   return _qnCache[d];
 }
 
+/* v74.4 — LIGAÇÃO ORGÂNICA ESCRITA COMO CARGA.
+   Defeito observado em 15/09/2026: a ligação da amida, do éster e do carbonato
+   chegaram ao professor como "⁻NH⁻CO⁻", "⁻CO⁻O⁻" e "⁻O⁻CO⁻O⁻" — com o MENOS
+   SOBRESCRITO (U+207B) no lugar do travessão de ligação (U+2013). Lido assim,
+   cada traço vira uma carga negativa: quimicamente falso, e impresso na prova.
+   Por que acontece: a seção CARGAS do prompt mostra ⁻ nove vezes coladas numa
+   fórmula (Cl⁻, OH⁻, NO₃⁻, SO₄²⁻, MnO₄⁻, Cr₂O₇²⁻, [Fe(CN)₆]⁴⁻, e⁻, β⁻), e a
+   seção ORGÂNICA era a única do bloco SEM uma lista "NUNCA" e sem exemplo de
+   ligação SOLTA na ponta (só CH₃–CH₃, com grupo dos dois lados). Nada — nem
+   prompt, nem normalizador, nem auditoria, nem teste — cobria o caso.
+   A regra aqui é determinística e conservadora: um ⁻ seguido IMEDIATAMENTE de
+   letra é ligação, porque uma carga nunca é seguida de letra (ela encerra a
+   espécie: "Cl⁻ ", "SO₄²⁻(aq)", "e⁻", "β⁻"). Identificado o fragmento, todos os
+   ⁻ dele viram – — inclusive o da ponta, que sozinho seria indistinguível de
+   carga ("⁻NH⁻CO⁻" inteiro). Expoentes matemáticos não são tocados: em 10⁻³,
+   2⁻ⁿ e 2ⁿ⁻¹ o ⁻ é seguido de sobrescrito, não de letra. */
+const QN_LIGACAO_FRAG = /[A-Za-zÀ-ÿ0-9₀-₉⁰-⁹⁺⁻()\[\]]*⁻[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ0-9₀-₉⁰-⁹⁺⁻()\[\]]*/gu;
+function qnLigacaoOrganica(texto: string): string {
+  if (typeof texto !== "string" || texto.indexOf("\u207B") < 0) return texto;
+  return texto.replace(QN_LIGACAO_FRAG, (frag: string) => frag.replace(/\u207B/g, "\u2013"));
+}
 function normalizarNotacaoTexto(texto: string, disciplina: string): string {
   if (typeof texto !== "string" || !texto) return texto;
+  // Vale para TODAS as disciplinas e roda antes da tabela: a ligação da amida
+  // aparece em Biologia (proteínas) tanto quanto em Química.
+  texto = qnLigacaoOrganica(texto);
   const { mapa, re } = qnTabela(disciplina);
   if (!re) return texto;
   return texto.replace(re, (m0: string, antes: string, tok: string, offset: number, str: string) => {
@@ -209,4 +233,4 @@ function normalizarNotacaoVisual(visual: any, disciplina: string): any {
   return v;
 }
 
-export { normalizarNotacaoTexto, normalizarNotacaoQuimica, normalizarNotacaoVisual, qnTabela, qnConverteIon, QN_FORMULAS_COMUNS, QN_FORMULAS_DISCIPLINA, QN_GASES, QN_GASES_SEMPRE, QN_IONS };
+export { qnLigacaoOrganica, normalizarNotacaoTexto, normalizarNotacaoQuimica, normalizarNotacaoVisual, qnTabela, qnConverteIon, QN_FORMULAS_COMUNS, QN_FORMULAS_DISCIPLINA, QN_GASES, QN_GASES_SEMPRE, QN_IONS };

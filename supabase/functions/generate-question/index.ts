@@ -17,7 +17,7 @@ import { NOTACAO_QUIMICA, NOTACAO_MATEMATICA, RECURSO_INSTRUCOES, COMPLEMENTO_BI
    sobrescrito, lista fechada) vive em notacao_quimica.ts, ao lado deste
    arquivo no repositório, e entra no pacote como recurso_instrucoes.ts:
    embutida no deploy, sem rede em produção. Ver o cabeçalho daquele arquivo. */
-import { normalizarNotacaoTexto, normalizarNotacaoQuimica, normalizarNotacaoVisual, qnTabela, qnConverteIon, QN_FORMULAS_COMUNS, QN_FORMULAS_DISCIPLINA, QN_GASES, QN_GASES_SEMPRE, QN_IONS } from "https://raw.githubusercontent.com/Turco2025/Enem/main/supabase/functions/generate-question/notacao_quimica.ts";
+import { qnLigacaoOrganica, normalizarNotacaoTexto, normalizarNotacaoQuimica, normalizarNotacaoVisual, qnTabela, qnConverteIon, QN_FORMULAS_COMUNS, QN_FORMULAS_DISCIPLINA, QN_GASES, QN_GASES_SEMPRE, QN_IONS } from "https://raw.githubusercontent.com/Turco2025/Enem/main/supabase/functions/generate-question/notacao_quimica.ts";
 /* v71: rede de segurança da notação MATEMÁTICA (expoentes, índices, × e ·),
    em notacao_matematica.ts — o mesmo JavaScript que roda no app, com os mesmos
    casos de teste. Roda em TODAS as áreas, depois da química. Caso real que a
@@ -1775,6 +1775,7 @@ function selfTestResponse() {
     buildDiversidadeTematica.toString(),
     buildRegraAlternativas.toString(),
     cortaLimpo.toString(), cortaConteudo.toString(),   // v74.3 (revisto): o corte dos recortes entra na impressão digital
+    qnLigacaoOrganica.toString(),                      // v74.4: a ligação orgânica entra na impressão digital
     buildSystemPlanejamento.toString(),
     normalizarNotacaoTexto.toString(), normalizarNotacaoQuimica.toString(), qnConverteIon.toString(),
     JSON.stringify([QN_FORMULAS_COMUNS, QN_FORMULAS_DISCIPLINA, QN_GASES, QN_GASES_SEMPRE, QN_IONS]),
@@ -1815,6 +1816,29 @@ function selfTestResponse() {
     temNotacaoMatematica: typeof NOTACAO_MATEMATICA === "string" && NOTACAO_MATEMATICA.length > 0,
     notacaoMatChars: NOTACAO_MATEMATICA.length,
     notacaoMatHash: fnv1a(NOTACAO_MATEMATICA),
+    /* v74.4 — LIGAÇÃO ORGÂNICA. Prova, no endpoint de produção, que a amida, o éster
+       e o carbonato saem com o travessão de ligação (–) e não com o menos sobrescrito
+       da carga (⁻), e que nenhuma carga ou expoente real foi tocado. */
+    ligacaoOrganica: (() => {
+      const L = (t: string, d = "Química") => normalizarNotacaoMatematica(normalizarNotacaoQuimica({ textoBase: t }, "natureza", d), d).textoBase;
+      const conserta =
+        L("A ligação amida \u207BNH\u207BCO\u207B une os aminoácidos.") === "A ligação amida \u2013NH\u2013CO\u2013 une os aminoácidos." &&
+        L("O grupo éster \u207BCO\u207BO\u207B na cadeia.") === "O grupo éster \u2013CO\u2013O\u2013 na cadeia." &&
+        L("O carbonato \u207BO\u207BCO\u207BO\u207B fecha.") === "O carbonato \u2013O\u2013CO\u2013O\u2013 fecha." &&
+        L("CH\u2083\u207BCO\u207BCH\u2083") === "CH\u2083\u2013CO\u2013CH\u2083" &&
+        L("A ligação peptídica \u207BNH\u207BCO\u207B.", "Biologia") === "A ligação peptídica \u2013NH\u2013CO\u2013.";
+      // nenhuma carga real e nenhum expoente podem ser tocados
+      const preserva = ["Cl\u207B", "OH\u207B", "NO\u2083\u207B", "SO\u2084\u00B2\u207B", "MnO\u2084\u207B", "[Fe(CN)\u2086]\u2074\u207B", "e\u207B", "\u03B2\u207B",
+        "Ag\u207A(aq) + Cl\u207B(aq) \u2192 AgCl(s)", "10\u207B\u00B3", "1,5 \u00D7 10\u207B\u00B3 mol/L", "2\u207B\u207F", "2\u207F\u207B\u00B9"]
+        .every((t) => qnLigacaoOrganica(t) === t);
+      // idempotente: em produção a normalização roda de 3 a 5 vezes
+      const umaVez = qnLigacaoOrganica("\u207BNH\u207BCO\u207B");
+      const idem = qnLigacaoOrganica(umaVez) === umaVez && umaVez === "\u2013NH\u2013CO\u2013";
+      // e o prompt passou a proibir explicitamente
+      const noPrompt = NOTACAO_QUIMICA.includes("NUNCA escreva a ligação com o menos sobrescrito") &&
+        NOTACAO_QUIMICA.includes("\u2013NH\u2013CO\u2013 (amida)");
+      return conserta && preserva && idem && noPrompt;
+    })(),
     notacaoEmTodasAsAreas: ["linguagens", "humanas", "natureza", "matematica"].every((a) => buildSystemPrompt(a).includes("NOTAÇÃO MATEMÁTICA") && buildSystemPrompt(a).includes("NOTAÇÃO QUÍMICA")),
     notacaoMatAmostra: normalizarNotacaoMatematica({ textoBase: "Q(t) = Q0 · 2^(-t/T) e 4,6 x 10^9 anos; S = S0 . (1 + i)^t; 288 = 2^5 x 3^2; 5 m2; log10(A/A0)", resolucaoComentada: "Q0 = 200" }, "Matemática").textoBase,
     // v73: diversidade de exemplos sem custo — o bloco do prompt transmite

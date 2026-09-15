@@ -57,8 +57,15 @@ a própria questão pedir que o estudante balanceie). Conte os átomos dos dois 
 confira a conservação da massa E da carga, use os menores coeficientes inteiros.
 Ex.: 4 Fe(s) + 3 O₂(g) → 2 Fe₂O₃(s).
 
-ORGÂNICA: – ligação simples, = dupla, ≡ tripla. CH₃–CH₃ · CH₂=CH₂ · HC≡CH ·
-CH₃–CH₂–OH · CH₃–COOH · CH₃–CO–CH₃. Não altere hidrogênios, grupos ou ligações.
+ORGÂNICA: – ligação simples (travessão U+2013), = dupla, ≡ tripla. CH₃–CH₃ ·
+CH₂=CH₂ · HC≡CH · CH₃–CH₂–OH · CH₃–COOH · CH₃–CO–CH₃. Não altere hidrogênios,
+grupos ou ligações.
+GRUPO FUNCIONAL com ligação SOLTA na ponta usa o MESMO travessão: –NH–CO– (amida)
+· –CO–O– (éster) · –O–CO–O– (carbonato) · –OH · –COOH · –NH₂ · –CHO · –SO₃H.
+NUNCA escreva a ligação com o menos sobrescrito da carga: ⁻NH⁻CO⁻, ⁻CO⁻O⁻,
+⁻O⁻CO⁻O⁻, CH₃⁻CO⁻CH₃ estão ERRADOS — ali cada traço vira uma carga negativa, que
+é outra coisa. O ⁻ só existe DEPOIS da espécie, como carga (Cl⁻, SO₄²⁻, e⁻);
+entre dois grupos, ou na ponta de um grupo, é sempre o travessão –.
 Se a estrutura for complexa demais para representação linear segura, peça fórmula
 estrutural em IMAGEM — não invente a estrutura.
 
