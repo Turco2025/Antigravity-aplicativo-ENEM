@@ -473,6 +473,15 @@ body.mode-professor .qcard{box-shadow:0 25px 60px -25px rgba(0,0,0,.6), 0 0 0 1.
         <textarea id="loteTema" placeholder="Ex.: Eletricidade – Eletrodinâmica&#10;ou vários conteúdos: MDC, MMC, radiciação, exponenciação (ou um por linha)"></textarea>
         <p class="hint" style="margin:4px 0 0;">Um conteúdo só, ou vários separados por vírgula, ponto e vírgula ou um por linha. Com vários, o app distribui em rodízio na ordem digitada (1.º → questão 1, 2.º → questão 2, …, e recomeça) e mostra o conteúdo de cada questão abaixo — você pode trocar qualquer um.</p>
         <p class="hint" id="loteDistribuicao" style="margin:6px 0 0;display:none;"></p>
+        <!-- v18.6 — Orientações adicionais. Campo OPCIONAL de preferência do professor
+             (enfoque, contextualização, abordagem). O texto viaja como DADO subordinado:
+             nunca altera as diretrizes do Inep, a Matriz de Referência, a notação química
+             ou matemática, as regras dos agentes, os critérios de elaboração/revisão do
+             app, nem o uso das provas reais do ENEM como referência. Ver
+             buildOrientacoesProfessor, no index.ts do backend. -->
+        <label class="field-label" style="margin-top:12px;">Orientações adicionais para a questão <span class="hint" style="font-weight:400;">(opcional)</span></label>
+        <textarea id="loteOrientacoes" placeholder="Ex.: Contextualize com uma situação do cotidiano&#10;Dê preferência a uma aplicação ambiental"></textarea>
+        <p class="hint" style="margin:4px 0 0;">Campo opcional para sugerir o enfoque ou a contextualização da questão. As orientações serão consideradas somente quando compatíveis com as diretrizes do INEP, a Matriz de Referência e os padrões de elaboração do ENEM.</p>
         <div class="qgrid" style="margin-top:12px;">
           <div>
             <label class="field-label">Quantidade de questões por nível</label>

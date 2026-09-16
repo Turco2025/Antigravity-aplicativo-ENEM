@@ -1011,6 +1011,9 @@ function somaUsoImagem(u){
 
 let uidCounter = 1;
 function uid(){ return "q" + (uidCounter++); }
+/* v18.6/v18.7 — a MESMA frase abaixo da caixa de orientações, no painel do lote (no
+   template) e em cada bloco de questão. Uma constante só para nunca divergirem. */
+const ORIENT_AVISO = "Campo opcional para sugerir o enfoque ou a contextualização da questão. As orientações serão consideradas somente quando compatíveis com as diretrizes do INEP, a Matriz de Referência e os padrões de elaboração do ENEM.";
 let confirmaDisciplinaEm = 0;   // v18.4: instante do aviso de disciplina (ver btnGenerate)
 
 /* ---------------- Armazenamento local (opcional, à prova de falhas) ----------------
@@ -1285,9 +1288,11 @@ function aplicarLoteATodas(){
   loteTemaAplicado = tema;
   // v18: vários conteúdos na caixa → um por questão, em rodízio (ver aplicaTemaDoLote).
   const dist = aplicaTemaDoLote(tema);
+  const orientacoes = (document.getElementById("loteOrientacoes").value || "").trim().slice(0, 600);
   state.questions.forEach((q, i) => {
     q.dificuldade = plano[i];
     q.recurso = recurso;
+    q.orientacoes = orientacoes;   // v18.6: mesma orientação para a leva toda
     // O lote redefine o recurso de todas: uma instrução de imagem antiga não
     // pode sobreviver a isso (mesma regra da troca de disciplina).
     q.instrucoesVisual = "";
@@ -1483,7 +1488,7 @@ function syncQuestionsArrayLength(){
   while(state.questions.length < state.qty){
     state.questions.push({
       id: uid(), tema: "", dificuldade: "Médio", recurso: "nenhum",
-      competenciaNum: null, habilidadeCod: null, instrucoesVisual: "",
+      competenciaNum: null, habilidadeCod: null, instrucoesVisual: "", orientacoes: "",
       status: "idle", errorMsg: "", data: null, approved: false,
     });
   }
@@ -1582,6 +1587,11 @@ function buildQuestionBlock(q, idx){
       <label class="field-label">Instruções opcionais para a criação d${q.recurso==="imagem"?"a imagem":q.recurso==="tabela"?"a tabela":"o gráfico"}</label>
       <textarea class="in-instr-visual" placeholder="Ex.: mostre o coração em corte transversal, com as quatro câmaras nomeadas; use um gráfico de linha em vez de barras; destaque a coluna de 2020...">${escapeHtml(q.instrucoesVisual||"")}</textarea>
     </div>
+    <div style="margin-top:12px;">
+      <label class="field-label">Orientações adicionais para esta questão <span class="hint" style="font-weight:400;">(opcional)</span></label>
+      <textarea class="in-orientacoes" placeholder="Ex.: Contextualize com uma situação do cotidiano&#10;Dê preferência a uma aplicação ambiental">${escapeHtml(q.orientacoes||"")}</textarea>
+      <p class="hint" style="margin:4px 0 0;">${ORIENT_AVISO}</p>
+    </div>
     <div class="qgrid2">
       <div>
         <label class="field-label">Competência de área (opcional)</label>
@@ -1603,6 +1613,9 @@ function buildQuestionBlock(q, idx){
 
   el.querySelector(".in-tema").addEventListener("input", e => { q.tema = e.target.value; atualizaDistribuicaoLote(); });
   el.querySelector(".in-instr-visual").addEventListener("input", e => { q.instrucoesVisual = e.target.value; });
+  // v18.7: orientação POR QUESTÃO — o "Aplicar" do lote sobrescreve todas (como o tema),
+  // e aqui o professor ajusta uma a uma. Mesmo teto de 600 do painel do lote.
+  el.querySelector(".in-orientacoes").addEventListener("input", e => { q.orientacoes = (e.target.value || "").slice(0, 600); });
   el.querySelectorAll(".diff-opt").forEach(d => d.addEventListener("click", () => {
     q.dificuldade = d.dataset.d;
     el.querySelectorAll(".diff-opt").forEach(x => x.classList.toggle("sel", x === d));
@@ -2532,6 +2545,12 @@ async function generateQuestion(q){
           // Sem recurso visual não há o que instruir: uma instrução guardada
           // de quando o recurso era "imagem" não vai para o modelo.
           instrucoesVisual: q.recurso !== "nenhum" ? (q.instrucoesVisual || "") : "",
+          /* v18.6 — preferência OPCIONAL do professor sobre enfoque/contextualização.
+             Vai como DADO subordinado a todas as regras (ver buildOrientacoesProfessor,
+             no backend): não altera as diretrizes do Inep, a Matriz de Referência, a
+             notação química ou matemática, as regras dos agentes, os critérios de
+             elaboração/revisão do app, nem o uso das provas reais como referência. */
+          orientacoes: q.orientacoes || "",
           gabaritoAlvo: gabaritoAlvoDe(state.questions.indexOf(q)),
           revisarMatematica,
           // Diversidade temática da leva (backend v63): eixo reservado para
@@ -3922,6 +3941,11 @@ function toggleEdit(cardEl, q, idx){
         <label class="field-label">Instruções opcionais para a criação d${q.recurso==="imagem"?"a imagem":q.recurso==="tabela"?"a tabela":"o gráfico"}</label>
         <textarea class="edit-instr-visual" placeholder="Ex.: mostre o coração em corte transversal, com as quatro câmaras nomeadas; use um gráfico de linha em vez de barras...">${escapeHtml(q.instrucoesVisual||"")}</textarea>
       </div>
+      <div style="margin-top:10px;">
+        <label class="field-label">Orientações adicionais para esta questão <span class="hint" style="font-weight:400;">(opcional)</span></label>
+        <textarea class="edit-orientacoes" placeholder="Ex.: Contextualize com uma situação do cotidiano">${escapeHtml(q.orientacoes||"")}</textarea>
+        <p class="hint" style="margin:4px 0 0;">${ORIENT_AVISO}</p>
+      </div>
       <div class="qgrid2">
         <div>
           <label class="field-label">Competência</label>
@@ -3964,6 +3988,7 @@ function toggleEdit(cardEl, q, idx){
     q.dificuldade = editWrap.querySelector(".edit-dif").value;
     q.recurso = recSel.value;
     q.instrucoesVisual = editWrap.querySelector(".edit-instr-visual").value;
+    q.orientacoes = (editWrap.querySelector(".edit-orientacoes").value || "").slice(0, 600);
     q.competenciaNum = compSel.value ? parseInt(compSel.value) : null;
     q.habilidadeCod = habSel.value || null;
     /* v18.2: o recorte planejado da leva (conteúdo + contexto + habilidade) foi
