@@ -92,6 +92,39 @@ Expoentes, índices, raízes e sinais chegam ao estudante prontos — x², 2⁴,
    sobrescritas/subscritas (`fontwork/ampliar_carlito.py`). Teste no navegador, sem rede:
    `node tests/verify_math_notation.js`.
 
+## Nível de dificuldade nunca se repete em questões seguidas (v18.5, 15/09/2026)
+
+Exigência do professor: gerando em bloco, **nunca** duas — nem três, nem quatro — questões
+seguidas do mesmo nível. A ordem alterna: média, difícil, fácil, fácil… não; média, difícil,
+fácil, difícil, média… sim.
+
+Até a v18.4 `distribuiNiveis` apenas **embaralhava** a lista de níveis, e embaralhar não impede
+repetição: medido, **89,5%** das levas de 9 questões (3 fáceis, 3 médias, 3 difíceis) saíam com
+pelo menos um par seguido do mesmo nível.
+
+**O limite aritmético, que o app agora respeita e explica.** Intercalando, um nível ocupa no
+máximo as posições ímpares — ou seja, **⌈n/2⌉** questões. Acima disso a repetição é inevitável,
+e o mínimo que sobra é `2·maior − n − 1` (8 fáceis em 10 → 5 pares seguidos). O app não finge
+que cumpriu: diz o teto e o número exato.
+
+`distribuiNiveis` trabalha em duas etapas. Sorteia até 200 vezes e fica com a primeira ordem que
+já alterna — isso preserva a variedade do embaralhamento puro, que é o que o professor quer (como
+no ENEM real, a prova não vem ordenada por dificuldade). Se nenhuma alternar, monta pelo guloso
+clássico: a cada passo, entre os níveis que **não** são o anterior, escolhe o que mais resta, com
+sorteio no empate — o guloso acha uma ordem alternada sempre que existir uma.
+
+A linha de situação do lote passou a dizer, **antes** de aplicar e antes de qualquer gasto:
+`10 de 10 questões · 4 fáceis · 3 médias · 3 difíceis · ordem sorteada, sem dois níveis iguais
+seguidos`; e, quando a contagem não permite, em vermelho: `10 de 10 · 8 fáceis · 1 média ·
+1 difícil — com 10 questões o máximo de um mesmo nível é 5; assim 5 repetições são inevitáveis`.
+O botão "Aplicar" **continua habilitado**: é decisão do professor, não bloqueio.
+
+Verificação (`tests/verify_niveis_alternados.js`, 11 asserções): **as 1.767 contagens possíveis
+de 2 a 20 questões**, com até 120 sorteios cada — **zero** repetições sempre que alternar era
+possível, e o **mínimo teórico exato** quando não era. Na divisão igual (3, 5, 6, 7, 9, 10, 12,
+15 e 20 questões): 0 repetições em 1.500 sorteios de cada. Variedade preservada: 174 ordens
+distintas em 2.000 sorteios de uma leva de 9.
+
 ## Conteúdos de uma disciplina gerados como outra (v18.4, 15/09/2026)
 
 O professor digitou sete conteúdos de **Química** — Radioatividade, Tabela Periódica, Modelos

@@ -1861,12 +1861,57 @@ function contagemIgual(total){
   return saida;
 }
 
-// Lista de níveis, uma posição por questão, EMBARALHADA (decisão do
-// professor: como no ENEM real, a prova não vem ordenada por dificuldade).
+/* v18.5 — NUNCA DOIS NÍVEIS IGUAIS SEGUIDOS.
+   Até a v18.4 a ordem era só um embaralhamento, e embaralhar não impede
+   repetição: com 4 fáceis, 3 médias e 3 difíceis, a chance de sair pelo menos
+   um par seguido é de cerca de 93%. O professor exige alternância: nunca duas
+   (nem três, nem quatro) questões seguidas do mesmo nível.
+   Quantas de um mesmo nível cabem sem repetir: intercalando A com as outras,
+   A ocupa as posições ímpares — no máximo ⌈n/2⌉. Acima disso a repetição é
+   ARITMETICAMENTE inevitável, e o app diz isso em vez de fingir que cumpriu. */
+function maxSemRepetir(total){ return Math.ceil(total / 2); }
+function niveisPodemAlternar(contagem, total){
+  return NIVEIS_LOTE.every(n => (contagem[n.nome] || 0) <= maxSemRepetir(total));
+}
+/* Com um nível acima do teto, o mínimo de vizinhanças iguais que sobram é
+   2·maior − total − 1 (as sobras que não têm separador). 8 fáceis em 10 → 5. */
+function repeticoesInevitaveis(contagem, total){
+  const maior = Math.max.apply(null, NIVEIS_LOTE.map(n => contagem[n.nome] || 0));
+  return Math.max(0, 2 * maior - total - 1);
+}
+function paresSeguidos(lista){
+  let n = 0;
+  for(let i = 1; i < lista.length; i++) if(lista[i] === lista[i - 1]) n++;
+  return n;
+}
+/* Ordem sorteada E sem dois níveis iguais seguidos.
+   Duas etapas: sorteia até 200 vezes e fica com a primeira ordem que já alterna
+   (mantém a variedade do embaralhamento puro, que é o que o professor quer —
+   como no ENEM real, a prova não vem ordenada por dificuldade); se nenhuma
+   alternar, monta pelo guloso clássico — a cada passo, entre os níveis que não
+   são o anterior, escolhe o que mais resta, com sorteio no empate. O guloso
+   acha uma ordem alternada sempre que existir uma. */
 function distribuiNiveis(contagem){
   const lista = [];
   NIVEIS_LOTE.forEach(n => { for(let k = 0; k < (contagem[n.nome] || 0); k++) lista.push(n.nome); });
-  return embaralha(lista);
+  if(lista.length < 2) return lista;
+  for(let t = 0; t < 200; t++){
+    const tentativa = embaralha(lista);
+    if(paresSeguidos(tentativa) === 0) return tentativa;
+  }
+  const restam = {};
+  NIVEIS_LOTE.forEach(n => { restam[n.nome] = contagem[n.nome] || 0; });
+  const saida = [];
+  let anterior = null;
+  for(let i = 0; i < lista.length; i++){
+    let cand = NIVEIS_LOTE.map(n => n.nome).filter(x => restam[x] > 0 && x !== anterior);
+    // Só fica sem candidato quando a repetição é inevitável (ver repeticoesInevitaveis).
+    if(!cand.length) cand = NIVEIS_LOTE.map(n => n.nome).filter(x => restam[x] > 0);
+    const maior = Math.max.apply(null, cand.map(x => restam[x]));
+    const escolhido = embaralha(cand.filter(x => restam[x] === maior))[0];
+    saida.push(escolhido); restam[escolhido]--; anterior = escolhido;
+  }
+  return saida;
 }
 
 function somaContadores(){
@@ -1911,10 +1956,15 @@ function atualizaResumoLote(){
   });
   const soma = somaContadores();
   const fecha = soma === total;
-  resumoEl.classList.toggle("erro", !fecha);
-  resumoEl.textContent = fecha
-    ? `${total} de ${total} ${total === 1 ? "questão" : "questões"} · ${textoContagem(loteContadores)} · ordem embaralhada ao aplicar`
-    : `${soma} de ${total} — ajuste os contadores para fechar a soma`;
+  // v18.5: alternância dos níveis — o professor vê ANTES de aplicar se a
+  // contagem que ele montou permite não repetir nível em questões seguidas.
+  const alterna = niveisPodemAlternar(loteContadores, total);
+  resumoEl.classList.toggle("erro", !fecha || (fecha && !alterna));
+  resumoEl.textContent = !fecha
+    ? `${soma} de ${total} — ajuste os contadores para fechar a soma`
+    : alterna
+      ? `${total} de ${total} ${total === 1 ? "questão" : "questões"} · ${textoContagem(loteContadores)} · ordem sorteada, sem dois níveis iguais seguidos`
+      : `${total} de ${total} · ${textoContagem(loteContadores)} — com ${total} ${total === 1 ? "questão" : "questões"} o máximo de um mesmo nível é ${maxSemRepetir(total)}; assim ${repeticoesInevitaveis(loteContadores, total) === 1 ? "1 repetição é inevitável" : `${repeticoesInevitaveis(loteContadores, total)} repetições são inevitáveis`}`;
   if(btn) btn.disabled = !fecha;
 }
 
@@ -1953,6 +2003,10 @@ function aplicarLoteATodas(){
   renderQuestionBlocks();
   sincronizaContadoresLote();
   const resumo = textoContagem(contagem);
+  // v18.5: a ordem sai alternada sempre que a contagem permitir; quando não
+  // permitir, o professor é avisado com o número exato e o que mudar.
+  const repetidos = paresSeguidos(plano);
+  if(repetidos > 0) toast(`Níveis: ${repetidos === 1 ? "1 par de questões seguidas ficou" : `${repetidos} pares de questões seguidas ficaram`} com o mesmo nível — inevitável com ${textoContagem(contagem)} em ${total} ${total === 1 ? "questão" : "questões"}, porque o máximo de um mesmo nível sem repetir é ${maxSemRepetir(total)}. Equilibre os contadores para alternar.`, "err");
   console.log(`[lote] aplicado a ${total} questões · tema "${tema || "(em branco)"}" · recurso ${recurso} · níveis ${resumo} · ordem: ${plano.join(", ")}` + (dist.itens.length > 1 ? ` · ${dist.itens.length} conteúdos em rodízio: ${textoDistribuicaoLote()}` : ""));
   const temaTxt = !tema ? "; tema em branco — a IA distribui os objetos de conhecimento"
     : dist.itens.length > 1 ? `; ${dist.itens.length} conteúdos em rodízio: ${resumoTema(textoDistribuicaoLote(), 220)}`
