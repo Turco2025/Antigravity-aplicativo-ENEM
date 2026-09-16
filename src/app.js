@@ -1090,14 +1090,26 @@ function renderDisciplinaChips(){
   if(!state.area){ wrap.innerHTML = `<span class="hint">Selecione uma área do conhecimento primeiro.</span>`; return; }
   AREA_META[state.area].disciplinas.forEach(d => {
     const chip = document.createElement("div");
-    chip.className = "chip" + (state.disciplina === d ? " sel" : "");
+    const marcada = state.disciplina === d;
+    chip.className = "chip" + (marcada ? " sel" : "");
     chip.textContent = d;
-    chip.addEventListener("click", () => {
+    /* v18.10 — a marcação também é dita a quem não enxerga a cor: aria-pressed
+       para o leitor de tela e title no passar do mouse. E o chip passa a ser um
+       botão de verdade — foco pelo teclado e acionamento por Enter/Espaço. */
+    chip.setAttribute("role", "button");
+    chip.setAttribute("tabindex", "0");
+    chip.setAttribute("aria-pressed", marcada ? "true" : "false");
+    chip.title = marcada ? d + " — disciplina selecionada" : "Selecionar " + d;
+    const seleciona = () => {
       if(state.disciplina !== d) limpaInstrucoesVisuais();
       state.disciplina = d;
       renderDisciplinaChips();
       renderQuestionBlocks();
       sincronizaContadoresLote();
+    };
+    chip.addEventListener("click", seleciona);
+    chip.addEventListener("keydown", ev => {
+      if(ev.key === "Enter" || ev.key === " " || ev.key === "Spacebar"){ ev.preventDefault(); seleciona(); }
     });
     wrap.appendChild(chip);
   });

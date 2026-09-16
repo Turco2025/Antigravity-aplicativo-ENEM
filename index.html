@@ -160,12 +160,37 @@ header.topbar{display:flex;align-items:center;justify-content:space-between;gap:
 .area-tile.sel[data-area]{box-shadow:0 20px 44px -14px var(--tile-glow,rgba(99,102,241,.95)), inset 0 0 0 3px rgba(255,255,255,.65);}
 
 .chip-row{display:flex;flex-wrap:wrap;gap:10px;}
+/* v18.10 — O CHIP DE DISCIPLINA PRECISA DIZER QUE ESTÁ MARCADO.
+   Até a v18.9 a única marca de seleção era o degradê var(--accent-a/b). Só que
+   na seção 2 esse degradê é verde (#22c55e→#16a34a) sobre um cartão que já é
+   verde (#15803d→#14532d): o chip selecionado ficava praticamente igual ao não
+   selecionado. Em Matemática, que tem uma disciplina só e já entra marcada, não
+   havia nem um segundo chip para comparar — o professor não tinha como saber se
+   tinha clicado. Agora a seleção é dita por três sinais que NÃO dependem de
+   contraste de cor: o disco com ✓ antes do rótulo, o anel branco interno (mesma
+   linguagem de .area-tile.sel) e o texto em negrito. */
 .chip{
   padding:9px 15px;border-radius:999px;border:1.5px solid var(--glass-brd);background:rgba(255,255,255,.03);
   cursor:pointer;font-size:13px;color:var(--ink-1);transition:all .15s ease;
+  display:inline-flex;align-items:center;gap:8px;
+}
+.chip::before{
+  content:"";width:16px;height:16px;border-radius:50%;flex:0 0 16px;box-sizing:border-box;
+  border:1.5px solid rgba(255,255,255,.45);background:transparent;transition:all .15s ease;
 }
 .chip:hover{background:rgba(255,255,255,.08);}
-.chip.sel{color:#fff;border-color:transparent;background:linear-gradient(135deg,var(--accent-a),var(--accent-b));box-shadow:0 8px 18px -6px color-mix(in srgb, var(--accent-a) 70%, transparent);}
+.chip:hover::before{border-color:rgba(255,255,255,.75);}
+.chip:focus-visible{outline:3px solid rgba(255,255,255,.85);outline-offset:2px;}
+.chip.sel{
+  color:#fff;border-color:transparent;font-weight:700;
+  background:linear-gradient(135deg,var(--accent-a),var(--accent-b));
+  box-shadow:0 8px 18px -6px color-mix(in srgb, var(--accent-a) 70%, transparent), inset 0 0 0 2px rgba(255,255,255,.85);
+}
+.chip.sel::before{
+  content:"\2713";background:#fff;border-color:#fff;color:var(--accent-b);
+  font-size:11px;font-weight:900;line-height:1;
+  display:flex;align-items:center;justify-content:center;
+}
 
 label.field-label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-1);margin:0 0 7px;letter-spacing:.2px;}
 input[type=text], input[type=number], input[type=password], textarea, select{
@@ -1818,14 +1843,26 @@ function renderDisciplinaChips(){
   if(!state.area){ wrap.innerHTML = `<span class="hint">Selecione uma área do conhecimento primeiro.</span>`; return; }
   AREA_META[state.area].disciplinas.forEach(d => {
     const chip = document.createElement("div");
-    chip.className = "chip" + (state.disciplina === d ? " sel" : "");
+    const marcada = state.disciplina === d;
+    chip.className = "chip" + (marcada ? " sel" : "");
     chip.textContent = d;
-    chip.addEventListener("click", () => {
+    /* v18.10 — a marcação também é dita a quem não enxerga a cor: aria-pressed
+       para o leitor de tela e title no passar do mouse. E o chip passa a ser um
+       botão de verdade — foco pelo teclado e acionamento por Enter/Espaço. */
+    chip.setAttribute("role", "button");
+    chip.setAttribute("tabindex", "0");
+    chip.setAttribute("aria-pressed", marcada ? "true" : "false");
+    chip.title = marcada ? d + " — disciplina selecionada" : "Selecionar " + d;
+    const seleciona = () => {
       if(state.disciplina !== d) limpaInstrucoesVisuais();
       state.disciplina = d;
       renderDisciplinaChips();
       renderQuestionBlocks();
       sincronizaContadoresLote();
+    };
+    chip.addEventListener("click", seleciona);
+    chip.addEventListener("keydown", ev => {
+      if(ev.key === "Enter" || ev.key === " " || ev.key === "Spacebar"){ ev.preventDefault(); seleciona(); }
     });
     wrap.appendChild(chip);
   });

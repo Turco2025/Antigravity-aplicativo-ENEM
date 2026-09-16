@@ -92,6 +92,22 @@ Expoentes, índices, raízes e sinais chegam ao estudante prontos — x², 2⁴,
    sobrescritas/subscritas (`fontwork/ampliar_carlito.py`). Teste no navegador, sem rede:
    `node tests/verify_math_notation.js`.
 
+## O chip de disciplina diz que está marcado (v18.10, 16/09/2026)
+
+Na seção 2 o chip selecionado era pintado com o degradê `var(--accent-a/--accent-b)` — que ali é
+verde (`#22c55e→#16a34a`) sobre um cartão que já é verde (`#15803d→#14532d`). A seleção sumia no
+fundo. Em **Matemática**, que tem uma disciplina só e já entra marcada, não havia nem um segundo
+chip para comparar: o professor clicava e nada parecia acontecer.
+
+A marcação passa a ser dita por três sinais que **não dependem de contraste de cor**: um disco
+branco com **✓** antes do rótulo (o não selecionado mostra o círculo vazio), o **anel branco
+interno** (`inset 0 0 0 2px`, a mesma linguagem de `.area-tile.sel`) e o rótulo em **negrito**. O
+chip também virou um botão de verdade — `role="button"`, `tabindex`, `aria-pressed`, `title` e
+acionamento por Enter/Espaço —, então o estado é anunciado a quem usa leitor de tela.
+
+Teste: `node tests/verify_chip_disciplina.js <caminho absoluto do index.html>` — 19 verificações,
+incluindo o caso do relato (área com uma disciplina só) e marcado × não marcado distinguíveis.
+
 ## A alternativa correta é uma só, em toda parte (v18.9 / generate-question v74.6, 16/09/2026)
 
 **Defeito relatado.** A alternativa identificada como correta nem sempre correspondia ao gabarito
