@@ -3922,6 +3922,9 @@ function escapeHtml(s){ return String(s==null?"":s).replace(/[&<>"']/g, c => ({"
 
    Recebe texto CRU e devolve HTML já escapado — substitui escapeHtml em todo
    ponto que exibe texto de questão. */
+/* Sobrescritos (²³¹ e o bloco U+2070–U+207F), barra de fração e parênteses: tudo
+   que sobe acima da altura dos algarismos dentro do radicando. */
+const RAD_ALTO_RE = /[\u00B2\u00B3\u00B9\u2070\u2071\u2074-\u207F()\[\]{}\/]/;
 function mathHtml(texto){ return radicaisEmHtml(texto, escapeHtml); }
 
 /* O varredor propriamente dito. "esc" é o escapador da saída — a tela usa
@@ -3941,10 +3944,15 @@ function radicaisEmHtml(texto, esc){
         radicando += c;
         j += c.length + 1;
       }
-      const barra = '<span class="rad-r">' + esc(radicando) + '</span>';
+      /* v18.13 — radicando ALTO: com expoente, barra de fração ou parênteses, o
+         conteúdo sobe acima da altura dos algarismos e a barra tem de subir
+         junto — senão o ² encosta nela (√v²/20, √60²/20). O CSS não tem como
+         medir o conteúdo, então a classe vem daqui. */
+      const alto = RAD_ALTO_RE.test(radicando) ? " alto" : "";
+      const barra = '<span class="rad-r' + alto + '">' + esc(radicando) + '</span>';
       if(ultimoRadical){
         // tira o √ já emitido e devolve os dois juntos, para o CSS poder encostá-los
-        out = out.slice(0, out.length - RAD.length) + '<span class="rad"><span class="rad-s">' + RAD + '</span>' + barra + '</span>';
+        out = out.slice(0, out.length - RAD.length) + '<span class="rad' + alto + '"><span class="rad-s">' + RAD + '</span>' + barra + '</span>';
       }else{
         out += barra;
       }
@@ -4945,7 +4953,13 @@ function pdfRadicalComBarra(s){
   }).replace(/\u0305/g, "");
 }
 
-function pdfSanitizeText(text){
+/* v18.13 — "manterBarra" preserva o combinante U+0305 em vez de trocá-lo pelos
+   glifos pré-compostos. É o que o caderno ENEM passa a usar: lá a barra da raiz
+   é DESENHADA com doc.line(), na altura certa para o conteúdo, porque o glifo
+   pré-compõe a sobrelinha numa altura fixa — e essa altura batia no expoente
+   (√v²/20 saía com o ² colado na barra). Os caminhos que não passam pelo
+   desenho rico (tabelas, visualizador em PDF) continuam com os glifos. */
+function pdfSanitizeText(text, manterBarra){
   if(text == null) return text;
   const s = quiJuntaFormula(String(text));
   if(!enemFonteEmbarcada){
@@ -4954,7 +4968,7 @@ function pdfSanitizeText(text){
   }
   if(!CARLITO_SET) CARLITO_SET = new Set(Array.from(CARLITO_COBERTURA));
   let out = "";
-  for(const ch of pdfRadicalComBarra(s)){
+  for(const ch of (manterBarra ? s : pdfRadicalComBarra(s))){
     if(ch === "\u2060") continue;                 // juntador: invisível, só serve ao Word e ao HTML
     if(ch === "\n" || ch === "\t" || ch === "\r" || CARLITO_SET.has(ch)) out += ch;
     else if(PDF_EQUIVALENTES[ch] !== undefined) out += PDF_EQUIVALENTES[ch];   // v14: equivalente com glifo
@@ -5350,7 +5364,7 @@ function enemParagraph(doc, ctx, flow, text, opts){
   const size = o.size || ENEM.body;
   const lead = o.leading || ENEM.leading;
   const indent = o.indent != null ? o.indent : ENEM.indent;
-  const clean = pdfSanitizeText(String(text || "").trim());
+  const clean = pdfSanitizeText(String(text || "").trim(), true);
   if(!clean) return;
 
   clean.split(/\n+/).forEach(par => {
@@ -5358,7 +5372,7 @@ function enemParagraph(doc, ctx, flow, text, opts){
     if(!t) return;
     // O corpo do caderno é 97,7 % regular, mas o negrito existe — e os marcadores
     // **assim** do gerador NÃO podem vazar impressos na página.
-    const runs = enemRichRuns(t).map(r => ({ text: r.text, bold: r.bold || !!o.bold }));
+    const runs = enemRunsPdf(t).map(r => ({ ...r, bold: r.bold || !!o.bold }));
     const lines = enemWrapRuns(doc, runs, flow.w, size, false, indent);
     lines.forEach((parts, i) => {
       const off = i === 0 ? indent : 0;            // recuo só na primeira linha
@@ -5377,11 +5391,11 @@ function enemRichParagraph(doc, ctx, flow, text, opts){
   const size = o.size || ENEM.body;
   const lead = o.leading || ENEM.leading;
   const indent = o.indent != null ? o.indent : 0;
-  const clean = pdfSanitizeText(String(text || "").trim());
+  const clean = pdfSanitizeText(String(text || "").trim(), true);
   if(!clean) return;
   clean.split(/\n+/).forEach(par => {
     if(!par.trim()) return;
-    const lines = enemWrapRuns(doc, enemRichRuns(par.trim()), flow.w - indent, size, false);
+    const lines = enemWrapRuns(doc, enemRunsPdf(par.trim()), flow.w - indent, size, false);
     lines.forEach((parts, i) => {
       enemEnsure(doc, ctx, flow, lead);
       enemDrawRichLine(doc, parts, flow.x + indent, flow.y + size, flow.w - indent,
@@ -5472,8 +5486,8 @@ function enemOptionMark(doc, x, yBaseline, letter){
    era antes, porque linha única é sempre última linha.                       */
 function enemAlternative(doc, ctx, flow, letter, text){
   const width = flow.w - ENEM.hang;
-  const clean = pdfSanitizeText(String(text || "").trim()) || "—";
-  const lines = enemWrapRuns(doc, enemRichRuns(clean), width, ENEM.body, false);
+  const clean = pdfSanitizeText(String(text || "").trim(), true) || "—";
+  const lines = enemWrapRuns(doc, enemRunsPdf(clean), width, ENEM.body, false);
   lines.forEach((parts, i) => {
     enemEnsure(doc, ctx, flow, ENEM.altLeading);
     const base = flow.y + ENEM.body;
@@ -5487,6 +5501,66 @@ function enemAlternative(doc, ctx, flow, letter, text){
 
 // Quebra o texto em trechos normais e em negrito. O título da obra vem marcado
 // com **asteriscos duplos**, convenção que o gerador de questões já usa.
+/* v18.13 — GEOMETRIA DA RAIZ NO CADERNO. A fonte do PDF é fixa (Carlito, métrica
+   da Calibri), então as proporções são medidas uma vez e ficam aqui, em frações
+   do corpo: ápice do √ 0,81; topo do algarismo 0,69; topo do conteúdo "alto"
+   (expoente, barra de fração, parênteses) 0,79. A folga entre a barra e o
+   conteúdo é 0,32 da altura do algarismo — o valor medido na referência em LaTeX
+   que o professor mandou. O √ é esticado até encostar na barra. */
+const ENEM_RAIZ = { apex: 0.81, alg: 0.69, alto: 0.79, folga: 0.32, espessura: 0.040 };
+function enemRaizMetrica(radicando){
+  const conteudo = RAD_ALTO_RE.test(radicando) ? ENEM_RAIZ.alto : ENEM_RAIZ.alg;
+  const alvo = Math.max(ENEM_RAIZ.apex, conteudo + ENEM_RAIZ.folga * ENEM_RAIZ.alg);
+  return { alvo: alvo, k: alvo / ENEM_RAIZ.apex };
+}
+
+/* Quebra o texto nas raízes: o √ vira um trecho próprio (desenhado maior) e o
+   radicando vira um trecho ATÔMICO (não quebra linha no meio de "x² + 1") sobre
+   o qual a barra é desenhada. Sem raiz no texto, devolve o trecho inteiro. */
+function enemPartesDaRaiz(txt){
+  const s = String(txt == null ? "" : txt);
+  if(s.indexOf("\u0305") < 0) return [{ text: s }];
+  const RAD = "\u221A";
+  const out = [];
+  let buf = "", i = 0;
+  const solta = () => { if(buf){ out.push({ text: buf }); buf = ""; } };
+  while(i < s.length){
+    const car = String.fromCodePoint(s.codePointAt(i));
+    if(s[i + car.length] === "\u0305"){
+      let radicando = "", j = i;
+      while(j < s.length){
+        const c = String.fromCodePoint(s.codePointAt(j));
+        if(s[j + c.length] !== "\u0305") break;
+        radicando += c;
+        j += c.length + 1;
+      }
+      /* O sinal e o radicando saem num token SÓ: separados, a quebra de linha
+         podia cair entre eles e o caderno saía com "√" no fim de uma linha e
+         "123456789" (com barra) no começo da outra. */
+      let sinal = "";
+      if(buf.endsWith(RAD)){ sinal = RAD; buf = buf.slice(0, -RAD.length); }
+      solta();
+      out.push({ text: sinal + radicando, raiz: true, sinal: sinal, radicando: radicando });
+      i = j;
+      continue;
+    }
+    buf += car;
+    i += car.length;
+  }
+  solta();
+  return out;
+}
+
+// Trechos para o PDF: negrito (**) e raízes. O caminho HTML continua usando
+// enemRichRuns puro, porque lá quem desenha a barra é o CSS (radicaisEmHtml).
+function enemRunsPdf(text){
+  const out = [];
+  enemRichRuns(text).forEach(r => {
+    enemPartesDaRaiz(r.text).forEach(p => out.push({ text: p.text, bold: r.bold, raiz: p.raiz, sinal: p.sinal, radicando: p.radicando }));
+  });
+  return out.length ? out : [{ text: String(text), bold: false }];
+}
+
 function enemRichRuns(text){
   const out = [];
   String(text).split(/(\*\*[^*]+\*\*)/g).forEach(part => {
@@ -5506,6 +5580,27 @@ function enemWrapRuns(doc, runs, width, size, italic, firstIndent){
   const limite = () => (lines.length === 0 ? width - fi : width);
   runs.forEach(run => {
     enemFont(doc, enemStyle(run.bold, !!italic), size);
+    /* v18.13 — o sinal de radical e o radicando não se quebram nem se separam:
+       cada um entra como UM token, com a largura medida no corpo em que vai ser
+       desenhado (o √ sai maior, ver enemRaizMetrica). */
+    if(run.raiz){
+      const m = enemRaizMetrica(run.radicando || "");
+      let wSinal = 0;
+      if(run.sinal){
+        enemFont(doc, enemStyle(run.bold, !!italic), size * m.k);
+        wSinal = doc.getTextWidth(pdfSanitizeText(run.sinal));
+        enemFont(doc, enemStyle(run.bold, !!italic), size);
+      }
+      const wRad = doc.getTextWidth(pdfSanitizeText(run.radicando || ""));
+      const w = wSinal + wRad - (run.sinal ? size * 0.05 : 0);
+      if(lineW + w > limite() && line.length){
+        while(line.length && /^[ \t\n]+$/.test(line[line.length - 1].text)) { lineW -= line.pop().w; }
+        lines.push(line); line = []; lineW = 0;
+      }
+      line.push({ text: run.text, bold: run.bold, w: w, raiz: true, sinal: run.sinal, radicando: run.radicando, wSinal: wSinal, wRad: wRad });
+      lineW += w;
+      return;
+    }
     run.text.split(/([ \t\n]+)/).forEach(tok => {
       if(!tok) return;
       const w = doc.getTextWidth(tok);
@@ -5547,9 +5642,30 @@ function enemDrawRichLine(doc, parts, x, y, width, size, align, isLast, italic){
   parts.forEach(p => {
     const isGap = /^[ \t\n]+$/.test(p.text);   // o espaço inseparável NÃO é vão de justificação
     if(!isGap){
-      enemFont(doc, enemStyle(p.bold, italic), size);
-      enemInk(doc);
-      doc.text(p.text, cx, y);
+      if(p.raiz){
+        /* v18.13 — o sinal sai esticado até a altura da barra, e a barra é uma
+           linha desenhada sobre a largura EXATA do radicando, na altura que o
+           conteúdo pede (com expoente ela sobe, e o sinal sobe junto). */
+        const m = enemRaizMetrica(p.radicando || "");
+        enemInk(doc);
+        let xr = cx;
+        if(p.sinal){
+          enemFont(doc, enemStyle(p.bold, italic), size * m.k);
+          doc.text(pdfSanitizeText(p.sinal), cx, y);
+          xr = cx + p.wSinal - size * 0.05;
+        }
+        enemFont(doc, enemStyle(p.bold, italic), size);
+        doc.text(pdfSanitizeText(p.radicando || ""), xr, y);
+        const esp = size * ENEM_RAIZ.espessura;
+        const yb = y - m.alvo * size + esp / 2;
+        doc.setLineWidth(esp);
+        doc.setDrawColor(ENEM.ink[0], ENEM.ink[1], ENEM.ink[2]);
+        doc.line(xr - (p.sinal ? size * 0.04 : 0), yb, xr + p.wRad, yb);
+      }else{
+        enemFont(doc, enemStyle(p.bold, italic), size);
+        enemInk(doc);
+        doc.text(p.text, cx, y);
+      }
     }
     cx += p.w + (isGap ? extra : 0);
   });
@@ -5910,15 +6026,31 @@ const ENEM_PRINT_CSS = `
 *{ box-sizing: border-box; }
 html,body{ margin:0; padding:0; }
 
-/* v18.12 — RAIZ: a barra é um degradê sólido sobre a caixa do radicando, então
-   cobre exatamente o radicando. Sem inline-block: em parágrafo justificado ele
-   abria um vão no meio da raiz. --rad-bp vem da fonte (ver o script no fim do
-   documento); o padrão é o da Calibri. */
-:root{ --rad-bp: 0.14em; --rad-k: 1em; }
+/* v18.13 — RAIZ NO DESENHO DA COMPOSIÇÃO MATEMÁTICA.
+
+   Medido na imagem de referência do professor (LaTeX): a barra começa e termina
+   EXATAMENTE no radicando (sobra zero), a folga entre a barra e o topo do
+   radicando é ~0,35 da altura do algarismo, e o radical é ESTICADO até encostar
+   na barra — o sinal fica mais alto que os algarismos, descendo um pouco abaixo
+   da linha de base.
+
+   Defeito que isto corrige: com a folga calculada só sobre a altura dos
+   ALGARISMOS, um radicando com expoente (√v²/20, √60²/20) tinha o ² batendo na
+   barra. A altura do radicando agora é medida em dois regimes — comum e ALTO
+   (expoente, barra de fração, parênteses) — e a marcação diz em qual cada raiz
+   está, porque em CSS não há como medir o conteúdo.
+
+   --rad-pt dá espaço de PINTURA acima da linha (padding vertical em elemento
+   inline pinta o fundo sem mexer no leiaute), para a barra poder subir acima da
+   ascendente da fonte sem ser cortada. */
+:root{ --rad-pt:0.34em; --rad-bp:0.36em; --rad-k:1.15em; --rad-bp-a:0.26em; --rad-k-a:1.28em; }
 .rad{ white-space: nowrap; }
-.rad-s{ font-size: var(--rad-k, 1em); margin-right: -0.06em; }
+.rad-s{ font-size: var(--rad-k,1.15em); margin-right: -0.06em; }
+.rad.alto .rad-s{ font-size: var(--rad-k-a,1.28em); }
 .rad-r{ background-image:linear-gradient(currentColor,currentColor); background-repeat:no-repeat;
-  background-size:100% 0.07em; background-position:0 var(--rad-bp,0.14em); padding:0 0.07em 0 0.05em; }
+  background-size:100% 0.040em; background-position:0 var(--rad-bp,0.36em);
+  padding: var(--rad-pt,0.34em) 0 0 0; }
+.rad-r.alto{ background-position:0 var(--rad-bp-a,0.26em); }
 body{
   font-family: Calibri, Carlito, "Segoe UI", system-ui, sans-serif;
   font-size: 10pt;
@@ -6217,14 +6349,16 @@ function enemBuildPrintHTML(doneQuestions, professor){
    conta de calibraBarraDaRaiz(), sem depender do app. */
 const CALIBRA_RAIZ_JS = "(function(){try{var f=getComputedStyle(document.body).fontFamily;" +
   "var c=document.createElement('canvas').getContext('2d');c.font='100px '+f;" +
-  "var a=c.measureText('\\u221A').fontBoundingBoxAscent,x=0,t=0;" +
+  "var a=c.measureText('\\u221A').fontBoundingBoxAscent,x=0,g=0,h=0,P=34;" +
   "['','600 ','bold '].forEach(function(w){c.font=w+'100px '+f;" +
   "x=Math.max(x,c.measureText('\\u221A').actualBoundingBoxAscent||0);" +
-  "t=Math.max(t,c.measureText('0123456789').actualBoundingBoxAscent||0);});" +
-  "if(!(a>0)||!(x>0)||!(t>0)||a<x)return;var v=Math.max(x,t+13);" +
-  "var k=Math.min(1.35,Math.max(1,v/x)),b=Math.min(0.30,Math.max(0.02,(a-v)/100));" +
-  "var r=document.documentElement.style;r.setProperty('--rad-bp',b.toFixed(4)+'em');" +
-  "r.setProperty('--rad-k',k.toFixed(4)+'em');}catch(e){}})();";
+  "g=Math.max(g,c.measureText('0123456789').actualBoundingBoxAscent||0);" +
+  "h=Math.max(h,c.measureText('0123456789\\u00B2\\u00B3\\u207B()/').actualBoundingBoxAscent||0);});" +
+  "if(!(a>0)||!(x>0)||!(g>0))return;var F=0.32*g;" +
+  "function P2(t){var v=Math.max(x,t+F);return{b:Math.max(0,(P+a-v)/100),k:Math.min(1.6,Math.max(1,v/x))};}" +
+  "var n=P2(g),m=P2(Math.max(h,g)),r=document.documentElement.style;" +
+  "r.setProperty('--rad-bp',n.b.toFixed(4)+'em');r.setProperty('--rad-k',n.k.toFixed(4)+'em');" +
+  "r.setProperty('--rad-bp-a',m.b.toFixed(4)+'em');r.setProperty('--rad-k-a',m.k.toFixed(4)+'em');}catch(e){}})();";
 
 /* Imprimir = o MESMO documento do PDF. Nada de re-renderizar em CSS e torcer
    para bater: montamos o jsPDF idêntico ao do botão PDF, marcamos autoPrint e
@@ -7600,32 +7734,38 @@ function calibraBarraDaRaiz(){
     if(!fam) return;
     const ctx = document.createElement("canvas").getContext("2d");
     if(!ctx) return;
-    const px = 100;
+    const px = 100, PT = 0.34 * px;   // = --rad-pt
     ctx.font = px + "px " + fam;
     const asc = ctx.measureText(RAD_BP_TEXTO).fontBoundingBoxAscent;
     /* O mesmo texto aparece em peso normal, semibold (comando) e negrito, e o
        ápice do √ muda com o peso — a medida tem de valer para o mais alto dos
        três, senão o radical em negrito ultrapassa a barra. */
-    let apex = 0, topo = 0;
+    let apex = 0, alg = 0, altoM = 0;
     ["", "600 ", "bold "].forEach(peso => {
       ctx.font = peso + px + "px " + fam;
-      apex = Math.max(apex, ctx.measureText(RAD_BP_TEXTO).actualBoundingBoxAscent || 0);
-      topo = Math.max(topo, ctx.measureText("0123456789").actualBoundingBoxAscent || 0);
+      apex  = Math.max(apex,  ctx.measureText(RAD_BP_TEXTO).actualBoundingBoxAscent || 0);
+      alg   = Math.max(alg,   ctx.measureText("0123456789").actualBoundingBoxAscent || 0);
+      altoM = Math.max(altoM, ctx.measureText("0123456789\u00B2\u00B3\u207B()/").actualBoundingBoxAscent || 0);
     });
-    if(!(asc > 0) || !(apex > 0) || !(topo > 0) || asc < apex) return;
-    /* A barra tem de (a) encostar no ápice do √ e (b) sobrar uma folga acima dos
-       algarismos. Em fontes de radical curto — a Segoe UI e a DejaVu têm o ápice
-       só 0,10 em acima do topo dos dígitos — as duas coisas não cabem, e a barra
-       raspava os algarismos. Então o √ é ESTICADO até a altura necessária (é o
-       que a composição matemática faz com radicais), e a barra vai para lá. Em
-       Calibri/Carlito, a fonte do papel, a folga já existe e k sai 1 — o PDF e a
-       impressão não mudam em nada. */
-    const FOLGA = 0.13 * px;
-    const alvo = Math.max(apex, topo + FOLGA);
-    const k = Math.min(1.35, Math.max(1, alvo / apex));
-    const bp = Math.min(0.30, Math.max(0.02, (asc - alvo) / px));
-    document.documentElement.style.setProperty("--rad-bp", bp.toFixed(4) + "em");
-    document.documentElement.style.setProperty("--rad-k", k.toFixed(4) + "em");
+    if(!(asc > 0) || !(apex > 0) || !(alg > 0)) return;
+    /* Geometria medida na referência do professor (LaTeX): a folga entre a barra
+       e o topo do radicando é ~0,35 da altura do algarismo, e o radical é
+       esticado até encostar na barra. Dois regimes, porque um radicando com
+       expoente sobe mais que um só de algarismos. */
+    const FOLGA = 0.32 * alg;   // medido na referência: 0,30–0,35 da altura do algarismo
+    const pos = conteudo => {
+      const alvo = Math.max(apex, conteudo + FOLGA);
+      return {
+        bp: Math.max(0, (PT + asc - alvo) / px),
+        k: Math.min(1.6, Math.max(1, alvo / apex)),
+      };
+    };
+    const normal = pos(alg), alto = pos(Math.max(altoM, alg));
+    const raiz = document.documentElement.style;
+    raiz.setProperty("--rad-bp", normal.bp.toFixed(4) + "em");
+    raiz.setProperty("--rad-k",  normal.k.toFixed(4) + "em");
+    raiz.setProperty("--rad-bp-a", alto.bp.toFixed(4) + "em");
+    raiz.setProperty("--rad-k-a",  alto.k.toFixed(4) + "em");
   }catch(e){ /* fica o valor padrão do CSS */ }
 }
 

@@ -103,9 +103,11 @@ function ok(c, msg, extra){ if(c){ total++; console.log('PASS ' + msg); } else {
     ['', '600 ', 'bold '].forEach(w => { c.font = w + px + 'px ' + fam;
       apex = Math.max(apex, c.measureText('√').actualBoundingBoxAscent);
       topo = Math.max(topo, c.measureText('0123456789').actualBoundingBoxAscent); });
-    const bp = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--rad-bp')) * px;
-    const k  = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--rad-k')) || 1;
-    const barra = asc - bp;              // altura da barra acima da linha de base
+    const cs = getComputedStyle(document.documentElement);
+    const bp = parseFloat(cs.getPropertyValue('--rad-bp')) * px;
+    const pt = parseFloat(cs.getPropertyValue('--rad-pt')) * px;   // folga de pintura acima da linha
+    const k  = parseFloat(cs.getPropertyValue('--rad-k')) || 1;
+    const barra = asc + pt - bp;         // altura da barra acima da linha de base
     return { barra: +barra.toFixed(1), topoDigitos: +topo.toFixed(1), apexEsticado: +(apex * k).toFixed(1), apex: +apex.toFixed(1), k: +k.toFixed(4) };
   });
   ok(C.barra > C.topoDigitos, 'C1 a barra passa ACIMA do topo dos algarismos — nunca corta o radicando', JSON.stringify(C));
@@ -157,6 +159,66 @@ function ok(c, msg, extra){ if(c){ total++; console.log('PASS ' + msg); } else {
   ok(E.barras >= 9, 'E1 o cartão renderiza a barra em texto-base, comando, alternativas, comentários e resolução', 'barras=' + E.barras);
   ok(!E.combinanteNoTexto, 'E2 nenhum combinante U+0305 chega ao texto da tela');
   ok(/√1000 e √144/.test(E.textoBase), 'E3 o texto lido continua legível e sem lixo', E.textoBase);
+
+  /* ---------- (G) v18.13 — radicando ALTO (expoente) não encosta na barra ---------- */
+  const G = await p.evaluate(() => {
+    const N = nmNormalizaTexto;
+    const html = t => mathHtml(N(t));
+    const cs = getComputedStyle(document.documentElement);
+    const px = 100, fam = getComputedStyle(document.body).fontFamily;
+    const c = document.createElement('canvas').getContext('2d');
+    c.font = px + 'px ' + fam;
+    const asc = c.measureText('\u221A').fontBoundingBoxAscent;
+    let apex = 0, alg = 0, sup = 0;
+    ['', '600 ', 'bold '].forEach(w => { c.font = w + px + 'px ' + fam;
+      apex = Math.max(apex, c.measureText('\u221A').actualBoundingBoxAscent);
+      alg  = Math.max(alg,  c.measureText('0123456789').actualBoundingBoxAscent);
+      sup  = Math.max(sup,  c.measureText('0123456789\u00B2\u00B3\u207B()/').actualBoundingBoxAscent); });
+    const PT = parseFloat(cs.getPropertyValue('--rad-pt')) * px;
+    const barra = r => asc + PT - parseFloat(cs.getPropertyValue(r)) * px;   // acima da linha de base
+    return {
+      htmlAlto: html('√(v²/20)'), htmlNormal: html('√1000'),
+      barraNormal: +barra('--rad-bp').toFixed(1), barraAlta: +barra('--rad-bp-a').toFixed(1),
+      k: parseFloat(cs.getPropertyValue('--rad-k')), ka: parseFloat(cs.getPropertyValue('--rad-k-a')),
+      alg: +alg.toFixed(1), sup: +sup.toFixed(1), apex: +apex.toFixed(1),
+    };
+  });
+  ok(/class="rad alto"/.test(G.htmlAlto) && /class="rad-r alto"/.test(G.htmlAlto),
+     'G1 radicando com expoente é marcado como ALTO (√v²/20)', G.htmlAlto);
+  ok(!/alto/.test(G.htmlNormal), 'G2 radicando só de algarismos NÃO é marcado como alto', G.htmlNormal);
+  ok(G.barraAlta > G.barraNormal, 'G3 no regime alto a barra sobe', JSON.stringify(G));
+  ok(G.barraAlta > G.sup, 'G4 a barra do regime alto passa ACIMA do topo do expoente — era este o defeito relatado', JSON.stringify(G));
+  ok(G.barraNormal > G.alg, 'G5 a barra do regime comum passa acima do topo do algarismo', JSON.stringify(G));
+  ok(G.ka >= G.k && G.ka <= 1.6, 'G6 o √ é esticado mais no regime alto, dentro do limite', JSON.stringify(G));
+  ok(Math.abs(G.barraNormal - G.k * G.apex) <= 2.5 && Math.abs(G.barraAlta - G.ka * G.apex) <= 2.5,
+     'G7 nos dois regimes o √ esticado encosta na barra', JSON.stringify(G));
+
+  /* ---------- (H) v18.13 — o PDF do caderno desenha a barra, não usa o glifo ---------- */
+  const H = await p.evaluate(() => {
+    const N = nmNormalizaTexto;
+    const partes = enemPartesDaRaiz(N('valor de 5√16 e √(60²/20) aqui'));
+    const mNormal = enemRaizMetrica('1000'), mAlto = enemRaizMetrica('60²/20');
+    return {
+      partes: partes.map(p => ({ t: p.text, raiz: !!p.raiz, sinal: p.sinal, rad: p.radicando })),
+      atomico: partes.filter(p => p.raiz).every(p => p.sinal === '\u221A'),
+      mNormal, mAlto,
+      // (o comportamento depende da fonte embarcada, que só existe com o jsPDF
+      //  carregado; aqui conferimos a bifurcação no próprio código)
+      preserva: /manterBarra \? s : pdfRadicalComBarra/.test(pdfSanitizeText.toString()),
+      converte: /pdfSanitizeText\(text, manterBarra\)/.test(pdfSanitizeText.toString()),
+      desenha: /doc\.line\(/.test(enemDrawRichLine.toString()) && /enemRaizMetrica/.test(enemDrawRichLine.toString()),
+      usaRunsPdf: /enemRunsPdf/.test(enemParagraph.toString()) && /enemRunsPdf/.test(enemAlternative.toString()) && /enemRunsPdf/.test(enemRichParagraph.toString()),
+      htmlIntacto: /radicaisEmHtml/.test(enemPrintRich.toString()) && !/enemPartesDaRaiz/.test(enemRichRuns.toString()),
+    };
+  });
+  ok(H.partes.filter(x => x.raiz).length === 2, 'H1 o texto do PDF é quebrado nas duas raízes', JSON.stringify(H.partes));
+  ok(H.atomico, 'H2 o sinal e o radicando saem num token só — a linha nunca quebra entre eles', JSON.stringify(H.partes));
+  ok(H.mAlto.alvo > H.mNormal.alvo && H.mAlto.k > H.mNormal.k,
+     'H3 no PDF, radicando com expoente levanta a barra e estica mais o sinal', JSON.stringify(H));
+  ok(H.preserva && H.converte, 'H4 o caderno preserva o combinante (barra desenhada); os demais caminhos continuam com os glifos', JSON.stringify(H));
+  ok(H.desenha, 'H5 a barra do caderno é desenhada com doc.line() na altura calculada');
+  ok(H.usaRunsPdf, 'H6 parágrafo, parágrafo rico e alternativa do caderno usam os trechos com raiz');
+  ok(H.htmlIntacto, 'H7 o caminho HTML continua separado — quem desenha lá é o CSS');
 
   ok(erros.length === 0, 'F1 nenhum erro de JavaScript na página', erros.join(' | '));
   await b.close();

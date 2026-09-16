@@ -92,6 +92,41 @@ Expoentes, índices, raízes e sinais chegam ao estudante prontos — x², 2⁴,
    sobrescritas/subscritas (`fontwork/ampliar_carlito.py`). Teste no navegador, sem rede:
    `node tests/verify_math_notation.js`.
 
+## A raiz no desenho da composição matemática (v18.13, 16/09/2026)
+
+Relato do professor, com três capturas: *"a potência está sobrepondo a raiz quadrada"* em `√v²/20`
+e `√60²/20`. Junto, a imagem de referência em LaTeX de `√1000`, `√144` e `√123456789`.
+
+**A referência foi medida, não imitada de olho.** Na imagem do professor: a barra começa e termina
+exatamente no radicando (sobra **zero**); a folga entre a barra e o topo do radicando é **0,30–0,35
+da altura do algarismo**; a espessura da barra é **0,05 dessa altura**; e o radical é **esticado**
+até encostar na barra, descendo um pouco abaixo da linha de base. São esses os números que o app usa
+agora — e o teste compara o resultado com eles.
+
+**A causa do defeito.** Na v18.12 a folga era calculada só sobre a altura dos ALGARISMOS. Um
+radicando com expoente sobe mais que isso, e o `²` batia na barra. Agora a altura do radicando é
+medida em **dois regimes** — comum e ALTO (expoente, barra de fração, parênteses) — e a marcação diz
+em qual regime cada raiz está, porque em CSS não há como medir o conteúdo. No regime alto a barra
+sobe e o radical estica junto.
+
+**O PDF do caderno mudou de técnica.** Ali a barra era um glifo pré-composto (`caractere + U+0305`)
+com a sobrelinha numa altura **fixa** na fonte — e era exatamente essa altura fixa que cortava o
+expoente. O caderno passa a **desenhar** a barra com `doc.line()`, sobre a largura exata do radicando
+e na altura que o conteúdo pede, com o `√` desenhado em corpo maior para encostar nela. Para isso, o
+sinal e o radicando viraram **um token só** no quebrador de linha: separados, a quebra podia cair
+entre eles e a página saía com `√` no fim de uma linha e o radicando (com barra) no começo da outra.
+Os caminhos que não passam pelo desenho rico — tabelas e o visualizador em PDF — continuam com os
+glifos.
+
+**Word (.docx): ressalva.** Lá a barra continua sendo o glifo de altura fixa, e por isso ela ainda
+corta o expoente. O conserto exato seria emitir equação nativa do Word (OMML `MathRadical`); testado
+aqui, o resultado **não renderizou** na conferência em LibreOffice, então não foi embarcado às cegas.
+Tela, impressão e PDF do caderno saem como na referência.
+
+Teste: `node tests/verify_raiz.js <caminho absoluto do index.html>` — 37 verificações, incluindo os
+dois regimes, a barra passando acima do expoente, o esticamento do `√` nos dois casos, o token único
+do PDF e a separação entre o caminho HTML (CSS) e o do caderno (desenho).
+
 ## A barra da raiz cobre o radicando inteiro (v18.12, 16/09/2026)
 
 Pedido do professor, com imagem de referência: *"a barra deve começar sobre o 1 e se estender até o
