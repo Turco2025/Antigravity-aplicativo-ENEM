@@ -92,6 +92,28 @@ Expoentes, índices, raízes e sinais chegam ao estudante prontos — x², 2⁴,
    sobrescritas/subscritas (`fontwork/ampliar_carlito.py`). Teste no navegador, sem rede:
    `node tests/verify_math_notation.js`.
 
+## Duas seções separadas: geração em bloco e configuração individual (v18.8, 16/09/2026)
+
+Até a v18.7 a geração em bloco e a configuração individual viviam na **mesma** seção 4: o painel
+do lote era uma caixa tracejada dentro do cartão rosa, e os blocos de questão vinham logo abaixo,
+no mesmo cartão. As duas coisas são etapas diferentes e agora têm caixas próprias:
+
+- **Seção 4 — Geração de questões em bloco**, em **roxo**: tema do lote, orientações adicionais,
+  quantidades por nível e recurso visual, terminando no "Aplicar".
+- **Seção 5 — Configuração individual das questões**, em **rosa**: um bloco por questão, fora da
+  caixa roxa, com 22 px de separação.
+- **Seção 6 — Gerar simulado**: a antiga seção 5, apenas renumerada; mantém o roxo que já tinha
+  (fica no fim da página, longe da seção 4).
+
+No CSS, `.card-step4` e `.card-step5` trocaram de cor (roxo ↔ rosa) e nasceu `.card-step6` com o
+roxo de antes. O `.lote-panel` perdeu a moldura tracejada e o preenchimento — ele **é** a seção 4
+agora, não uma caixa dentro de outra —, e o título duplicado "⚡ Configurar todas as questões de
+uma vez" saiu, junto com a regra `.lote-head`, que ficou sem uso.
+
+**Nada de comportamento mudou**: mesmos campos, mesmos ids, mesmos ouvintes, mesmo payload. A
+suíte inteira (256 asserções + 102 do núcleo) passa sem alteração, o que é a prova de que a
+mudança é só de organização visual, numeração e cor.
+
 ## Orientações adicionais do professor (v18.6 / generate-question v74.5, 16/09/2026)
 
 Campo **opcional** no painel do lote, logo abaixo de "Tema do lote": **Orientações adicionais

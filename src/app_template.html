@@ -98,8 +98,12 @@ header.topbar{display:flex;align-items:center;justify-content:space-between;gap:
 .card-step1{--accent-a:#1e3a8a;--accent-b:#1d4ed8;background:linear-gradient(150deg, #1e3a8a, #172554);border-color:rgba(96,165,250,.55);border-width:2px;}
 .card-step2{--accent-a:#22c55e;--accent-b:#16a34a;background:linear-gradient(150deg, #15803d, #14532d);border-color:rgba(134,239,172,.5);border-width:2px;}
 .card-step3{--accent-a:#f59e0b;--accent-b:#f97316;background:linear-gradient(150deg, #92400e, #7c2d12);border-color:rgba(253,186,116,.5);border-width:2px;}
-.card-step4{--accent-a:#ec4899;--accent-b:#db2777;background:linear-gradient(150deg, #9d174d, #701a3f);border-color:rgba(249,168,212,.5);border-width:2px;}
-.card-step5{--accent-a:#a855f7;--accent-b:#9333ea;background:linear-gradient(150deg, #6b21a8, #4c1d95);border-color:rgba(216,180,254,.5);border-width:2px;}
+/* v18.8 — a geração em bloco (seção 4) e a configuração individual (seção 5) são
+   duas caixas separadas: a de bloco em ROXO, a individual em ROSA. A seção 6
+   ("Gerar simulado") mantém o roxo que já tinha — fica longe da 4 na página. */
+.card-step4{--accent-a:#a855f7;--accent-b:#9333ea;background:linear-gradient(150deg, #6b21a8, #4c1d95);border-color:rgba(216,180,254,.5);border-width:2px;}
+.card-step5{--accent-a:#ec4899;--accent-b:#db2777;background:linear-gradient(150deg, #9d174d, #701a3f);border-color:rgba(249,168,212,.5);border-width:2px;}
+.card-step6{--accent-a:#a855f7;--accent-b:#9333ea;background:linear-gradient(150deg, #6b21a8, #4c1d95);border-color:rgba(216,180,254,.5);border-width:2px;}
 /* v15 — Caixa "Solicitar simulados pelo WhatsApp" (pareamento do número; etapa A2).
    Fundo grafite-petróleo de propósito: o passo 2 logo abaixo já é verde, e o verde do
    WhatsApp fica só no ícone, na borda e no botão para a caixa não parecer parte do passo. */
@@ -189,8 +193,9 @@ select optgroup{background:#fff;color:#111;font-weight:700;}
 }
 /* Painel de configuração em lote (passo 4): preenche todas as questões de
    uma vez; os blocos individuais continuam abaixo, para ajustes. */
-.lote-panel{border-radius:16px;border:1.5px dashed var(--glass-brd);background:rgba(255,255,255,.05);padding:18px;margin-bottom:18px;}
-.lote-panel .lote-head{display:flex;align-items:center;gap:8px;font-weight:700;font-size:13.5px;margin-bottom:4px;}
+/* v18.8: o painel agora É a seção 4 inteira — sem moldura tracejada de "caixa
+   dentro de caixa" e sem a margem de baixo que o separava dos blocos individuais. */
+.lote-panel{border-radius:0;border:0;background:transparent;padding:0;margin-bottom:0;}
 /* Contadores por nível: espelho editável dos blocos individuais (ver
    atualizaResumoLote / aplicarLoteATodas no app.js). */
 .lote-counts{display:flex;gap:8px;flex-wrap:wrap;}
@@ -459,16 +464,15 @@ body.mode-professor .qcard{box-shadow:0 25px 60px -25px rgba(0,0,0,.6), 0 0 0 1.
       </div>
     </div>
 
+    <!-- v18.8 — SEÇÃO 4 (roxa): geração em bloco. Só preenche os blocos individuais
+         da seção 5 (é um atalho, não um segundo caminho de geração). Com o mesmo tema
+         em todas as questões, o app planeja um recorte distinto para cada uma antes de
+         gerar (ver planejaRecortesPorTema, no app.js). -->
     <div class="card card-step4">
-      <div class="section-title"><span class="num">4</span> Configuração individual das questões</div>
-      <p class="section-sub">Para cada questão, defina o tema, a dificuldade e o recurso visual. Competência e habilidade são opcionais — se você não escolher, o agente seleciona automaticamente a mais aderente ao tema e informa a classificação usada. Para um simulado inteiro sobre um único tema, use o painel abaixo e depois ajuste o que quiser questão por questão.</p>
-      <!-- CONFIGURAÇÃO EM LOTE. Só preenche os blocos individuais abaixo (é um
-           atalho, não um segundo caminho de geração). Com o mesmo tema em todas
-           as questões, o app planeja um recorte distinto para cada uma antes de
-           gerar (ver planejaRecortesPorTema, no app.js). -->
+      <div class="section-title"><span class="num">4</span> Geração de questões em bloco</div>
+      <p class="section-sub">Configure todas as questões de uma vez: o tema (ou a lista de conteúdos, um por questão), as orientações adicionais, as quantidades de cada nível e o recurso visual. O que você aplicar aqui preenche os blocos da seção 5, onde dá para ajustar questão por questão.</p>
       <div class="lote-panel" id="lotePanel">
-        <div class="lote-head">⚡ Configurar todas as questões de uma vez</div>
-        <p class="hint" style="margin:0 0 12px;">Preenche as questões abaixo com o tema (ou distribui a lista de conteúdos, um por questão) e o mesmo recurso visual, e distribui as quantidades de cada nível em ordem embaralhada. Os contadores mostram sempre a situação real das questões abaixo: mude o nível de uma questão lá embaixo e eles se atualizam. A IA planeja um recorte diferente (conteúdo, contexto e habilidade) para cada questão do tema.</p>
+        <p class="hint" style="margin:0 0 12px;">As quantidades de cada nível são distribuídas em ordem sorteada, sem dois níveis iguais seguidos. Os contadores mostram sempre a situação real das questões da seção 5: mude o nível de uma questão lá e eles se atualizam. A IA planeja um recorte diferente (conteúdo, contexto e habilidade) para cada questão do tema.</p>
         <label class="field-label">Tema do lote</label>
         <textarea id="loteTema" placeholder="Ex.: Eletricidade – Eletrodinâmica&#10;ou vários conteúdos: MDC, MMC, radiciação, exponenciação (ou um por linha)"></textarea>
         <p class="hint" style="margin:4px 0 0;">Um conteúdo só, ou vários separados por vírgula, ponto e vírgula ou um por linha. Com vários, o app distribui em rodízio na ordem digitada (1.º → questão 1, 2.º → questão 2, …, e recomeça) e mostra o conteúdo de cada questão abaixo — você pode trocar qualquer um.</p>
@@ -507,14 +511,21 @@ body.mode-professor .qcard{box-shadow:0 25px 60px -25px rgba(0,0,0,.6), 0 0 0 1.
         </div>
         <div class="lote-actions">
           <button type="button" class="btn sm" id="btnAplicarLote">Aplicar às <span id="loteQtd">1</span> questões</button>
-          <span class="hint">Depois de aplicar, você ainda pode ajustar cada questão individualmente abaixo.</span>
+          <span class="hint">Depois de aplicar, você ainda pode ajustar cada questão individualmente na seção 5.</span>
         </div>
       </div>
+    </div>
+
+    <!-- v18.8 — SEÇÃO 5 (rosa): configuração individual, uma caixa por questão.
+         Fora da caixa roxa da seção 4, com separação visual clara. -->
+    <div class="card card-step5">
+      <div class="section-title"><span class="num">5</span> Configuração individual das questões</div>
+      <p class="section-sub">Para cada questão, defina o tema, a dificuldade, o recurso visual e as orientações adicionais. Competência e habilidade são opcionais — se você não escolher, o agente seleciona automaticamente a mais aderente ao tema e informa a classificação usada.</p>
       <div id="questionBlocks"></div>
     </div>
 
-    <div class="card card-step5">
-      <div class="section-title"><span class="num">5</span> Gerar simulado</div>
+    <div class="card card-step6">
+      <div class="section-title"><span class="num">6</span> Gerar simulado</div>
       <div class="footer-actions">
         <!-- Este interruptor controla a revisão matemática independente
              (review-math-question): uma 2ª chamada à IA que confere contas,
