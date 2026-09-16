@@ -396,7 +396,8 @@ function buildRegraAlternativas(): string {
 2. O GABARITO NÃO PODE SE DENUNCIAR. A alternativa correta nunca é a mais completa, a mais qualificada nem a mais bem redigida do conjunto. Em alternativas de TEXTO ela também nunca se destaca por tamanho: não pode passar de 25% nem de 25 caracteres acima da segunda mais longa. (Em alternativas NUMÉRICAS o tamanho do número é irrelevante — ali manda a ordem crescente do item 3, e os valores não se mexem por causa de tamanho.) Um candidato que não domine a habilidade tem de errar por não dominá-la — jamais por escolher a alternativa visivelmente mais trabalhada.
 3. ORDEM LÓGICA. Alternativas NUMÉRICAS vão sempre em ordem crescente de valor — essa ordem manda, e os valores de cada distrator (que carregam o erro de raciocínio específico dele) nunca podem ser alterados para acertar tamanho de texto. As de TEXTO vão da mais curta para a mais longa; cumprida a paridade do item 1, a diferença entre vizinhas é de poucos caracteres e não sinaliza nada.
 4. COMO ESCREVER PARA CUMPRIR OS TRÊS (alternativas de TEXTO). Decida o tamanho ANTES: fixe UMA extensão-alvo para as cinco — a que a alternativa correta precisa para ficar completa e sem sobra — e escreva todas nessa mesma medida, cada uma com o seu erro de raciocínio próprio. Se uma delas estiver ficando maior que as outras, ENCURTE-A — nunca alongue as demais para alcançá-la, e nunca deixe uma sozinha maior. (Esta regra é sobre as cinco serem IGUAIS entre si; o tamanho absoluto continua sendo o da CALIBRAÇÃO DE EXTENSÃO acima, com a tolerância que ela mesma admite.)
-5. FORMA IGUAL PARA AS CINCO (é o que garante o item 1 na hora de escrever, alternativas de TEXTO). Cada alternativa é UMA única oração, sem segundo período. Proibido em qualquer uma delas: oração explicativa emendada no fim, puxada por "já que", "uma vez que", "algo que", "de modo que" ou travessão; e um segundo argumento somado ao primeiro. E não acrescente à alternativa CORRETA nenhum reforço final do tipo "o que garante…", "algo que os demais não fazem" ou "de forma duradoura" para deixá-la mais convincente que os distratores: é exatamente assim que o gabarito se denuncia.`;
+5. FORMA IGUAL PARA AS CINCO (é o que garante o item 1 na hora de escrever, alternativas de TEXTO). Cada alternativa é UMA única oração, sem segundo período. Proibido em qualquer uma delas: oração explicativa emendada no fim, puxada por "já que", "uma vez que", "algo que", "de modo que" ou travessão; e um segundo argumento somado ao primeiro. E não acrescente à alternativa CORRETA nenhum reforço final do tipo "o que garante…", "algo que os demais não fazem" ou "de forma duradoura" para deixá-la mais convincente que os distratores: é exatamente assim que o gabarito se denuncia.
+6. COERÊNCIA DA RESPOSTA — conferida antes da entrega. A alternativa a que a sua resolução chega, a letra do campo "gabarito", a alternativa com "status":"correta" em "analiseAlternativas" (exatamente UMA das cinco) e a alternativa citada no fecho da resolução comentada têm de ser A MESMA. Releia a resolução antes de responder e confira as quatro contra ela: se a conta levar a outra letra, é a LETRA que muda, nunca a conta — e as outras quatro alternativas ficam "incorreta". Questão em que essas marcações discordam é devolvida para conferência de conteúdo e não chega ao professor.`;
 }
 
 function buildBlocoFixo(opts: {
@@ -1778,6 +1779,189 @@ async function garantirVisual(data: any, opts: { area: string; disciplina: strin
   return diag;
 }
 
+/* ========= v74.6 — COERÊNCIA DA RESPOSTA, CONFERIDA ANTES DE ENTREGAR =========
+
+   DEFEITO RELATADO (16/09/2026): "a alternativa identificada como correta nem
+   sempre corresponde ao gabarito registrado". O modelo entrega TRÊS declarações
+   da mesma resposta — o campo "gabarito", o "status":"correta" dentro de
+   "analiseAlternativas" e a alternativa que a resolução comentada conclui — e
+   NENHUMA camada conferia se as três apontavam a mesma alternativa. Quando
+   divergiam, a questão seguia assim mesmo; no app, a tela marcava por uma
+   fonte e o caderno do professor, por outra, e a prova se contradizia.
+
+   O que passa a acontecer aqui:
+   1. a conferência roda em TODA questão e não custa nada (é só leitura);
+   2. só quando ela falha o backend faz UMA chamada curta — e é uma chamada que
+      RESOLVE a questão do zero pelas alternativas, sem presumir que o gabarito,
+      a resolução ou a análise anteriores estejam certos (requisito 1). O texto
+      das cinco alternativas não é tocado: ordem numérica e paridade ficam
+      intactas, e a resposta certa continua presa ao CONTEÚDO;
+   3. a questão reparada é conferida de novo. Se ainda não fechar, ela sai
+      marcada com "gabaritoInconsistente" e o app não a entrega como concluída.
+
+   Custo: zero na questão saudável. Uma chamada curta (só texto-base, comando e
+   alternativas) na questão defeituosa. */
+// (usa LETRAS_ALTERNATIVAS, já definido acima)
+
+function conferenciaGabarito(d: any): { letra: string | null; estado: string; motivo: string; corretas: string[] } {
+  if (!d || typeof d !== "object") return { letra: null, estado: "indefinido", motivo: "questão sem dados", corretas: [] };
+  const g = LETRAS_ALTERNATIVAS.includes(d.gabarito) ? String(d.gabarito) : null;
+  const an = (d.analiseAlternativas && typeof d.analiseAlternativas === "object") ? d.analiseAlternativas : {};
+  const statusDe = (k: string) => {
+    const v = (an as any)[k];
+    if (!v || typeof v !== "object") return "";
+    return String(v.status == null ? "" : v.status).trim().toLowerCase();
+  };
+  const comStatus = LETRAS_ALTERNATIVAS.filter((k) => statusDe(k));
+  const corretas = LETRAS_ALTERNATIVAS.filter((k) => statusDe(k) === "correta");
+  if (!g) return { letra: null, estado: "indefinido", motivo: `o campo "gabarito" veio ausente ou fora de A–E`, corretas };
+  if (!comStatus.length) return { letra: null, estado: "divergente", motivo: `a análise das alternativas veio sem o campo "status" (o gabarito registrado é ${g})`, corretas };
+  if (corretas.length !== 1) return { letra: null, estado: "divergente", motivo: `a análise marca ${corretas.length} alternativa(s) como correta${corretas.length ? " (" + corretas.join(", ") + ")" : ""} e o gabarito registrado é ${g}`, corretas };
+  if (corretas[0] !== g) return { letra: null, estado: "divergente", motivo: `o gabarito registrado é ${g}, mas a análise marca ${corretas[0]} como correta`, corretas };
+  return { letra: g, estado: "ok", motivo: "", corretas };
+}
+
+/* A letra que a RESOLUÇÃO comentada afirma ser a correta — terceira declaração
+   da mesma resposta. Leitura deliberadamente estrita: só conta quando a frase
+   diz explicitamente que aquela letra é a correta ("gabarito: C", "a
+   alternativa correta é a C", "a alternativa C é a correta"). Qualquer outra
+   menção a letra é ignorada, e duas letras diferentes encontradas pelos padrões
+   estritos devolvem null (ambíguo) em vez de acusar divergência. */
+function letraNaResolucao(txt: unknown): string | null {
+  const t = typeof txt === "string" ? txt : "";
+  if (!t) return null;
+  const padroes = [
+    /gabarito\s*(?:é|:|=)\s*(?:a\s+)?(?:alternativa\s+|letra\s+|op[çc][ãa]o\s+)?([A-E])(?![\wÀ-ÿ])/gi,
+    /(?:alternativa|resposta|op[çc][ãa]o|letra)\s+correta\s*(?:é|:)\s*(?:a\s+)?(?:alternativa\s+|letra\s+|op[çc][ãa]o\s+)?([A-E])(?![\wÀ-ÿ])/gi,
+    /correta\s+é\s+a\s+(?:alternativa|letra|op[çc][ãa]o)\s+([A-E])(?![\wÀ-ÿ])/gi,
+    /(?:alternativa|op[çc][ãa]o|letra)\s+([A-E])\s*,?\s*(?:é|está)\s+(?:a\s+|portanto,?\s+a\s+)?(?:única\s+)?correta/gi,
+  ];
+  const achadas = new Set<string>();
+  for (const re of padroes) {
+    let m: RegExpExecArray | null;
+    re.lastIndex = 0;
+    while ((m = re.exec(t)) !== null) {
+      /* O artigo "a" e a conjunção "e" minúsculos nunca são letra de
+         alternativa. Sem este descarte, "a alternativa correta é a Cinemática
+         do movimento" casaria o próprio artigo (o grupo [A-E] é insensível a
+         caixa) e acusaria uma divergência que não existe. */
+      if (m[1] === "a" || m[1] === "e") continue;
+      achadas.add(m[1].toUpperCase());
+    }
+  }
+  return achadas.size === 1 ? Array.from(achadas)[0] : null;
+}
+
+const FERRAMENTA_GABARITO = {
+  name: "entregar_gabarito",
+  description: "Entrega a letra da alternativa correta, a resolução comentada e a análise das cinco alternativas — as três coerentes entre si.",
+  input_schema: {
+    type: "object",
+    properties: {
+      gabarito: { type: "string", enum: ["A", "B", "C", "D", "E", ""], description: 'A letra da única alternativa correta. String vazia SÓ quando nenhuma for defensável, ou mais de uma for.' },
+      resolucaoComentada: { type: "string" },
+      analiseAlternativas: {
+        type: "object",
+        description: 'As cinco letras, cada uma {"status":"correta"|"incorreta","comentario":"..."}. Exatamente UMA com status "correta".',
+        properties: {
+          A: { type: "object" }, B: { type: "object" }, C: { type: "object" },
+          D: { type: "object" }, E: { type: "object" },
+        },
+        required: ["A", "B", "C", "D", "E"],
+      },
+    },
+    required: ["gabarito", "resolucaoComentada", "analiseAlternativas"],
+  },
+};
+
+function buildConferenciaGabaritoPrompt(data: any, motivo: string): string {
+  const alts = (data && data.alternativas) || {};
+  const visual = data && data.visual ? textoDeEspecificacao(data.visual) : "";
+  return `CONFERÊNCIA DA RESPOSTA — esta questão voltou com as marcações da resposta em desacordo: ${motivo}.
+
+RESOLVA a questão abaixo do zero, pelo conteúdo, e decida qual das cinco alternativas é a única defensável como correta. NÃO presuma que o gabarito, a resolução comentada ou a análise que vieram antes estejam certos — é exatamente isso que está em dúvida. Nenhuma letra planejada, nenhuma distribuição de gabarito e nenhuma preferência de posição entram nesta decisão: manda o conteúdo.
+
+TEXTO-BASE
+${String(data?.textoBase || "")}
+
+COMANDO
+${String(data?.comando || "")}
+${visual ? `\nRECURSO VISUAL (especificação)\n${visual.slice(0, 1500)}\n` : ""}
+ALTERNATIVAS — o texto das cinco NÃO pode ser alterado, nem a ordem delas
+A) ${String(alts.A || "")}
+B) ${String(alts.B || "")}
+C) ${String(alts.C || "")}
+D) ${String(alts.D || "")}
+E) ${String(alts.E || "")}
+
+Devolva pela ferramenta "entregar_gabarito":
+· "gabarito": a letra a que o SEU cálculo/raciocínio chegou — nunca a letra que estava registrada antes, nunca uma letra escolhida por distribuição;
+· "resolucaoComentada": a resolução completa, terminando na alternativa dessa mesma letra, com a notação química e matemática do padrão já definido;
+· "analiseAlternativas": as cinco letras, cada uma com "status" ("correta" só na letra do gabarito; "incorreta" nas outras quatro) e "comentario" nomeando, em termos conceituais, o erro de raciocínio daquele distrator.
+As três partes têm de apontar a MESMA alternativa. Se, ao resolver, você concluir que NENHUMA das cinco está correta, ou que MAIS DE UMA é defensável, devolva "gabarito": "" e explique na resolução — é melhor a questão ser recusada do que sair contraditória.`;
+}
+
+/* Roda a conferência e, só quando ela falha, faz UMA chamada de reparo.
+   Devolve o diagnóstico; a questão é alterada no lugar. */
+async function garantirGabaritoCoerente(data: any, system: SistemaPrompt, usos: any[], restanteMs: number) {
+  const diag: any = { chamadas: 0, reparado: false };
+  let conf = conferenciaGabarito(data);
+  const naResolucao = letraNaResolucao(data && data.resolucaoComentada);
+  diag.estadoInicial = conf.estado;
+  diag.motivoInicial = conf.motivo;
+  diag.letraNaResolucao = naResolucao;
+  const resolucaoDiverge = !!(conf.estado === "ok" && naResolucao && naResolucao !== conf.letra);
+  if (conf.estado === "ok" && !resolucaoDiverge) {
+    diag.estado = "ok"; diag.letra = conf.letra;
+    return diag;
+  }
+  const motivo = resolucaoDiverge
+    ? `o gabarito e a análise apontam ${conf.letra}, mas a resolução comentada conclui pela alternativa ${naResolucao}`
+    : conf.motivo;
+  diag.motivo = motivo;
+  console.warn(`[gabarito] incoerência detectada: ${motivo}`);
+  if (restanteMs < 25_000) {
+    diag.estado = "divergente";
+    diag.pulado = `sem tempo para a conferência (restavam ${Math.round(restanteMs / 1000)} s)`;
+    data.gabaritoInconsistente = { motivo, reparado: false };
+    return diag;
+  }
+  try {
+    const bruto = await callClaudeForJSON(system, buildConferenciaGabaritoPrompt(data, motivo), false, usos, FERRAMENTA_GABARITO);
+    diag.chamadas = 1;
+    const letra = bruto && typeof bruto === "object" ? String((bruto as any).gabarito || "").trim().toUpperCase() : "";
+    if (LETRAS_ALTERNATIVAS.includes(letra)) {
+      const proposta = {
+        gabarito: letra,
+        resolucaoComentada: String((bruto as any).resolucaoComentada || data.resolucaoComentada || ""),
+        analiseAlternativas: (bruto as any).analiseAlternativas,
+      };
+      const normal = normalizarCamposEstruturados({ ...data, ...proposta });
+      const conf2 = conferenciaGabarito(normal);
+      const naResolucao2 = letraNaResolucao(normal.resolucaoComentada);
+      if (conf2.estado === "ok" && (!naResolucao2 || naResolucao2 === conf2.letra)) {
+        data.gabarito = normal.gabarito;
+        data.resolucaoComentada = normal.resolucaoComentada;
+        data.analiseAlternativas = normal.analiseAlternativas;
+        delete data.gabaritoInconsistente;
+        diag.estado = "ok"; diag.reparado = true; diag.letra = conf2.letra;
+        diag.mudouDe = conf.letra || conf.corretas.join("") || null;
+        console.log(`[gabarito] reparado por conferência de conteúdo: alternativa correta = ${conf2.letra}`);
+        return diag;
+      }
+      diag.motivoPosReparo = conf2.estado === "ok" ? `a resolução reescrita ainda conclui pela alternativa ${naResolucao2}` : conf2.motivo;
+    } else {
+      diag.motivoPosReparo = "o revisor não encontrou uma única alternativa defensável como correta";
+    }
+  } catch (e) {
+    diag.erro = String((e as any)?.message || e).slice(0, 200);
+  }
+  diag.estado = "divergente";
+  data.gabaritoInconsistente = { motivo: diag.motivoPosReparo || diag.motivo || motivo, reparado: false };
+  console.error(`[gabarito] NÃO foi possível tornar a questão coerente: ${data.gabaritoInconsistente.motivo}`);
+  return diag;
+}
+
 function fnv1a(texto: string): string {
   let h = 0x811c9dc5;
   for (let i = 0; i < texto.length; i++) {
@@ -1811,6 +1995,7 @@ function selfTestResponse() {
     cortaLimpo.toString(), cortaConteudo.toString(),   // v74.3 (revisto): o corte dos recortes entra na impressão digital
     qnLigacaoOrganica.toString(),                      // v74.4: a ligação orgânica entra na impressão digital
     buildOrientacoesProfessor.toString(), limpaOrientacoes.toString(),   // v74.5
+    conferenciaGabarito.toString(), letraNaResolucao.toString(), buildConferenciaGabaritoPrompt.toString(),   // v74.6
     buildSystemPlanejamento.toString(),
     normalizarNotacaoTexto.toString(), normalizarNotacaoQuimica.toString(), qnConverteIon.toString(),
     JSON.stringify([QN_FORMULAS_COMUNS, QN_FORMULAS_DISCIPLINA, QN_GASES, QN_GASES_SEMPRE, QN_IONS]),
@@ -1990,6 +2175,37 @@ function selfTestResponse() {
           && !/[\s,;:(\u2013\u2014-]$/.test(cortaLimpo("Texto com vírgula, no lugar do corte, que continua além do limite estabelecido aqui", 45)),
         chars: comLista.length - semLista.length,
       };
+    })(),
+    /* v74.6 — COERÊNCIA DA RESPOSTA. Prova, no endpoint de produção, que a
+       conferência lê alternativas e gabarito corretamente: aceita a questão
+       coerente; recusa o defeito relatado (gabarito numa letra, análise em
+       outra); recusa duas corretas, nenhuma correta e análise sem status;
+       e que a leitura da resolução é estrita o bastante para não acusar
+       divergência onde não há. */
+    coerenciaGabarito: (() => {
+      const an = (c: string) => { const o: any = {}; for (const L of LETRAS_ALTERNATIVAS) o[L] = { status: L === c ? "correta" : "incorreta", comentario: "c" }; return o; };
+      const duas: any = an("C"); duas.E.status = "correta";
+      const semStatus: any = {}; for (const L of LETRAS_ALTERNATIVAS) semStatus[L] = { comentario: "c" };
+      const defeito = conferenciaGabarito({ gabarito: "C", analiseAlternativas: an("D") });
+      return (
+        conferenciaGabarito({ gabarito: "C", analiseAlternativas: an("C") }).estado === "ok" &&
+        conferenciaGabarito({ gabarito: "C", analiseAlternativas: an("C") }).letra === "C" &&
+        defeito.estado === "divergente" && defeito.letra === null &&
+        defeito.motivo.includes("C") && defeito.motivo.includes("D") &&
+        conferenciaGabarito({ gabarito: "C", analiseAlternativas: duas }).estado === "divergente" &&
+        conferenciaGabarito({ gabarito: "C", analiseAlternativas: an("Z") }).estado === "divergente" &&
+        conferenciaGabarito({ gabarito: "C", analiseAlternativas: semStatus }).estado === "divergente" &&
+        conferenciaGabarito({ gabarito: "F", analiseAlternativas: an("C") }).estado === "indefinido" &&
+        conferenciaGabarito({ gabarito: "B", analiseAlternativas: { A: { status: "incorreta" }, B: { status: " Correta " }, C: { status: "incorreta" }, D: { status: "incorreta" }, E: { status: "incorreta" } } }).estado === "ok" &&
+        letraNaResolucao("Portanto, o gabarito é C.") === "C" &&
+        letraNaResolucao("Logo, a alternativa correta é a E.") === "E" &&
+        letraNaResolucao("A alternativa correta é a Cinemática do movimento.") === null &&
+        letraNaResolucao("A alternativa B confunde área com perímetro; a D usa escala linear.") === null &&
+        letraNaResolucao("Gabarito: C. Mas a alternativa correta é a D.") === null &&
+        buildRegraAlternativas().includes("COERÊNCIA DA RESPOSTA") &&
+        FERRAMENTA_GABARITO.input_schema.required.length === 3 &&
+        buildConferenciaGabaritoPrompt({ textoBase: "t", comando: "c", alternativas: { A: "a", B: "b", C: "c", D: "d", E: "e" } }, "motivo").includes("RESOLVA a questão abaixo do zero")
+      );
     })(),
   });
 }
@@ -2259,6 +2475,14 @@ ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferrame
       visualDiag.entregueTipo = diag2.entregueTipo;
       visualDiag.promptChars = diag2.promptChars;
     }
+    /* v74.6 — COERÊNCIA DA RESPOSTA. Última coisa antes de montar a resposta:
+       depois do rascunho, da garantia do recurso visual e da revisão
+       matemática (qualquer um deles pode ter reescrito a questão). Custa zero
+       quando está tudo certo. */
+    const gabaritoDiag = await garantirGabaritoCoerente(
+      data, system, usos, LIMITE_FUNCAO_MS - (Date.now() - inicioReq),
+    );
+
     const diversidadeDiag = {
       eixoTematico: eixoTematico || null,
       recorte: recorte || null,
@@ -2289,7 +2513,7 @@ ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferrame
     notacaoDiag.residuoFinal = temResiduoNotacao(data, area);
     if (notacaoDiag.residuoFinal) console.warn(`[notação] resíduo ASCII na questão entregue (${disciplina}: "${String(data?.tema || "").slice(0, 60)}") — ` + JSON.stringify(notacaoDiag.notacao?.residuosDepois ?? notacaoDiag));
     else if (notacaoDiag.residuoAntesDoRevisor) console.log(`[notação] resíduo corrigido pelo revisor (${notacaoDiag.notacao?.tentativas ?? "?"} tentativa(s))`);
-    return jsonResponse({ question: corrigirQuebrasLiterais(data), uso, visualDiag, diversidadeDiag, notacaoDiag });
+    return jsonResponse({ question: corrigirQuebrasLiterais(data), uso, visualDiag, diversidadeDiag, notacaoDiag, gabaritoDiag });
   } catch (err) {
     return jsonResponse({ error: `Erro ao gerar questão: ${String((err as any)?.message || err)}` }, 502);
   }

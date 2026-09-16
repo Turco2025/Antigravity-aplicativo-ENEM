@@ -2463,6 +2463,88 @@ function alternativasNumericasOrdenadas(alts){
    de texto é, portanto, best-effort, e nenhum teste deve exigi-la. A paridade não é afetada: a
    troca não muda o conjunto de comprimentos nem o comprimento da correta, que é o que a
    auditoria local mede. */
+/* ============ v18.9 — FONTE ÚNICA DA ALTERNATIVA CORRETA ============
+
+   DEFEITO CORRIGIDO. O app tinha SEIS lugares decidindo qual alternativa é a
+   correta, e eles não concordavam entre si: a tela marcava por "gabarito"; o
+   PDF, o Word e a impressão marcavam por analiseAlternativas[L].status; o
+   visualizador em PDF e a exportação em HTML misturavam os dois (a tarja vinha
+   de "gabarito", a palavra CORRETA/INCORRETA vinha do "status"). Bastava o
+   modelo entregar gabarito "C" com a análise marcando "D" — e a MESMA questão
+   saía com ✅ em C na tela, CORRETA em D no caderno do professor e C na folha
+   de respostas do aluno. A prova se contradizia.
+
+   A PARTIR DAQUI os seis pontos leem esta função, e só ela. Ela não escolhe a
+   letra "mais provável" nem silencia a divergência: quando as duas fontes
+   discordam, devolve letra = null e estado "divergente", e a questão não é
+   entregue como concluída nem exportada (ver generateQuestion e
+   bloqueiaSeGabaritoInconsistente). Trocar uma letra para a inconsistência
+   sumir é exatamente o que NÃO se faz aqui.
+
+   Devolve { letra, estado, motivo, corretas }, estado em
+   "ok" | "divergente" | "indefinido".                                        */
+function conferenciaGabarito(d){
+  const L = GABARITO_LETRAS;
+  if(!d || typeof d !== "object") return { letra: null, estado: "indefinido", corretas: [], motivo: "Questão sem dados para conferir." };
+  const g = L.indexOf(d.gabarito) >= 0 ? d.gabarito : null;
+  const an = (d.analiseAlternativas && typeof d.analiseAlternativas === "object") ? d.analiseAlternativas : {};
+  const statusDe = k => {
+    const v = an[k];
+    if(!v || typeof v !== "object") return "";
+    return String(v.status == null ? "" : v.status).trim().toLowerCase();
+  };
+  const comStatus = L.filter(k => statusDe(k));
+  const corretas = L.filter(k => statusDe(k) === "correta");
+
+  if(!g){
+    return { letra: null, estado: "indefinido", corretas: corretas,
+      motivo: 'O campo "gabarito" da questão está ausente ou fora de A–E' + (d.gabarito ? ' (veio "' + String(d.gabarito) + '")' : "") + "." };
+  }
+  /* Questão sem NENHUM status na análise (simulado salvo antes da v18.9, ou
+     análise só com comentários): não existe segunda fonte para conferir, então
+     a letra do gabarito vale — e fica registrado que a conferência foi parcial.
+     Isto não é divergência e não bloqueia nada. */
+  if(!comStatus.length) return { letra: g, estado: "ok", corretas: [], parcial: true, motivo: 'A análise das alternativas não traz o campo "status" — a conferência ficou limitada ao gabarito registrado.' };
+  if(corretas.length !== 1){
+    return { letra: null, estado: "divergente", corretas: corretas,
+      motivo: "A análise das alternativas marca " + corretas.length + " alternativa(s) como correta" + (corretas.length ? " (" + corretas.join(", ") + ")" : "") + ", e o esperado é exatamente 1. O gabarito registrado é " + g + "." };
+  }
+  if(corretas[0] !== g){
+    return { letra: null, estado: "divergente", corretas: corretas,
+      motivo: "O gabarito registrado é " + g + ", mas a análise das alternativas marca " + corretas[0] + " como correta." };
+  }
+  return { letra: g, estado: "ok", corretas: corretas, motivo: "" };
+}
+
+/* A letra a marcar como correta na tela e em TODAS as exportações. null = a
+   questão está inconsistente e nada pode ser marcado (ver acima). */
+function letraCorretaDe(d){ return conferenciaGabarito(d).letra; }
+
+/* Marca textual usada por tela, PDF, Word, impressão e visualizador. A terceira
+   forma ("A CONFERIR") só aparece em questão divergente — que não chega às
+   exportações, porque elas são bloqueadas antes. */
+function marcaAlternativa(conf, letra, comIcone){
+  if(conf && conf.letra === letra) return comIcone ? "✅ CORRETA" : "CORRETA";
+  if(conf && conf.letra) return comIcone ? "❌ INCORRETA" : "INCORRETA";
+  return comIcone ? "⚠️ A CONFERIR" : "A CONFERIR";
+}
+
+/* Quando duas alternativas trocam de lugar, TODA referência à letra antiga tem
+   de acompanhar o conteúdo: "a alternativa C" na resolução comentada passa a
+   ser "a alternativa A". Sem isto a troca conserta a posição e cria uma segunda
+   inconsistência, agora dentro do texto. Só letras precedidas por
+   alternativa/letra/opção/item/gabarito são tocadas — nunca uma letra solta,
+   que numa questão de matemática pode ser uma variável. */
+function trocaLetrasNoTexto(txt, a, b){
+  if(typeof txt !== "string" || !txt) return txt;
+  const re = new RegExp("((?:alternativas?|letras?|op[çc][ãa]o|op[çc][õo]es|itens|item|gabarito)\\s+(?:correta\\s+)?)([" + a + b + "])(?![\\wÀ-ÿ])", "gi");
+  return txt.replace(re, function(_m, pre, l){
+    const up = l.toUpperCase();
+    const novo = up === a ? b : a;
+    return pre + (l === up ? novo : novo.toLowerCase());
+  });
+}
+
 function aplicaGabaritoAlvo(data, alvo){
   if(!alvo || !data || !data.gabarito) return "mantido";
   if(data.gabarito === alvo) return "ok";
@@ -2470,18 +2552,87 @@ function aplicaGabaritoAlvo(data, alvo){
   if(!alts || !alts[data.gabarito] || !alts[alvo]) return "impossivel";
   if(alternativasNumericasOrdenadas(alts)) return "impossivel";
 
+  /* v18.9 — A TROCA É ATÔMICA OU NÃO ACONTECE, e a resposta certa continua
+     presa ao CONTEÚDO, nunca à letra:
+     · nada se mexe antes de a conferência dizer que a questão está coerente.
+       Numa questão já divergente a troca só embaralharia mais — "impossivel";
+     · texto da alternativa, entrada da análise e as referências à letra na
+       resolução e nos comentários mudam JUNTOS, sobre uma CÓPIA. Antes, o
+       texto trocava sempre e a análise só trocava quando as duas entradas
+       existiam: faltando uma, a questão saía com o comentário "correta" colado
+       na alternativa errada — era este o caminho da dessincronização;
+     · a cópia é conferida de novo e só então gravada;
+     · a letra planejada NUNCA prevalece: com numéricas em ordem crescente, ou
+       com a análise incompleta, a função recusa e quem se ajusta é o
+       planejamento da distribuição (ver replanejaGabaritos).                 */
+  const antes = conferenciaGabarito(data);
+  if(antes.estado !== "ok" || antes.letra !== data.gabarito) return "impossivel";
+
   const de = data.gabarito;
-  const t = alts[de]; alts[de] = alts[alvo]; alts[alvo] = t;
   const an = data.analiseAlternativas;
-  if(an && an[de] && an[alvo]){ const t2 = an[de]; an[de] = an[alvo]; an[alvo] = t2; }
+  const temAnalise = !!(an && typeof an === "object" && GABARITO_LETRAS.some(k => an[k]));
+  if(temAnalise && !(an[de] && an[alvo])) return "impossivel";
+
+  const altsNovo = Object.assign({}, alts);
+  altsNovo[de] = alts[alvo]; altsNovo[alvo] = alts[de];
+  let anNovo = null;
+  if(temAnalise){
+    anNovo = Object.assign({}, an);
+    GABARITO_LETRAS.forEach(k => { if(an[k] && typeof an[k] === "object") anNovo[k] = Object.assign({}, an[k]); });
+    const t2 = anNovo[de]; anNovo[de] = anNovo[alvo]; anNovo[alvo] = t2;
+    GABARITO_LETRAS.forEach(k => { if(anNovo[k] && typeof anNovo[k] === "object") anNovo[k].comentario = trocaLetrasNoTexto(anNovo[k].comentario, de, alvo); });
+  }
+  const provisorio = { gabarito: alvo, alternativas: altsNovo, analiseAlternativas: anNovo || an };
+  const depois = conferenciaGabarito(provisorio);
+  if(depois.estado !== "ok" || depois.letra !== alvo) return "impossivel";
+
+  data.alternativas = altsNovo;
+  if(anNovo) data.analiseAlternativas = anNovo;
+  data.resolucaoComentada = trocaLetrasNoTexto(data.resolucaoComentada, de, alvo);
   data.gabarito = alvo;
   data.gabaritoReposicionado = true;
   return "ok";
 }
 
+/* v18.9 — a letra planejada nunca prevalece sobre a resposta certa. Quando uma
+   questão entrega letra diferente da planejada e a troca não é possível (ordem
+   numérica, análise incompleta), quem se ajusta é o PLANO: os alvos das
+   questões que ainda NÃO foram disparadas são recalculados a partir das letras
+   já entregues, mantendo o que a distribuição promete — nenhuma letra repetida
+   em sequência e as cinco letras uma única vez em cada bloco de cinco. Só mexe
+   em quem ainda não começou (status "idle"); nenhuma questão é reescrita. */
+function replanejaGabaritos(){
+  if(!Array.isArray(state.gabaritoPlan) || !state.questions.length) return;
+  const n = state.questions.length;
+  const letraReal = i => {
+    const q = state.questions[i];
+    return (q && q.data && GABARITO_LETRAS.indexOf(q.data.gabarito) >= 0) ? q.data.gabarito : null;
+  };
+  const mexivel = i => {
+    const q = state.questions[i];
+    return !!q && q.status === "idle" && !q.data;
+  };
+  const plano = state.gabaritoPlan.slice(0, n);
+  while(plano.length < n) plano.push(null);
+  for(let i = 0; i < n; i++){ const r = letraReal(i); if(r) plano[i] = r; }
+  for(let i = 0; i < n; i++){
+    if(!mexivel(i)) continue;
+    const ini = Math.floor(i / 5) * 5;
+    const usadas = [];
+    for(let j = ini; j < Math.min(n, ini + 5); j++){ if(j !== i && plano[j]) usadas.push(plano[j]); }
+    const anterior = i > 0 ? plano[i - 1] : null;
+    const seguinte = (i + 1 < n && !mexivel(i + 1)) ? plano[i + 1] : null;
+    const semVizinha = GABARITO_LETRAS.filter(Lx => Lx !== anterior && Lx !== seguinte);
+    const livres = semVizinha.filter(Lx => usadas.indexOf(Lx) < 0);
+    const fonte = livres.length ? livres : (semVizinha.length ? semVizinha : GABARITO_LETRAS);
+    plano[i] = fonte[Math.floor(Math.random() * fonte.length)];
+  }
+  state.gabaritoPlan = plano;
+}
+
 // Confere a distribuição final e devolve os problemas encontrados, se houver.
 function auditaGabaritos(){
-  const letras = state.questions.map(q => (q.data && q.data.gabarito) || null);
+  const letras = state.questions.map(q => letraCorretaDe(q.data) || null);
   const problemas = [];
   for(let i = 1; i < letras.length; i++){
     if(letras[i] && letras[i] === letras[i - 1]) problemas.push(`questões ${i} e ${i + 1} com o mesmo gabarito (${letras[i]})`);
@@ -2604,6 +2755,19 @@ async function generateQuestion(q){
     if(payload.uso) somaUso(payload.uso);
     // Rede de segurança: a letra planejada tem de ser mesmo a correta.
     q.gabaritoStatus = aplicaGabaritoAlvo(q.data, gabaritoAlvoDe(state.questions.indexOf(q)));
+    /* v18.9 — a letra planejada nunca prevalece sobre a resposta certa: quando
+       a troca não é possível, quem se ajusta é o PLANO das questões que ainda
+       não começaram, nunca o gabarito desta. */
+    if(q.gabaritoStatus === "impossivel") replanejaGabaritos();
+    /* v18.9 — TRAVA DE CONSISTÊNCIA. Questão em que o gabarito e a análise das
+       alternativas apontam letras diferentes NÃO é dada como concluída: o
+       simulado sairia marcando uma alternativa na tela e outra no caderno do
+       professor. O backend já tenta consertar resolvendo a questão de novo; se
+       mesmo assim chegou divergente, vira erro com o motivo à vista. */
+    q.conferencia = conferenciaGabarito(q.data);
+    if(q.conferencia.estado !== "ok"){
+      throw new Error(q.conferencia.motivo + ' A questão não pode ser entregue assim — clique em "Regenerar".');
+    }
 
     /* RECURSO VISUAL PEDIDO = RECURSO VISUAL ENTREGUE. O backend (v62) já
        confere e refaz o recurso antes de responder, e manda o diagnóstico em
@@ -2617,6 +2781,19 @@ async function generateQuestion(q){
     if(payload.diversidadeDiag){
       const dd = payload.diversidadeDiag;
       diagImagem(q, "tema", `entregue "${dd.temaEntregue}" · objeto "${dd.objetoEntregue}"` + (dd.eixoTematico ? ` · eixo reservado "${dd.eixoTematico}" (${dd.eixoRespeitado ? "respeitado" : "NÃO respeitado"})` : dd.recorte ? ` · recorte reservado "${String(dd.recorte).slice(0, 160)}"` : " · sem eixo nem recorte (leva de 1 ou temas distintos)") + (dd.subtopico ? ` · subtópico "${dd.subtopico}"` : "") + (dd.dominioContexto ? ` · domínio "${dd.dominioContexto}"${dd.dominioAlternativo ? ` (ou "${dd.dominioAlternativo}")` : ""} · ${dd.dominiosEvitar || 0} domínio(s) proibido(s)` : "") + ` · ${dd.temasEvitar} assunto(s) a evitar`);
+    }
+    /* v18.9 — diagnóstico da conferência de gabarito feita no backend. Só
+       aparece quando houve divergência ou reparo; no caminho normal não há
+       nada a relatar e nada é registrado. */
+    if(payload.gabaritoDiag && (payload.gabaritoDiag.estado !== "ok" || payload.gabaritoDiag.reparado)){
+      const gd = payload.gabaritoDiag;
+      diagImagem(q, "gabarito", `conferência: ${gd.estado}` +
+        (gd.motivoInicial ? ` · detectado: ${gd.motivoInicial}` : "") +
+        (gd.reparado ? ` · REPARADO resolvendo a questão de novo (correta = ${gd.letra}${gd.mudouDe && gd.mudouDe !== gd.letra ? `, antes ${gd.mudouDe}` : ""})` : "") +
+        (gd.motivoPosReparo ? ` · depois do reparo: ${gd.motivoPosReparo}` : "") +
+        (gd.pulado ? ` · ${gd.pulado}` : "") +
+        (gd.erro ? ` · erro: ${gd.erro}` : "") +
+        (gd.chamadas ? ` · ${gd.chamadas} chamada(s) extra(s)` : ""));
     }
     const vd = payload.visualDiag || null;
     diagImagem(q, "questao_recebida", `recurso pedido "${q.recurso}" · visual entregue ${q.data.visual ? `tipo "${q.data.visual.tipo}"` : "nulo"} · promptImagem ${imgTextoDeEspecificacao(q.data.visual && q.data.visual.promptImagem, 0).length} chars` + (vd ? ` · backend: refeito ${vd.refeito}x, conforme ${vd.conforme}${vd.motivo ? ", " + vd.motivo : ""}` : "") + (q.data.visualPendente ? ` · visualPendente: ${q.data.visualPendente.motivo}` : ""));
@@ -3579,6 +3756,29 @@ function bloqueiaSeQuimicaInvalida(doneQuestions){
   return false;
 }
 
+/* v18.9 — TRAVA DE ENTREGA. Nenhuma questão em que o gabarito e a análise das
+   alternativas apontem letras diferentes sai em PDF, Word, impressão ou HTML: o
+   caderno do professor marcaria uma alternativa e a folha de respostas do
+   aluno, outra. Diferente da auditoria de notação — que só registra no console
+   —, esta bloqueia de verdade, nomeia as questões e manda regenerar. Cobre
+   também simulados salvos antes desta versão, que nunca passaram pela trava da
+   geração. */
+function bloqueiaSeGabaritoInconsistente(doneQuestions){
+  const ruins = [];
+  (doneQuestions || []).forEach(o => {
+    const conf = conferenciaGabarito(o.q && o.q.data);
+    if(conf.estado !== "ok") ruins.push({ n: o.idx + 1, motivo: conf.motivo });
+  });
+  if(!ruins.length) return false;
+  console.error("[gabarito] exportação bloqueada:", ruins);
+  const lista = ruins.length === 1
+    ? "a questão " + ruins[0].n + " está"
+    : "as questões " + ruins.map(r => r.n).join(", ") + " estão";
+  toast("Exportação bloqueada: " + lista + " com o gabarito inconsistente. " + ruins[0].motivo +
+        ' Use "Regenerar" antes de exportar — assim o caderno do professor e a folha de respostas do aluno não saem se contradizendo.', "err");
+  return true;
+}
+
 function updateProgress(){
   const total = state.questions.length;
   const done = state.questions.filter(q => q.status === "done" || q.status === "error").length;
@@ -3631,7 +3831,7 @@ function renderSummaryTable(){
   state.questions.forEach((q, idx) => {
     if(q.status !== "done") return;
     const tr = document.createElement("tr");
-    tr.innerHTML = `<td>${idx+1}</td><td>${escapeHtml(q.data.tema||q.tema)}</td><td>${escapeHtml(q.data.habilidade?.codigo||"—")}</td><td>${escapeHtml(q.data.dificuldade||q.dificuldade)}</td><td><strong>${escapeHtml(q.data.gabarito||"—")}</strong></td>`;
+    tr.innerHTML = `<td>${idx+1}</td><td>${escapeHtml(q.data.tema||q.tema)}</td><td>${escapeHtml(q.data.habilidade?.codigo||"—")}</td><td>${escapeHtml(q.data.dificuldade||q.dificuldade)}</td><td><strong>${escapeHtml(letraCorretaDe(q.data)||"—")}</strong></td>`;
     body.appendChild(tr);
   });
 }
@@ -3671,9 +3871,15 @@ function auditaQuestaoLocal(q){
   const alts = d.alternativas || {};
   const txt = k => String((alts && alts[k]) || "").trim();
 
-  // Gabarito
-  if(!L.includes(d.gabarito)) aviso("Gabarito ausente ou fora de A–E.");
-  if(q.gabaritoStatus === "impossivel") aviso("Gabarito fora da letra planejada para esta posição (não pôde ser reposicionado sem quebrar a ordem numérica).");
+  /* Gabarito — v18.9: o auditor usa EXATAMENTE a mesma conferência que a tela e
+     as exportações. Antes ele tinha leitura própria (comparava, por conta
+     própria, analiseAlternativas[].status com d.gabarito) e podia divergir de
+     quem desenha a marcação. Agora há uma fonte só, e ela é esta. */
+  const confAud = conferenciaGabarito(d);
+  if(confAud.estado === "divergente") aviso(confAud.motivo + ' A questão não pode ser exportada assim — use "Regenerar".');
+  else if(confAud.estado === "indefinido") aviso(confAud.motivo);
+  else if(confAud.parcial) info(confAud.motivo);
+  if(q.gabaritoStatus === "impossivel") info("A letra entregue não é a planejada para esta posição, e trocar duas alternativas quebraria a ordem numérica — a resposta correta ficou onde está (manda o conteúdo, não a letra) e o planejamento das questões seguintes foi refeito.");
 
   // Alternativas: cinco, preenchidas e distintas
   const vazias = L.filter(k => !txt(k));
@@ -3707,11 +3913,9 @@ function auditaQuestaoLocal(q){
     });
   }
 
-  // Análise das alternativas: exatamente uma "correta", e é o gabarito
-  const an = d.analiseAlternativas || {};
-  const corretas = L.filter(k => an[k] && String(an[k].status || "").toLowerCase() === "correta");
-  if(corretas.length !== 1) aviso("Análise das alternativas marca " + corretas.length + " alternativa(s) como correta (esperado: 1).");
-  else if(corretas[0] !== d.gabarito) aviso("Análise marca " + corretas[0] + " como correta, mas o gabarito é " + d.gabarito + ".");
+  // Análise das alternativas: "exatamente uma correta" e "é a mesma letra do
+  // gabarito" já foram conferidos lá em cima, por conferenciaGabarito — v18.9,
+  // fonte única. Não há segunda leitura aqui de propósito.
 
   // Comando
   const cmd = String(d.comando || "");
@@ -3731,10 +3935,10 @@ function auditaQuestaoLocal(q){
      enxerga ao bater o olho. Quem protege as alternativas curtas — onde poucos caracteres
      viram uma razão alta sem significado — é o piso de 40 caracteres; os 25 caracteres são
      um gatilho ADICIONAL, para o regime de alternativas longas (ver o comentário abaixo). */
-  if(L.includes(d.gabarito) && txt(d.gabarito)){
+  if(confAud.letra && txt(confAud.letra)){
     const tams = L.filter(k => txt(k)).map(k => ({ k: k, n: txt(k).length }));
-    const g = txt(d.gabarito).length;
-    const outras = tams.filter(x => x.k !== d.gabarito).map(x => x.n);
+    const g = txt(confAud.letra).length;
+    const outras = tams.filter(x => x.k !== confAud.letra).map(x => x.n);
     const segunda = outras.length ? Math.max.apply(null, outras) : 0;
     const menor = tams.length ? Math.min.apply(null, tams.map(x => x.n)) : 0;
     const maior = tams.length ? Math.max.apply(null, tams.map(x => x.n)) : 0;
@@ -3744,7 +3948,7 @@ function auditaQuestaoLocal(q){
        ramos já implica que a correta é a maior de todas, então a frase do aviso é sempre
        verdadeira. Nas 20 questões reais o resultado é o mesmo com "e" ou com "ou". */
     if(g > 40 && segunda && (g > 1.25 * segunda || (g - segunda) >= 25)){
-      aviso(`A alternativa correta (${d.gabarito}) é a mais longa da questão: ${g} caracteres contra ${segunda} da segunda maior. O Guia do Inep pede paridade entre as cinco — do jeito que está, o tamanho pode entregar a resposta. Use "Regenerar".`);
+      aviso(`A alternativa correta (${confAud.letra}) é a mais longa da questão: ${g} caracteres contra ${segunda} da segunda maior. O Guia do Inep pede paridade entre as cinco — do jeito que está, o tamanho pode entregar a resposta. Use "Regenerar".`);
     } else if(menor > 40 && maior > 1.30 * menor){   // 1,25 é a paridade que o prompt pede; 1,30 dá a tolerância
       info(`Alternativas com extensões desiguais (de ${menor} a ${maior} caracteres) — o Guia do Inep pede paridade técnica entre as cinco.`);
     }
@@ -4013,13 +4217,16 @@ function temaComparavel(t){ return normalizaTextoBusca(t).trim(); }
 
 function buildQuestionBody(data, q){
   const wrap = document.createElement("div");
+  /* v18.9 — FONTE ÚNICA: a tela marca a alternativa correta pela mesma
+     conferência que o PDF, o Word, a impressão e as duas exportações usam. */
+  const confAlt = conferenciaGabarito(data);
 
   const metaRow = document.createElement("div");
   metaRow.style.cssText = "display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;";
   metaRow.innerHTML = `
     <span class="badge dif-${data.dificuldade}">${data.dificuldade}</span>
     <span class="badge">${escapeHtml(data.habilidade?.codigo||"")}</span>
-    <span class="badge professor-only gabarito-badge">Gabarito: ${escapeHtml(data.gabarito||"")}</span>
+    <span class="badge professor-only gabarito-badge">Gabarito: ${escapeHtml(confAlt.letra || "inconsistente")}</span>
   `;
   wrap.appendChild(metaRow);
 
@@ -4035,7 +4242,7 @@ function buildQuestionBody(data, q){
 
   const altList = document.createElement("div"); altList.className = "alt-list";
   ["A","B","C","D","E"].forEach(letter => {
-    const isCorrect = data.gabarito === letter;
+    const isCorrect = confAlt.letra === letter;
     const item = document.createElement("div");
     item.className = "alt-item" + (isCorrect ? " correct" : "");
     const comentario = data.analiseAlternativas && data.analiseAlternativas[letter] ? data.analiseAlternativas[letter].comentario : "";
@@ -4043,7 +4250,7 @@ function buildQuestionBody(data, q){
       <div class="alt-letter">${letter}</div>
       <div style="flex:1;">
         <div>${escapeHtml((data.alternativas && data.alternativas[letter]) || "")}</div>
-        <div class="alt-comment professor-only">${isCorrect ? "✅ CORRETA" : "❌ INCORRETA"} — ${escapeHtml(comentario)}</div>
+        <div class="alt-comment professor-only">${marcaAlternativa(confAlt, letter, true)} — ${escapeHtml(comentario)}</div>
       </div>
     `;
     altList.appendChild(item);
@@ -4056,7 +4263,7 @@ function buildQuestionBody(data, q){
       <div class="pedagog-item"><div class="lab">Área</div><div class="val">${escapeHtml(AREA_META[state.area].label)}</div></div>
       <div class="pedagog-item"><div class="lab">Disciplina</div><div class="val">${escapeHtml(data.disciplina||state.disciplina)}</div></div>
       <div class="pedagog-item"><div class="lab">Dificuldade</div><div class="val">${escapeHtml(data.dificuldade||"")}</div></div>
-      <div class="pedagog-item"><div class="lab">Gabarito</div><div class="val">${escapeHtml(data.gabarito||"")}</div></div>
+      <div class="pedagog-item"><div class="lab">Gabarito</div><div class="val">${escapeHtml(confAlt.letra || "inconsistente")}</div></div>
     </div>
     <div class="pedagog-grid">
       <div class="pedagog-item" style="grid-column:1/-1;"><div class="lab">Competência</div><div class="val">Competência ${escapeHtml(data.competencia?.numero)} — ${escapeHtml(data.competencia?.texto)}</div></div>
@@ -4394,6 +4601,7 @@ async function exportHtmlSnapshot(){
     const professor = state.viewMode !== "aluno";
     const doneQuestions = state.questions.map((q, idx) => ({ q, idx })).filter(o => o.q.status === "done");
     if(bloqueiaSeQuimicaInvalida(doneQuestions)) return;
+    if(bloqueiaSeGabaritoInconsistente(doneQuestions)) return;
     const html = enemBuildHtmlComPdf(doneQuestions, professor);
     const blob = new Blob([html], { type: "text/html;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -4498,6 +4706,7 @@ async function printExam(){
     const doneQuestions = state.questions.map((q, idx) => ({ q, idx })).filter(o => o.q.status === "done");
     if(!doneQuestions.length) throw new Error("Nenhuma questão para imprimir.");
     if(bloqueiaSeQuimicaInvalida(doneQuestions)) return;
+    if(bloqueiaSeGabaritoInconsistente(doneQuestions)) return;
     const abriu = enemPrintPdf(doneQuestions, professor);
     toast(abriu ? "Documento aberto para impressão no padrão do caderno ENEM."
                 : "Seu navegador bloqueou a janela; o arquivo foi baixado — abra-o e imprima.", abriu ? "ok" : "err");
@@ -5369,7 +5578,7 @@ function enemGabaritoAluno(doc, ctx, flow, doneQuestions){
   enemAreaTitle(doc, ctx, flow, "Gabarito");
 
   doneQuestions.forEach(o => {
-    const letra = (o.q.data && o.q.data.gabarito) || "—";
+    const letra = letraCorretaDe(o.q.data) || "—";
     enemEnsure(doc, ctx, flow, ENEM.altLeading);
     const base = flow.y + ENEM.body;
     // Número da questão à esquerda, letra circulada logo depois — a mesma
@@ -5401,7 +5610,7 @@ function enemGabaritoBlock(doc, ctx, flow, o, isLastOfColumn){
   enemQuestionLabel(doc, ctx, flow, numero);
 
   // Gabarito: letra circulada na margem e a resposta correta ao lado.
-  const letra = d.gabarito || "—";
+  const letra = letraCorretaDe(d) || "—";
   enemEnsure(doc, ctx, flow, ENEM.altLeading);
   const base = flow.y + ENEM.body;
   if(/^[A-E]$/.test(letra)) enemOptionMark(doc, flow.x, base, letra);
@@ -5409,7 +5618,7 @@ function enemGabaritoBlock(doc, ctx, flow, o, isLastOfColumn){
   enemInk(doc);
   doc.text("GABARITO: " + letra, flow.x + ENEM.hang, base);
   flow.y += ENEM.altLeading;
-  const resposta = (d.alternativas && d.alternativas[d.gabarito]) || "";
+  const resposta = (d.alternativas && d.alternativas[letraCorretaDe(d)]) || "";
   if(resposta) enemRichParagraph(doc, ctx, flow, resposta, { indent: ENEM.hang });
 
   // Ficha pedagógica — cada linha é "rótulo: valor", o rótulo em negrito.
@@ -5442,7 +5651,7 @@ function enemGabaritoBlock(doc, ctx, flow, o, isLastOfColumn){
     ["A","B","C","D","E"].forEach(L => {
       const info = analise[L];
       if(!info) return;
-      const status = info.status === "correta" ? "CORRETA" : "INCORRETA";
+      const status = marcaAlternativa(conferenciaGabarito(d), L, false);
       enemAlternative(doc, ctx, flow, L, status + " — " + (info.comentario || ""));
     });
   }
@@ -5772,10 +5981,10 @@ function enemPrintResposta(o){
   const d = o.q.data || {};
   const out = ['<section class="questao">'];
   out.push(enemPrintRotulo("Questão " + (o.idx + 1)));
-  const letra = d.gabarito || "—";
+  const letra = letraCorretaDe(d) || "—";
   out.push('<p class="alt"><span class="letra">' + (ENEM_DOCX_MARKS[letra] || letra) +
            '</span><strong>GABARITO: ' + enemPrintEsc(letra) + '</strong></p>');
-  const resposta = (d.alternativas && d.alternativas[d.gabarito]) || "";
+  const resposta = (d.alternativas && d.alternativas[letraCorretaDe(d)]) || "";
   if(resposta) out.push('<p class="ficha" style="margin-left:4.5mm">' + enemPrintRich(resposta) + '</p>');
 
   const ficha = [];
@@ -5804,7 +6013,7 @@ function enemPrintResposta(o){
     ["A","B","C","D","E"].forEach(L => {
       const info = analise[L];
       if(!info) return;
-      const status = info.status === "correta" ? "CORRETA" : "INCORRETA";
+      const status = marcaAlternativa(conferenciaGabarito(d), L, false);
       out.push('<p class="alt"><span class="letra">' + (ENEM_DOCX_MARKS[L] || L) +
                '</span>' + status + " — " + enemPrintRich(info.comentario || "") + '</p>');
     });
@@ -5845,7 +6054,7 @@ function enemBuildPrintHTML(doneQuestions, professor){
   }else{
     // §7.2 — folha de gabarito: SOMENTE a letra de cada questão.
     const linhas = doneQuestions.map(o => {
-      const letra = (o.q.data && o.q.data.gabarito) || "—";
+      const letra = letraCorretaDe(o.q.data) || "—";
       return '<p class="alt"><strong>' + (o.idx + 1) + '.</strong><span class="letra">' +
              (ENEM_DOCX_MARKS[letra] || letra) + '</span></p>';
     }).join("\n");
@@ -6321,7 +6530,7 @@ function enemDocxGabaritoAluno(doneQuestions){
   const out = [];
   out.push(...enemDocxAreaTitle("Gabarito"));
   doneQuestions.forEach(o => {
-    const letra = (o.q.data && o.q.data.gabarito) || "—";
+    const letra = letraCorretaDe(o.q.data) || "—";
     out.push(new Paragraph({
       spacing: { line: ENEM_DOCX.altLine, lineRule: LineRuleType.EXACTLY, before: 0, after: 0 },
       children: [
@@ -6341,7 +6550,7 @@ function enemDocxGabaritoBlock(o){
   const out = [];
   out.push(...enemDocxQuestionLabel(o.idx + 1, ENEM_DOCX.colW, o.primeiroDoCaderno));
 
-  const letra = d.gabarito || "—";
+  const letra = letraCorretaDe(d) || "—";
   out.push(new Paragraph({
     alignment: AlignmentType.JUSTIFIED,
     spacing: { line: ENEM_DOCX.altLine, lineRule: LineRuleType.EXACTLY, before: 0, after: 0 },
@@ -6351,7 +6560,7 @@ function enemDocxGabaritoBlock(o){
       new TextRun({ text: "GABARITO: " + letra, bold: true, font: ENEM_DOCX.font, size: 20, color: ENEM_DOCX.ink }),
     ],
   }));
-  const resposta = (d.alternativas && d.alternativas[d.gabarito]) || "";
+  const resposta = (d.alternativas && d.alternativas[letraCorretaDe(d)]) || "";
   if(resposta) out.push(...enemDocxRichParagraph(resposta, { indent: ENEM_DOCX.hang }));
 
   const ficha = [];
@@ -6382,7 +6591,7 @@ function enemDocxGabaritoBlock(o){
     ["A","B","C","D","E"].forEach(L => {
       const info = analise[L];
       if(!info) return;
-      const status = info.status === "correta" ? "CORRETA" : "INCORRETA";
+      const status = marcaAlternativa(conferenciaGabarito(d), L, false);
       out.push(...enemDocxAlternative(L, status + " — " + (info.comentario || "")));
     });
   }
@@ -6770,6 +6979,7 @@ async function exportPdf(){
     // de todas as questões, o caderno de respostas — gabarito, ficha pedagógica,
     // resolução comentada e comentário de cada alternativa.
     if(bloqueiaSeQuimicaInvalida(doneQuestions)) return;
+    if(bloqueiaSeGabaritoInconsistente(doneQuestions)) return;
     enemExportPdf(doneQuestions, !isAluno);
     toast("PDF exportado com sucesso.", "ok");
     return;
@@ -6794,7 +7004,7 @@ async function exportPdf(){
       }
 
       ["A", "B", "C", "D", "E"].forEach(letter => {
-        const isCorrect = !isAluno && d.gabarito === letter;
+        const isCorrect = !isAluno && letraCorretaDe(d) === letter;
         const altText = (d.alternativas && d.alternativas[letter]) || "";
         pdfDrawBox(doc, ctx, {
           label: `Alternativa ${letter}` + (isCorrect ? " — CORRETA" : ""),
@@ -6810,9 +7020,9 @@ async function exportPdf(){
         if(d.objetoConhecimento) habText += `\n\nObjeto de conhecimento: ${d.objetoConhecimento}`;
         pdfDrawBox(doc, ctx, { label: "Habilidade, competência e objeto de conhecimento", text: habText, colors: PDF_PALETTE.habilidade, fontSize: 10 });
 
-        pdfDrawBox(doc, ctx, { label: "Gabarito", text: d.gabarito || "—", colors: PDF_PALETTE.gabarito, big: true, gap: 14 });
+        pdfDrawBox(doc, ctx, { label: "Gabarito", text: letraCorretaDe(d) || "—", colors: PDF_PALETTE.gabarito, big: true, gap: 14 });
 
-        const respostaText = (d.alternativas && d.alternativas[d.gabarito]) || "";
+        const respostaText = (d.alternativas && d.alternativas[letraCorretaDe(d)]) || "";
         pdfDrawBox(doc, ctx, { label: "Resposta correta", text: respostaText, colors: PDF_PALETTE.resposta, fontSize: 10.5 });
 
         pdfDrawBox(doc, ctx, { label: "Resolução comentada", text: d.resolucaoComentada || "", colors: PDF_PALETTE.resolucao, fontSize: 10 });
@@ -6820,7 +7030,7 @@ async function exportPdf(){
         const comentarios = ["A", "B", "C", "D", "E"].map(letter => {
           const info = d.analiseAlternativas && d.analiseAlternativas[letter];
           if(!info) return "";
-          const status = info.status === "correta" ? "CORRETA" : "INCORRETA";
+          const status = marcaAlternativa(conferenciaGabarito(d), letter, false);
           return `${letter} — ${status}: ${info.comentario || ""}`;
         }).filter(Boolean).join("\n\n");
         pdfDrawBox(doc, ctx, { label: "Comentários das alternativas", text: comentarios, colors: PDF_PALETTE.comentario, fontSize: 10 });
@@ -7108,6 +7318,7 @@ async function exportDocx(){
     // tarja, rodapé corrido e fólio. `evenAndOddHeaderAndFooters` faz cabeçalho
     // e rodapé espelharem pela paridade, como no caderno oficial.
     if(bloqueiaSeQuimicaInvalida(doneQuestions)) return;
+    if(bloqueiaSeGabaritoInconsistente(doneQuestions)) return;
     const docEnem = new Document({
       evenAndOddHeaderAndFooters: true,
       sections: enemDocxSections(doneQuestions, !isAluno),
@@ -7159,7 +7370,7 @@ async function exportDocx(){
       }
 
       ["A", "B", "C", "D", "E"].forEach(letter => {
-        const isCorrect = !isAluno && d.gabarito === letter;
+        const isCorrect = !isAluno && letraCorretaDe(d) === letter;
         const altText = (d.alternativas && d.alternativas[letter]) || "";
         children.push(...docxBuildBox({
           label: `Alternativa ${letter}` + (isCorrect ? " — CORRETA" : ""),
@@ -7175,9 +7386,9 @@ async function exportDocx(){
         if(d.objetoConhecimento) habText += `\n\nObjeto de conhecimento: ${d.objetoConhecimento}`;
         children.push(...docxBuildBox({ label: "Habilidade, competência e objeto de conhecimento", text: habText, colors: PDF_PALETTE.habilidade, fontSize: 10 }));
 
-        children.push(...docxBuildBox({ label: "Gabarito", text: d.gabarito || "—", colors: PDF_PALETTE.gabarito, big: true, gap: 14 }));
+        children.push(...docxBuildBox({ label: "Gabarito", text: letraCorretaDe(d) || "—", colors: PDF_PALETTE.gabarito, big: true, gap: 14 }));
 
-        const respostaText = (d.alternativas && d.alternativas[d.gabarito]) || "";
+        const respostaText = (d.alternativas && d.alternativas[letraCorretaDe(d)]) || "";
         children.push(...docxBuildBox({ label: "Resposta correta", text: respostaText, colors: PDF_PALETTE.resposta, fontSize: 10.5 }));
 
         children.push(...docxBuildBox({ label: "Resolução comentada", text: d.resolucaoComentada || "", colors: PDF_PALETTE.resolucao, fontSize: 10 }));
@@ -7185,7 +7396,7 @@ async function exportDocx(){
         const comentarios = ["A", "B", "C", "D", "E"].map(letter => {
           const info = d.analiseAlternativas && d.analiseAlternativas[letter];
           if(!info) return "";
-          const status = info.status === "correta" ? "CORRETA" : "INCORRETA";
+          const status = marcaAlternativa(conferenciaGabarito(d), letter, false);
           return `${letter} — ${status}: ${info.comentario || ""}`;
         }).filter(Boolean).join("\n\n");
         children.push(...docxBuildBox({ label: "Comentários das alternativas", text: comentarios, colors: PDF_PALETTE.comentario, fontSize: 10 }));

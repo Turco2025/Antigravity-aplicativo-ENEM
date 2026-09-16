@@ -92,6 +92,76 @@ Expoentes, índices, raízes e sinais chegam ao estudante prontos — x², 2⁴,
    sobrescritas/subscritas (`fontwork/ampliar_carlito.py`). Teste no navegador, sem rede:
    `node tests/verify_math_notation.js`.
 
+## A alternativa correta é uma só, em toda parte (v18.9 / generate-question v74.6, 16/09/2026)
+
+**Defeito relatado.** A alternativa identificada como correta nem sempre correspondia ao gabarito
+registrado. A causa não estava no modelo: estava no app. Havia **seis** lugares decidindo, cada um
+por conta própria, qual alternativa é a correta — e eles liam fontes diferentes:
+
+| Onde | Lia |
+|---|---|
+| Tela (`buildQuestionBody`) | `data.gabarito` |
+| PDF no padrão ENEM (`enemGabaritoBlock`) | `analiseAlternativas[L].status` |
+| Impressão (`enemPrintResposta`) | `analiseAlternativas[L].status` |
+| Word no padrão ENEM (`enemDocxGabaritoBlock`) | `analiseAlternativas[L].status` |
+| Visualizador em PDF | tarja por `gabarito`, palavra CORRETA/INCORRETA por `status` |
+| Exportação em HTML | tarja por `gabarito`, palavra CORRETA/INCORRETA por `status` |
+
+Bastava o modelo entregar `gabarito: "C"` com a análise marcando **D** para a MESMA questão sair com
+✅ em C na tela, **CORRETA em D** no caderno do professor e **C** na folha de respostas do aluno — a
+prova se contradizendo. Nada validava, nada reparava e nada bloqueava: o auditor local tinha ainda
+uma **sétima** leitura própria e só emitia um aviso, que não impedia a exportação.
+
+**O que passou a valer.**
+
+1. **Fonte única — `conferenciaGabarito(d)`**. Devolve `{ letra, estado, motivo }` com estado
+   `ok` | `divergente` | `indefinido`. Os seis pontos de exibição/exportação, a tabela-resumo, a
+   folha de gabarito do aluno, a auditoria de distribuição e o auditor local passam a ler **só** ela.
+   Quando as fontes discordam, `letra` é `null` — nada é marcado como correto e nenhuma letra é
+   "escolhida" para fazer a inconsistência sumir.
+2. **Backend confere antes de entregar (v74.6)**. `garantirGabaritoCoerente()` roda depois do
+   rascunho, da garantia do recurso visual e da revisão matemática. A conferência custa **zero**
+   (é leitura). **Só quando ela falha** o backend faz **uma** chamada curta que **resolve a questão
+   do zero pelas alternativas** — sem presumir que gabarito, resolução ou análise anteriores estejam
+   certos — e reescreve gabarito, resolução e análise coerentes entre si. O texto das cinco
+   alternativas não é tocado: ordem numérica e paridade ficam intactas. A questão reparada é
+   conferida de novo; se ainda não fechar, sai marcada como inconsistente.
+3. **Terceira declaração da resposta**. `letraNaResolucao()` lê, de forma deliberadamente estrita, a
+   alternativa que a **resolução comentada** afirma ser a correta ("gabarito: C", "a alternativa
+   correta é a C"). Menção solta a distrator não conta, e duas letras diferentes devolvem `null`
+   (ambíguo) em vez de acusar divergência. Se a resolução conclui por outra letra, entra no reparo.
+4. **A troca de posição é atômica.** `aplicaGabaritoAlvo()` só reposiciona a correta na letra
+   planejada se a questão já estiver coerente; texto da alternativa, entrada da análise e as
+   referências à letra na resolução e nos comentários (`trocaLetrasNoTexto()`) mudam **juntos**,
+   sobre uma cópia que é conferida antes de ser gravada. Era exatamente aqui que a dessincronização
+   nascia: antes, o texto trocava sempre e a análise só trocava quando as duas entradas existiam.
+5. **A letra planejada nunca prevalece sobre a resposta certa.** Com alternativas numéricas em ordem
+   crescente, ou com a análise incompleta, a troca é recusada — e quem se ajusta é o **planejamento**
+   (`replanejaGabaritos()`), que refaz os alvos das questões ainda não disparadas a partir das letras
+   já entregues, mantendo "sem letra repetida em sequência" e "as cinco letras por bloco de cinco".
+6. **Entrega bloqueada.** Uma questão divergente vira **erro** na geração (não é dada como
+   concluída) e `bloqueiaSeGabaritoInconsistente()` impede as quatro saídas — HTML, impressão, PDF e
+   Word — nomeando as questões. Simulados salvos antes desta versão, cuja análise não traz `status`,
+   continuam exportáveis: sem segunda fonte não há divergência, só conferência parcial.
+
+**Custo.** Zero na questão saudável (a conferência é só leitura). Uma chamada curta — texto-base,
+comando e as cinco alternativas — apenas na questão defeituosa. O prompt cacheado cresceu ~560
+caracteres (item 6 da REGRA DAS CINCO ALTERNATIVAS, exigindo coerência entre as quatro marcações).
+
+**Testes.** `node tests/verify_gabarito_coerente.js <caminho absoluto do index.html>` — 45
+verificações: leitura da conferência, o defeito relatado reproduzido, tela e caderno do professor
+marcando a mesma letra, embaralhamento levando a letra junto com o conteúdo, ordem numérica que não
+cede, plano de gabaritos refeito em 800 sorteios e as quatro travas de exportação.
+
+No backend, `deno run --allow-read --allow-write --allow-env tests/verify_gabarito_backend.ts
+supabase/functions/generate-question/index.ts` — 20 verificações do caminho de reparo **sem chamar a
+Anthropic**: o teste extrai do próprio arquivo de produção o trecho de `conferenciaGabarito()` a
+`garantirGabaritoCoerente()` e troca só as dependências externas por dublês. Cobre "questão saudável
+não gasta nenhuma chamada", o defeito relatado reparado com uma chamada, alternativas intocadas,
+reparo incoerente recusado, tempo curto, falha de rede e análise sem `status`. Além disso,
+`coerenciaGabarito` entrou na resposta de `?selftest=1` e as três funções novas entraram na
+impressão digital `codigoHash`.
+
 ## Duas seções separadas: geração em bloco e configuração individual (v18.8, 16/09/2026)
 
 Até a v18.7 a geração em bloco e a configuração individual viviam na **mesma** seção 4: o painel
