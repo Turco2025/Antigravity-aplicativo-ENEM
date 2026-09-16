@@ -92,6 +92,19 @@ Expoentes, índices, raízes e sinais chegam ao estudante prontos — x², 2⁴,
    sobrescritas/subscritas (`fontwork/ampliar_carlito.py`). Teste no navegador, sem rede:
    `node tests/verify_math_notation.js`.
 
+## Menos texto explicativo na seção 4 (v18.14, 16/09/2026)
+
+A pedido do professor, saíram três blocos de texto da **seção 4 (Geração de questões em bloco)**:
+
+- o subtítulo "Configure todas as questões de uma vez…";
+- o parágrafo sobre a distribuição sorteada dos níveis e o recorte planejado pela IA;
+- a mensagem abaixo da caixa "Orientações adicionais para a questão".
+
+Só saiu texto: nenhum campo, contador, botão ou comportamento foi alterado. A mesma mensagem das
+orientações **continua** abaixo da caixa de cada questão, na seção 5 — ela foi especificada à parte e
+não estava no pedido. `verify_orientacoes.js` passou a conferir a ausência no painel do lote (A4) e
+mantém a conferência da presença por questão (G2).
+
 ## A raiz no desenho da composição matemática (v18.13, 16/09/2026)
 
 Relato do professor, com três capturas: *"a potência está sobrepondo a raiz quadrada"* em `√v²/20`

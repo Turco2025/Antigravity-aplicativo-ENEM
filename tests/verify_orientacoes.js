@@ -50,12 +50,15 @@ function ok(c, msg, extra){ if(c){ total++; console.log('PASS ' + msg); } else {
     return { existe: true, depoisDoTema: !!(pos & Node.DOCUMENT_POSITION_FOLLOWING),
       mesmoPainel: tema.closest('.lote-panel') === ta.closest('.lote-panel'),
       rotulo: lbl ? lbl.textContent.trim() : '', hint: hint ? hint.textContent.trim() : '',
+      // v18.14 — o professor pediu para tirar a mensagem de baixo da caixa DO LOTE;
+      // a de cada questão, na seção 5, continua (ver bloco G).
+      textoNoPainel: /Campo opcional para sugerir o enfoque/.test(ta.closest('.lote-panel').textContent),
       vazia: ta.value === '' };
   });
   ok(A.existe, 'A1 a caixa "Orientações adicionais" existe');
   ok(A.depoisDoTema && A.mesmoPainel, 'A2 fica logo abaixo do "Tema do lote", no mesmo painel', JSON.stringify(A));
   ok(/^Orientações adicionais para a questão/.test(A.rotulo) && /opcional/i.test(A.rotulo), 'A3 rótulo correto e marcado como opcional', A.rotulo);
-  ok(A.hint === HINT, 'A4 a mensagem abaixo da caixa é exatamente a pedida', A.hint);
+  ok(A.textoNoPainel === false, 'A4 a mensagem explicativa NÃO aparece mais abaixo da caixa do lote (removida a pedido do professor)', A.hint);
   ok(A.vazia, 'A5 nasce vazia — é opcional');
 
   // ---------- (B) vazia: a geração segue normal e o campo vai vazio ----------
