@@ -3901,6 +3901,63 @@ function renderSummaryTable(){
 
 function escapeHtml(s){ return String(s==null?"":s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 
+/* ============ v18.12 — A BARRA DA RAIZ COBRE O RADICANDO INTEIRO ============
+
+   O texto da questão já chega com o radicando marcado caractere a caractere
+   pelo combinante U+0305 (√1000 → "√1̅0̅0̅0̅"): é assim que a rede de notação
+   matemática escreve, no app e no backend, e é desse dado que o PDF do caderno
+   tira os glifos pré-compostos que desenham a barra contínua.
+
+   No NAVEGADOR, porém, quem posiciona o combinante é a fonte da interface — e
+   o resultado saía errado: a barra nascia solta do √, alta demais e passando do
+   último algarismo. Unicode não tem como acertar isso: não existe caractere que
+   estique uma barra sobre um radicando de vários algarismos.
+
+   A correção não muda o dado, muda o DESENHO: o mesmo trecho sobrelinhado vira
+   marcação. Cada corrida de "caractere + U+0305" entra num <span class="rad-r">
+   com border-top, que por definição tem exatamente a largura do seu conteúdo —
+   a barra começa no primeiro algarismo e termina no último. Quando o trecho vem
+   logo depois de um "√", os dois entram juntos num <span class="rad">, e o CSS
+   encosta o sinal na barra, como no caderno do ENEM.
+
+   Recebe texto CRU e devolve HTML já escapado — substitui escapeHtml em todo
+   ponto que exibe texto de questão. */
+function mathHtml(texto){ return radicaisEmHtml(texto, escapeHtml); }
+
+/* O varredor propriamente dito. "esc" é o escapador da saída — a tela usa
+   escapeHtml; a impressão usa o seu próprio, que não escapa aspas. */
+function radicaisEmHtml(texto, esc){
+  const s = String(texto == null ? "" : texto);
+  if(s.indexOf("\u0305") < 0) return esc(s);
+  const RAD = "\u221A";
+  let out = "", i = 0, ultimoRadical = false;
+  while(i < s.length){
+    const car = String.fromCodePoint(s.codePointAt(i));
+    if(s[i + car.length] === "\u0305"){
+      let radicando = "", j = i;
+      while(j < s.length){
+        const c = String.fromCodePoint(s.codePointAt(j));
+        if(s[j + c.length] !== "\u0305") break;
+        radicando += c;
+        j += c.length + 1;
+      }
+      const barra = '<span class="rad-r">' + esc(radicando) + '</span>';
+      if(ultimoRadical){
+        // tira o √ já emitido e devolve os dois juntos, para o CSS poder encostá-los
+        out = out.slice(0, out.length - RAD.length) + '<span class="rad"><span class="rad-s">' + RAD + '</span>' + barra + '</span>';
+      }else{
+        out += barra;
+      }
+      i = j; ultimoRadical = false;
+      continue;
+    }
+    out += esc(car);
+    ultimoRadical = (car === RAD);
+    i += car.length;
+  }
+  return out;
+}
+
 /* AUDITORIA LOCAL — validação de verdade, sem nenhuma chamada de API.
 
    Confere, no próprio navegador, o que um revisor checaria mecanicamente:
@@ -4293,14 +4350,14 @@ function buildQuestionBody(data, q){
   `;
   wrap.appendChild(metaRow);
 
-  const tb = document.createElement("div"); tb.className = "texto-base"; tb.textContent = data.textoBase || "";
+  const tb = document.createElement("div"); tb.className = "texto-base"; tb.innerHTML = mathHtml(data.textoBase || "");
   wrap.appendChild(tb);
 
   if(data.visual && data.visual.tipo){
     wrap.appendChild(buildVisual(data.visual, q));
   }
 
-  const cmd = document.createElement("p"); cmd.className = "comando"; cmd.textContent = data.comando || "";
+  const cmd = document.createElement("p"); cmd.className = "comando"; cmd.innerHTML = mathHtml(data.comando || "");
   wrap.appendChild(cmd);
 
   const altList = document.createElement("div"); altList.className = "alt-list";
@@ -4312,8 +4369,8 @@ function buildQuestionBody(data, q){
     item.innerHTML = `
       <div class="alt-letter">${letter}</div>
       <div style="flex:1;">
-        <div>${escapeHtml((data.alternativas && data.alternativas[letter]) || "")}</div>
-        <div class="alt-comment professor-only">${marcaAlternativa(confAlt, letter, true)} — ${escapeHtml(comentario)}</div>
+        <div>${mathHtml((data.alternativas && data.alternativas[letter]) || "")}</div>
+        <div class="alt-comment professor-only">${marcaAlternativa(confAlt, letter, true)} — ${mathHtml(comentario)}</div>
       </div>
     `;
     altList.appendChild(item);
@@ -4334,7 +4391,7 @@ function buildQuestionBody(data, q){
       ${data.objetoConhecimento ? `<div class="pedagog-item" style="grid-column:1/-1;"><div class="lab">Objeto de conhecimento</div><div class="val">${escapeHtml(data.objetoConhecimento)}</div></div>` : ""}
     </div>
     <div class="lab" style="font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-2);margin-bottom:6px;">Resolução comentada</div>
-    <div class="resolucao">${escapeHtml(data.resolucaoComentada||"")}</div>
+    <div class="resolucao">${mathHtml(data.resolucaoComentada||"")}</div>
     ${htmlAuditoriaLocal(q)}
   `;
   wrap.appendChild(pedagog);
@@ -5833,8 +5890,11 @@ function enemPrintEsc(s){
 
 // **negrito** vira <strong>; todo o resto é escapado.
 function enemPrintRich(text){
+  // v18.12 — o radicando sobrelinhado vira <span class="rad-r">, igual à tela:
+  // no papel a barra também precisa cobrir o radicando inteiro.
+  const esc = s => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   return enemRichRuns(quiJuntaFormula(String(text == null ? "" : text)))
-    .map(r => r.bold ? "<strong>" + enemPrintEsc(r.text) + "</strong>" : enemPrintEsc(r.text))
+    .map(r => r.bold ? "<strong>" + radicaisEmHtml(r.text, esc) + "</strong>" : radicaisEmHtml(r.text, esc))
     .join("");
 }
 
@@ -5849,6 +5909,16 @@ const ENEM_PRINT_CSS = `
 
 *{ box-sizing: border-box; }
 html,body{ margin:0; padding:0; }
+
+/* v18.12 — RAIZ: a barra é um degradê sólido sobre a caixa do radicando, então
+   cobre exatamente o radicando. Sem inline-block: em parágrafo justificado ele
+   abria um vão no meio da raiz. --rad-bp vem da fonte (ver o script no fim do
+   documento); o padrão é o da Calibri. */
+:root{ --rad-bp: 0.14em; --rad-k: 1em; }
+.rad{ white-space: nowrap; }
+.rad-s{ font-size: var(--rad-k, 1em); margin-right: -0.06em; }
+.rad-r{ background-image:linear-gradient(currentColor,currentColor); background-repeat:no-repeat;
+  background-size:100% 0.07em; background-position:0 var(--rad-bp,0.14em); padding:0 0.07em 0 0.05em; }
 body{
   font-family: Calibri, Carlito, "Segoe UI", system-ui, sans-serif;
   font-size: 10pt;
@@ -6137,8 +6207,24 @@ function enemBuildPrintHTML(doneQuestions, professor){
     '<strong>Imprimir</strong> do aplicativo.</p>\n' +
     '<table class="pg">\n' + enemPrintChromeTop(ctx) + '\n' + enemPrintChromeBot(ctx) + '\n' +
     '<tbody><tr><td>\n<h2 class="area">' + enemPrintEsc(areaLabel) + '</h2>\n' +
-    miolos + '\n' + fecho + '\n</td></tr></tbody>\n</table>\n</body>\n</html>';
+    miolos + '\n' + fecho + '\n</td></tr></tbody>\n</table>\n' +
+    // v18.12 — o mesmo calibre da barra da raiz, embutido: o arquivo é aberto
+    // fora do app e pode cair numa máquina sem Calibri.
+    '<script>' + CALIBRA_RAIZ_JS + '<\/script>\n</body>\n</html>';
 }
+
+/* v18.12 — calibre da barra da raiz embutido no documento de impressão: mesma
+   conta de calibraBarraDaRaiz(), sem depender do app. */
+const CALIBRA_RAIZ_JS = "(function(){try{var f=getComputedStyle(document.body).fontFamily;" +
+  "var c=document.createElement('canvas').getContext('2d');c.font='100px '+f;" +
+  "var a=c.measureText('\\u221A').fontBoundingBoxAscent,x=0,t=0;" +
+  "['','600 ','bold '].forEach(function(w){c.font=w+'100px '+f;" +
+  "x=Math.max(x,c.measureText('\\u221A').actualBoundingBoxAscent||0);" +
+  "t=Math.max(t,c.measureText('0123456789').actualBoundingBoxAscent||0);});" +
+  "if(!(a>0)||!(x>0)||!(t>0)||a<x)return;var v=Math.max(x,t+13);" +
+  "var k=Math.min(1.35,Math.max(1,v/x)),b=Math.min(0.30,Math.max(0.02,(a-v)/100));" +
+  "var r=document.documentElement.style;r.setProperty('--rad-bp',b.toFixed(4)+'em');" +
+  "r.setProperty('--rad-k',k.toFixed(4)+'em');}catch(e){}})();";
 
 /* Imprimir = o MESMO documento do PDF. Nada de re-renderizar em CSS e torcer
    para bater: montamos o jsPDF idêntico ao do botão PDF, marcamos autoPrint e
@@ -7498,6 +7584,51 @@ async function exportDocx(){
 }
 
 /* ---------------- Init / events ---------------- */
+/* v18.12 — CALIBRAÇÃO DA BARRA DA RAIZ.
+   A barra é pintada a partir do topo da área de conteúdo da linha, que fica na
+   ASCENDENTE da fonte; o ápice do √ fica mais abaixo. A distância entre os dois
+   é propriedade da fonte — 0,14 em na Calibri, 0,11 na DejaVu Sans, 0,05 na
+   FreeSans —, e o app não sabe de antemão qual fonte o sistema vai escolher
+   (Segoe UI no Windows, outra coisa em Linux ou no celular). Então mede, uma
+   vez, com a fonte realmente em uso, e grava em --rad-bp. Falhando a medição,
+   fica o padrão do CSS. Chamada no init e de novo quando as fontes terminam de
+   carregar, porque antes disso a medida seria da fonte de fallback. */
+const RAD_BP_TEXTO = "\u221A";
+function calibraBarraDaRaiz(){
+  try{
+    const fam = getComputedStyle(document.body).fontFamily;
+    if(!fam) return;
+    const ctx = document.createElement("canvas").getContext("2d");
+    if(!ctx) return;
+    const px = 100;
+    ctx.font = px + "px " + fam;
+    const asc = ctx.measureText(RAD_BP_TEXTO).fontBoundingBoxAscent;
+    /* O mesmo texto aparece em peso normal, semibold (comando) e negrito, e o
+       ápice do √ muda com o peso — a medida tem de valer para o mais alto dos
+       três, senão o radical em negrito ultrapassa a barra. */
+    let apex = 0, topo = 0;
+    ["", "600 ", "bold "].forEach(peso => {
+      ctx.font = peso + px + "px " + fam;
+      apex = Math.max(apex, ctx.measureText(RAD_BP_TEXTO).actualBoundingBoxAscent || 0);
+      topo = Math.max(topo, ctx.measureText("0123456789").actualBoundingBoxAscent || 0);
+    });
+    if(!(asc > 0) || !(apex > 0) || !(topo > 0) || asc < apex) return;
+    /* A barra tem de (a) encostar no ápice do √ e (b) sobrar uma folga acima dos
+       algarismos. Em fontes de radical curto — a Segoe UI e a DejaVu têm o ápice
+       só 0,10 em acima do topo dos dígitos — as duas coisas não cabem, e a barra
+       raspava os algarismos. Então o √ é ESTICADO até a altura necessária (é o
+       que a composição matemática faz com radicais), e a barra vai para lá. Em
+       Calibri/Carlito, a fonte do papel, a folga já existe e k sai 1 — o PDF e a
+       impressão não mudam em nada. */
+    const FOLGA = 0.13 * px;
+    const alvo = Math.max(apex, topo + FOLGA);
+    const k = Math.min(1.35, Math.max(1, alvo / apex));
+    const bp = Math.min(0.30, Math.max(0.02, (asc - alvo) / px));
+    document.documentElement.style.setProperty("--rad-bp", bp.toFixed(4) + "em");
+    document.documentElement.style.setProperty("--rad-k", k.toFixed(4) + "em");
+  }catch(e){ /* fica o valor padrão do CSS */ }
+}
+
 function init(){
   initAuth();
   renderAreaGrid();
@@ -7631,4 +7762,7 @@ function init(){
 function openModal(id){ document.getElementById(id).classList.add("show"); }
 function closeModal(id){ document.getElementById(id).classList.remove("show"); }
 
-document.addEventListener("DOMContentLoaded", init);
+document.addEventListener("DOMContentLoaded", () => { calibraBarraDaRaiz(); init(); });
+// As fontes podem chegar depois do init; remedir então, senão a barra ficaria
+// calibrada para a fonte de fallback.
+if(document.fonts && document.fonts.ready) document.fonts.ready.then(calibraBarraDaRaiz).catch(() => {});

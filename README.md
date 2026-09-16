@@ -92,6 +92,55 @@ Expoentes, índices, raízes e sinais chegam ao estudante prontos — x², 2⁴,
    sobrescritas/subscritas (`fontwork/ampliar_carlito.py`). Teste no navegador, sem rede:
    `node tests/verify_math_notation.js`.
 
+## A barra da raiz cobre o radicando inteiro (v18.12, 16/09/2026)
+
+Pedido do professor, com imagem de referência: *"a barra deve começar sobre o 1 e se estender até o
+final do último zero. Não basta colocar o símbolo √ antes do número"*.
+
+**O dado já estava certo; o desenho é que não.** A rede de notação matemática marca o radicando
+caractere a caractere com o combinante U+0305 (`√1000` → `√1̅0̅0̅0̅`), e é desse dado que o PDF do
+caderno tira os glifos pré-compostos que desenham a barra contínua — no PDF a raiz **já saía
+correta**. Na TELA, porém, quem posicionava o combinante era a fonte da interface, e o resultado era
+uma barra solta do √, alta demais e passando do último algarismo. Unicode não tem como resolver
+isso: não existe caractere que estique uma barra sobre um radicando de vários algarismos.
+
+**O que mudou.** O mesmo dado passa a virar marcação (`mathHtml()` / `radicaisEmHtml()`): cada
+corrida de "caractere + U+0305" entra num `<span class="rad-r">` cuja barra é um degradê sólido
+pintado sobre a caixa — que, por definição, tem exatamente a largura do conteúdo. Começa no primeiro
+algarismo, termina no último. O `√` entra junto num `<span class="rad">` e o CSS encosta os dois.
+Vale para texto-base, comando, alternativas, comentários, resolução e para o documento de impressão.
+
+Dois detalhes que custaram medição:
+
+- **Nada de caixa atômica.** Com `display:inline-block`, em parágrafo justificado o navegador tratava
+  a fronteira entre o √ e o radicando como ponto de justificação e **esticava a própria raiz**
+  (medido: 79,8 px de caixa para 57,9 px de conteúdo, na impressão). Com o degradê, os dois lados são
+  inline puro e não há onde inserir espaço.
+- **A altura da barra é propriedade da FONTE.** A barra nasce no topo da área de conteúdo da linha (a
+  ascendente); o ápice do √ fica mais abaixo — 0,14 em na Calibri, 0,11 na DejaVu, 0,05 na FreeSans.
+  `calibraBarraDaRaiz()` mede isso em tempo de execução, com a fonte que o navegador realmente
+  escolheu (Segoe UI no Windows, outra coisa em Linux), nos três pesos usados, e grava em `--rad-bp`.
+  Quando a fonte tem radical curto — e a barra raspa os algarismos — o `√` é **esticado** por
+  `--rad-k` até a altura necessária, que é o que a composição matemática faz com radicais. Em
+  Calibri/Carlito, a fonte do papel, a folga já existe e o esticamento sai ~1: o PDF não muda.
+  O documento de impressão leva o mesmo calibre embutido, para funcionar fora do app.
+
+**Coeficiente externo continua fora.** Em `5√16`, só o `16` fica sob a barra — o normalizador já
+delimitava o radicando, e a marcação respeita essa delimitação. O mesmo vale para `√(x² + 1)`, em que
+a barra cobre a expressão inteira sem os parênteses.
+
+**Estado das quatro saídas.** Tela, impressão e PDF do caderno saem como na imagem de referência. O
+Word (.docx) já cobria o radicando pelo combinante (o Word compõe U+0305 com a Calibri), com uma
+pequena sobra da barra à direita do último algarismo, porque ali a sobrelinha acompanha o avanço de
+cada caractere; deixar isso exato exigiria emitir equação nativa do Word (OMML), o que muda a
+composição do caderno e não foi feito.
+
+Teste: `node tests/verify_raiz.js <caminho absoluto do index.html>` — 23 verificações, incluindo
+√1000, √144, √123456789, 5√16 e √(x² + 1); largura da barra igual à do radicando; ausência de largura
+fantasma em parágrafo justificado; e a geometria (barra acima do topo dos algarismos e encostada no
+ápice do √). O resultado visual foi conferido por captura de tela e por rasterização do PDF e do
+.docx.
+
 ## "Gerar simulado" também dentro da seção 4 (v18.11, 16/09/2026)
 
 Depois de configurar o lote, era preciso descer a página inteira até a seção 6 para gerar. O botão

@@ -296,6 +296,23 @@ select optgroup{background:#fff;color:#111;font-weight:700;}
 .spinner{width:18px;height:18px;border-radius:50%;border:2.5px solid rgba(255,255,255,.2);border-top-color:var(--accent-a);animation:spin .8s linear infinite;flex-shrink:0;}
 @keyframes spin{to{transform:rotate(360deg);}}
 
+/* v18.12 — RAIZ: a barra é pintada como um degradê sólido de 0,07 em sobre a
+   caixa do radicando, então tem EXATAMENTE a largura dele — começa no primeiro
+   algarismo e termina no último. Nada aqui é caixa atômica (inline-block): em
+   parágrafo justificado o navegador esticava a fronteira entre o √ e o
+   radicando e abria um vão no meio da raiz (medido: 79,8 px de caixa para
+   57,9 px de conteúdo, na impressão).
+   --rad-bp é a distância entre o topo da área de conteúdo da linha (a
+   ascendente da fonte) e o ápice do √. É propriedade da FONTE, então o app a
+   mede em tempo de execução com a fonte que o navegador realmente escolheu
+   (ver calibraBarraDaRaiz); o valor abaixo é o da Calibri/Carlito, usado como
+   padrão e no papel. */
+:root{ --rad-bp: 0.14em; --rad-k: 1em; }
+.rad{white-space:nowrap;}
+.rad-s{font-size:var(--rad-k,1em);margin-right:-0.06em;}
+.rad-r{background-image:linear-gradient(currentColor,currentColor);background-repeat:no-repeat;
+  background-size:100% 0.07em;background-position:0 var(--rad-bp,0.14em);padding:0 0.07em 0 0.05em;}
+
 .texto-base{background:rgba(255,255,255,.035);border-left:3px solid var(--accent-a);border-radius:0 10px 10px 0;padding:14px 16px;font-size:14px;line-height:1.65;color:var(--ink-1);margin-bottom:16px;white-space:pre-wrap;text-align:justify;}
 .comando{font-size:14.5px;font-weight:600;margin:18px 0 14px;padding-top:16px;line-height:1.5;border-top:1px dashed var(--glass-brd);text-align:justify;}
 .alt-list{display:flex;flex-direction:column;gap:9px;margin-bottom:6px;}
