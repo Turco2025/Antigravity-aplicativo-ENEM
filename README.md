@@ -92,6 +92,27 @@ Expoentes, índices, raízes e sinais chegam ao estudante prontos — x², 2⁴,
    sobrescritas/subscritas (`fontwork/ampliar_carlito.py`). Teste no navegador, sem rede:
    `node tests/verify_math_notation.js`.
 
+## A barra encosta no sinal, e a espessura é sempre a mesma (v18.15, 16/09/2026)
+
+Duas capturas ampliadas do professor mostraram (1) a barra nascendo deslocada do ápice do `√` — um
+degrau entre a ponta do sinal e o começo do traço — e (2) espessura irregular.
+
+**(1) Faltava uma medida da fonte.** A distância entre o **avanço** do `√` e a **ponta direita do
+desenho** dele varia muito: 4,2% do em na Calibri, 0,28% na Segoe UI/DejaVu, 1,8% na FreeSans. O
+ápice fica nessa ponta, não no fim do avanço — e o recuo era fixo (−0,06 em), de modo que a barra
+caía à esquerda do ápice numa fonte e à direita noutra. Agora essa sobra é medida (`--rad-ml`) e a
+barra começa no ápice, com 0,03 em de sobreposição para a emenda não abrir por arredondamento; o `√`
+é esticado 3% além do necessário, para a ponta **alcançar** a barra em vez de parar um subpixel
+abaixo dela. No PDF do caderno vale a mesma geometria, com as constantes medidas da Carlito.
+
+**(2) A espessura era subpixel.** 0,04 em a 14 px dá 0,56 px, e o navegador pinta isso como uma linha
+translúcida de 1 px cuja aparência muda com a posição subpixel — daí a irregularidade. Passou a ser
+`max(1px, 0.04em)`: nunca menos de um pixel inteiro e idêntica em todas as raízes do mesmo corpo.
+
+Teste: `verify_raiz.js` foi de 37 para **43 verificações**, medindo agora o desencontro entre a barra
+e o ápice (em px, nos dois regimes) e conferindo que a espessura é a mesma em todas as raízes e nunca
+menor que 1 px.
+
 ## Menos texto explicativo na seção 4 (v18.14, 16/09/2026)
 
 A pedido do professor, saíram três blocos de texto da **seção 4 (Geração de questões em bloco)**:

@@ -296,31 +296,33 @@ select optgroup{background:#fff;color:#111;font-weight:700;}
 .spinner{width:18px;height:18px;border-radius:50%;border:2.5px solid rgba(255,255,255,.2);border-top-color:var(--accent-a);animation:spin .8s linear infinite;flex-shrink:0;}
 @keyframes spin{to{transform:rotate(360deg);}}
 
-/* v18.13 — RAIZ NO DESENHO DA COMPOSIÇÃO MATEMÁTICA.
+/* v18.15 — A BARRA ENCOSTA NO SINAL, E TEM SEMPRE A MESMA ESPESSURA.
 
-   Medido na imagem de referência do professor (LaTeX): a barra começa e termina
-   EXATAMENTE no radicando (sobra zero), a folga entre a barra e o topo do
-   radicando é ~0,35 da altura do algarismo, e o radical é ESTICADO até encostar
-   na barra — o sinal fica mais alto que os algarismos, descendo um pouco abaixo
-   da linha de base.
+   Dois defeitos vistos ampliados: (1) a barra nascia deslocada do ápice do √ —
+   um degrau entre a ponta do sinal e o começo do traço; (2) a espessura variava,
+   porque 0,04 em a 14 px dá 0,56 px e o navegador pinta isso como uma linha
+   translúcida de 1 px, diferente conforme a posição subpixel.
 
-   Defeito que isto corrige: com a folga calculada só sobre a altura dos
-   ALGARISMOS, um radicando com expoente (√v²/20, √60²/20) tinha o ² batendo na
-   barra. A altura do radicando agora é medida em dois regimes — comum e ALTO
-   (expoente, barra de fração, parênteses) — e a marcação diz em qual cada raiz
-   está, porque em CSS não há como medir o conteúdo.
-
-   --rad-pt dá espaço de PINTURA acima da linha (padding vertical em elemento
-   inline pinta o fundo sem mexer no leiaute), para a barra poder subir acima da
-   ascendente da fonte sem ser cortada. */
-:root{ --rad-pt:0.34em; --rad-bp:0.36em; --rad-k:1.15em; --rad-bp-a:0.26em; --rad-k-a:1.28em; }
+   (1) A distância entre o AVANÇO do √ e a ponta direita do seu desenho é
+   propriedade da fonte — 4,2% do em na Calibri, 0,28% na Segoe UI/DejaVu, 1,8%
+   na FreeSans. Era esse número que faltava: com um recuo fixo, a barra caía à
+   esquerda do ápice em umas fontes e à direita em outras. Agora ele é medido
+   (--rad-ml) e a barra começa exatamente no ápice, com 0,03 em de sobreposição
+   para a emenda não abrir por arredondamento; o √ ainda é esticado 3% além do
+   necessário, para a ponta alcançar a barra em vez de parar um subpixel abaixo.
+   (2) A espessura passa a ser max(1px, 0,04em): nunca menos de um pixel inteiro,
+   igual em todas as raízes do mesmo corpo. */
+:root{ --rad-pt:0.34em; --rad-bp:0.36em; --rad-k:1.15em; --rad-ml:0.045em;
+       --rad-bp-a:0.26em; --rad-k-a:1.28em; --rad-ml-a:0.045em; --rad-ov:0.075em; }
 .rad{white-space:nowrap;}
-.rad-s{font-size:var(--rad-k,1.15em);margin-right:-0.06em;}
+.rad-s{font-size:var(--rad-k,1.15em);}
 .rad.alto .rad-s{font-size:var(--rad-k-a,1.28em);}
 .rad-r{background-image:linear-gradient(currentColor,currentColor);background-repeat:no-repeat;
-  background-size:100% 0.040em;background-position:0 var(--rad-bp,0.36em);
-  padding:var(--rad-pt,0.34em) 0 0 0;}
-.rad-r.alto{background-position:0 var(--rad-bp-a,0.26em);}
+  background-size:100% max(1px, 0.04em);background-position:0 var(--rad-bp,0.36em);
+  padding:var(--rad-pt,0.34em) 0 0 var(--rad-ov,0.075em);
+  margin-left:calc(var(--rad-ml,0.045em) - var(--rad-ov,0.075em));}
+.rad-r.alto{background-position:0 var(--rad-bp-a,0.26em);
+  margin-left:calc(var(--rad-ml-a,0.045em) - var(--rad-ov,0.075em));}
 
 .texto-base{background:rgba(255,255,255,.035);border-left:3px solid var(--accent-a);border-radius:0 10px 10px 0;padding:14px 16px;font-size:14px;line-height:1.65;color:var(--ink-1);margin-bottom:16px;white-space:pre-wrap;text-align:justify;}
 .comando{font-size:14.5px;font-weight:600;margin:18px 0 14px;padding-top:16px;line-height:1.5;border-top:1px dashed var(--glass-brd);text-align:justify;}

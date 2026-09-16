@@ -296,31 +296,33 @@ select optgroup{background:#fff;color:#111;font-weight:700;}
 .spinner{width:18px;height:18px;border-radius:50%;border:2.5px solid rgba(255,255,255,.2);border-top-color:var(--accent-a);animation:spin .8s linear infinite;flex-shrink:0;}
 @keyframes spin{to{transform:rotate(360deg);}}
 
-/* v18.13 — RAIZ NO DESENHO DA COMPOSIÇÃO MATEMÁTICA.
+/* v18.15 — A BARRA ENCOSTA NO SINAL, E TEM SEMPRE A MESMA ESPESSURA.
 
-   Medido na imagem de referência do professor (LaTeX): a barra começa e termina
-   EXATAMENTE no radicando (sobra zero), a folga entre a barra e o topo do
-   radicando é ~0,35 da altura do algarismo, e o radical é ESTICADO até encostar
-   na barra — o sinal fica mais alto que os algarismos, descendo um pouco abaixo
-   da linha de base.
+   Dois defeitos vistos ampliados: (1) a barra nascia deslocada do ápice do √ —
+   um degrau entre a ponta do sinal e o começo do traço; (2) a espessura variava,
+   porque 0,04 em a 14 px dá 0,56 px e o navegador pinta isso como uma linha
+   translúcida de 1 px, diferente conforme a posição subpixel.
 
-   Defeito que isto corrige: com a folga calculada só sobre a altura dos
-   ALGARISMOS, um radicando com expoente (√v²/20, √60²/20) tinha o ² batendo na
-   barra. A altura do radicando agora é medida em dois regimes — comum e ALTO
-   (expoente, barra de fração, parênteses) — e a marcação diz em qual cada raiz
-   está, porque em CSS não há como medir o conteúdo.
-
-   --rad-pt dá espaço de PINTURA acima da linha (padding vertical em elemento
-   inline pinta o fundo sem mexer no leiaute), para a barra poder subir acima da
-   ascendente da fonte sem ser cortada. */
-:root{ --rad-pt:0.34em; --rad-bp:0.36em; --rad-k:1.15em; --rad-bp-a:0.26em; --rad-k-a:1.28em; }
+   (1) A distância entre o AVANÇO do √ e a ponta direita do seu desenho é
+   propriedade da fonte — 4,2% do em na Calibri, 0,28% na Segoe UI/DejaVu, 1,8%
+   na FreeSans. Era esse número que faltava: com um recuo fixo, a barra caía à
+   esquerda do ápice em umas fontes e à direita em outras. Agora ele é medido
+   (--rad-ml) e a barra começa exatamente no ápice, com 0,03 em de sobreposição
+   para a emenda não abrir por arredondamento; o √ ainda é esticado 3% além do
+   necessário, para a ponta alcançar a barra em vez de parar um subpixel abaixo.
+   (2) A espessura passa a ser max(1px, 0,04em): nunca menos de um pixel inteiro,
+   igual em todas as raízes do mesmo corpo. */
+:root{ --rad-pt:0.34em; --rad-bp:0.36em; --rad-k:1.15em; --rad-ml:0.045em;
+       --rad-bp-a:0.26em; --rad-k-a:1.28em; --rad-ml-a:0.045em; --rad-ov:0.075em; }
 .rad{white-space:nowrap;}
-.rad-s{font-size:var(--rad-k,1.15em);margin-right:-0.06em;}
+.rad-s{font-size:var(--rad-k,1.15em);}
 .rad.alto .rad-s{font-size:var(--rad-k-a,1.28em);}
 .rad-r{background-image:linear-gradient(currentColor,currentColor);background-repeat:no-repeat;
-  background-size:100% 0.040em;background-position:0 var(--rad-bp,0.36em);
-  padding:var(--rad-pt,0.34em) 0 0 0;}
-.rad-r.alto{background-position:0 var(--rad-bp-a,0.26em);}
+  background-size:100% max(1px, 0.04em);background-position:0 var(--rad-bp,0.36em);
+  padding:var(--rad-pt,0.34em) 0 0 var(--rad-ov,0.075em);
+  margin-left:calc(var(--rad-ml,0.045em) - var(--rad-ov,0.075em));}
+.rad-r.alto{background-position:0 var(--rad-bp-a,0.26em);
+  margin-left:calc(var(--rad-ml-a,0.045em) - var(--rad-ov,0.075em));}
 
 .texto-base{background:rgba(255,255,255,.035);border-left:3px solid var(--accent-a);border-radius:0 10px 10px 0;padding:14px 16px;font-size:14px;line-height:1.65;color:var(--ink-1);margin-bottom:16px;white-space:pre-wrap;text-align:justify;}
 .comando{font-size:14.5px;font-weight:600;margin:18px 0 14px;padding-top:16px;line-height:1.5;border-top:1px dashed var(--glass-brd);text-align:justify;}
@@ -6287,11 +6289,20 @@ function enemAlternative(doc, ctx, flow, letter, text){
    (expoente, barra de fração, parênteses) 0,79. A folga entre a barra e o
    conteúdo é 0,32 da altura do algarismo — o valor medido na referência em LaTeX
    que o professor mandou. O √ é esticado até encostar na barra. */
-const ENEM_RAIZ = { apex: 0.81, alg: 0.69, alto: 0.79, folga: 0.32, espessura: 0.040 };
+const ENEM_RAIZ = {
+  apex: 0.81, alg: 0.69, alto: 0.79, folga: 0.32, espessura: 0.040,
+  // v18.15 — medidos na Carlito (métrica da Calibri, a fonte do caderno): avanço do
+  // √ e ponta direita do desenho dele. A diferença é onde fica o ápice — é dali que
+  // a barra tem de sair, senão nasce deslocada do sinal.
+  av: 0.498, ir: 0.540,
+  folgaX: 0.045,     // respiro entre o ápice e o 1º sinal do radicando
+  sobrepoe: 0.030,   // a barra entra um fio por cima do ápice, para a emenda não abrir
+  estica: 1.03,      // e o √ passa 3% da altura da barra, pelo mesmo motivo
+};
 function enemRaizMetrica(radicando){
   const conteudo = RAD_ALTO_RE.test(radicando) ? ENEM_RAIZ.alto : ENEM_RAIZ.alg;
   const alvo = Math.max(ENEM_RAIZ.apex, conteudo + ENEM_RAIZ.folga * ENEM_RAIZ.alg);
-  return { alvo: alvo, k: alvo / ENEM_RAIZ.apex };
+  return { alvo: alvo, k: (alvo / ENEM_RAIZ.apex) * ENEM_RAIZ.estica };
 }
 
 /* Quebra o texto nas raízes: o √ vira um trecho próprio (desenhado maior) e o
@@ -6372,7 +6383,8 @@ function enemWrapRuns(doc, runs, width, size, italic, firstIndent){
         enemFont(doc, enemStyle(run.bold, !!italic), size);
       }
       const wRad = doc.getTextWidth(pdfSanitizeText(run.radicando || ""));
-      const w = wSinal + wRad - (run.sinal ? size * 0.05 : 0);
+      // largura total = √ (esticado) até o ápice + respiro + radicando
+      const w = (run.sinal ? wSinal * (ENEM_RAIZ.ir / ENEM_RAIZ.av) + size * ENEM_RAIZ.folgaX : 0) + wRad;
       if(lineW + w > limite() && line.length){
         while(line.length && /^[ \t\n]+$/.test(line[line.length - 1].text)) { lineW -= line.pop().w; }
         lines.push(line); line = []; lineW = 0;
@@ -6428,11 +6440,13 @@ function enemDrawRichLine(doc, parts, x, y, width, size, align, isLast, italic){
            conteúdo pede (com expoente ela sobe, e o sinal sobe junto). */
         const m = enemRaizMetrica(p.radicando || "");
         enemInk(doc);
-        let xr = cx;
+        let xr = cx, xApice = cx;
         if(p.sinal){
           enemFont(doc, enemStyle(p.bold, italic), size * m.k);
           doc.text(pdfSanitizeText(p.sinal), cx, y);
-          xr = cx + p.wSinal - size * 0.05;
+          // o ápice fica na ponta do DESENHO do √, não no fim do avanço dele
+          xApice = cx + p.wSinal * (ENEM_RAIZ.ir / ENEM_RAIZ.av);
+          xr = xApice + size * ENEM_RAIZ.folgaX;
         }
         enemFont(doc, enemStyle(p.bold, italic), size);
         doc.text(pdfSanitizeText(p.radicando || ""), xr, y);
@@ -6440,7 +6454,7 @@ function enemDrawRichLine(doc, parts, x, y, width, size, align, isLast, italic){
         const yb = y - m.alvo * size + esp / 2;
         doc.setLineWidth(esp);
         doc.setDrawColor(ENEM.ink[0], ENEM.ink[1], ENEM.ink[2]);
-        doc.line(xr - (p.sinal ? size * 0.04 : 0), yb, xr + p.wRad, yb);
+        doc.line(p.sinal ? xApice - size * ENEM_RAIZ.sobrepoe : xr, yb, xr + p.wRad, yb);
       }else{
         enemFont(doc, enemStyle(p.bold, italic), size);
         enemInk(doc);
@@ -6806,31 +6820,33 @@ const ENEM_PRINT_CSS = `
 *{ box-sizing: border-box; }
 html,body{ margin:0; padding:0; }
 
-/* v18.13 — RAIZ NO DESENHO DA COMPOSIÇÃO MATEMÁTICA.
+/* v18.15 — A BARRA ENCOSTA NO SINAL, E TEM SEMPRE A MESMA ESPESSURA.
 
-   Medido na imagem de referência do professor (LaTeX): a barra começa e termina
-   EXATAMENTE no radicando (sobra zero), a folga entre a barra e o topo do
-   radicando é ~0,35 da altura do algarismo, e o radical é ESTICADO até encostar
-   na barra — o sinal fica mais alto que os algarismos, descendo um pouco abaixo
-   da linha de base.
+   Dois defeitos vistos ampliados: (1) a barra nascia deslocada do ápice do √ —
+   um degrau entre a ponta do sinal e o começo do traço; (2) a espessura variava,
+   porque 0,04 em a 14 px dá 0,56 px e o navegador pinta isso como uma linha
+   translúcida de 1 px, diferente conforme a posição subpixel.
 
-   Defeito que isto corrige: com a folga calculada só sobre a altura dos
-   ALGARISMOS, um radicando com expoente (√v²/20, √60²/20) tinha o ² batendo na
-   barra. A altura do radicando agora é medida em dois regimes — comum e ALTO
-   (expoente, barra de fração, parênteses) — e a marcação diz em qual cada raiz
-   está, porque em CSS não há como medir o conteúdo.
-
-   --rad-pt dá espaço de PINTURA acima da linha (padding vertical em elemento
-   inline pinta o fundo sem mexer no leiaute), para a barra poder subir acima da
-   ascendente da fonte sem ser cortada. */
-:root{ --rad-pt:0.34em; --rad-bp:0.36em; --rad-k:1.15em; --rad-bp-a:0.26em; --rad-k-a:1.28em; }
+   (1) A distância entre o AVANÇO do √ e a ponta direita do seu desenho é
+   propriedade da fonte — 4,2% do em na Calibri, 0,28% na Segoe UI/DejaVu, 1,8%
+   na FreeSans. Era esse número que faltava: com um recuo fixo, a barra caía à
+   esquerda do ápice em umas fontes e à direita em outras. Agora ele é medido
+   (--rad-ml) e a barra começa exatamente no ápice, com 0,03 em de sobreposição
+   para a emenda não abrir por arredondamento; o √ ainda é esticado 3% além do
+   necessário, para a ponta alcançar a barra em vez de parar um subpixel abaixo.
+   (2) A espessura passa a ser max(1px, 0,04em): nunca menos de um pixel inteiro,
+   igual em todas as raízes do mesmo corpo. */
+:root{ --rad-pt:0.34em; --rad-bp:0.36em; --rad-k:1.15em; --rad-ml:0.045em;
+       --rad-bp-a:0.26em; --rad-k-a:1.28em; --rad-ml-a:0.045em; --rad-ov:0.075em; }
 .rad{ white-space: nowrap; }
-.rad-s{ font-size: var(--rad-k,1.15em); margin-right: -0.06em; }
+.rad-s{ font-size: var(--rad-k,1.15em); }
 .rad.alto .rad-s{ font-size: var(--rad-k-a,1.28em); }
 .rad-r{ background-image:linear-gradient(currentColor,currentColor); background-repeat:no-repeat;
-  background-size:100% 0.040em; background-position:0 var(--rad-bp,0.36em);
-  padding: var(--rad-pt,0.34em) 0 0 0; }
-.rad-r.alto{ background-position:0 var(--rad-bp-a,0.26em); }
+  background-size:100% max(1px, 0.04em); background-position:0 var(--rad-bp,0.36em);
+  padding: var(--rad-pt,0.34em) 0 0 var(--rad-ov,0.075em);
+  margin-left: calc(var(--rad-ml,0.045em) - var(--rad-ov,0.075em)); }
+.rad-r.alto{ background-position:0 var(--rad-bp-a,0.26em);
+  margin-left: calc(var(--rad-ml-a,0.045em) - var(--rad-ov,0.075em)); }
 body{
   font-family: Calibri, Carlito, "Segoe UI", system-ui, sans-serif;
   font-size: 10pt;
@@ -7129,16 +7145,19 @@ function enemBuildPrintHTML(doneQuestions, professor){
    conta de calibraBarraDaRaiz(), sem depender do app. */
 const CALIBRA_RAIZ_JS = "(function(){try{var f=getComputedStyle(document.body).fontFamily;" +
   "var c=document.createElement('canvas').getContext('2d');c.font='100px '+f;" +
-  "var a=c.measureText('\\u221A').fontBoundingBoxAscent,x=0,g=0,h=0,P=34;" +
-  "['','600 ','bold '].forEach(function(w){c.font=w+'100px '+f;" +
-  "x=Math.max(x,c.measureText('\\u221A').actualBoundingBoxAscent||0);" +
+  "var a=c.measureText('\\u221A').fontBoundingBoxAscent,x=0,g=0,h=0,s=0,P=34;" +
+  "['','600 ','bold '].forEach(function(w){c.font=w+'100px '+f;var q=c.measureText('\\u221A');" +
+  "x=Math.max(x,q.actualBoundingBoxAscent||0);s=Math.max(s,(q.actualBoundingBoxRight||0)-(q.width||0));" +
   "g=Math.max(g,c.measureText('0123456789').actualBoundingBoxAscent||0);" +
   "h=Math.max(h,c.measureText('0123456789\\u00B2\\u00B3\\u207B()/').actualBoundingBoxAscent||0);});" +
   "if(!(a>0)||!(x>0)||!(g>0))return;var F=0.32*g;" +
-  "function P2(t){var v=Math.max(x,t+F);return{b:Math.max(0,(P+a-v)/100),k:Math.min(1.6,Math.max(1,v/x))};}" +
+  "function P2(t){var v=Math.max(x,t+F),k=Math.min(1.6,Math.max(1,v/x))*1.03;" +
+  "return{b:Math.max(0,(P+a-v)/100),k:k,m:(k*s)/100+0.045};}" +
   "var n=P2(g),m=P2(Math.max(h,g)),r=document.documentElement.style;" +
   "r.setProperty('--rad-bp',n.b.toFixed(4)+'em');r.setProperty('--rad-k',n.k.toFixed(4)+'em');" +
-  "r.setProperty('--rad-bp-a',m.b.toFixed(4)+'em');r.setProperty('--rad-k-a',m.k.toFixed(4)+'em');}catch(e){}})();";
+  "r.setProperty('--rad-ml',n.m.toFixed(4)+'em');" +
+  "r.setProperty('--rad-bp-a',m.b.toFixed(4)+'em');r.setProperty('--rad-k-a',m.k.toFixed(4)+'em');" +
+  "r.setProperty('--rad-ml-a',m.m.toFixed(4)+'em');}catch(e){}})();";
 
 /* Imprimir = o MESMO documento do PDF. Nada de re-renderizar em CSS e torcer
    para bater: montamos o jsPDF idêntico ao do botão PDF, marcamos autoPrint e
@@ -8520,10 +8539,14 @@ function calibraBarraDaRaiz(){
     /* O mesmo texto aparece em peso normal, semibold (comando) e negrito, e o
        ápice do √ muda com o peso — a medida tem de valer para o mais alto dos
        três, senão o radical em negrito ultrapassa a barra. */
-    let apex = 0, alg = 0, altoM = 0;
+    let apex = 0, alg = 0, altoM = 0, sobra = 0;
     ["", "600 ", "bold "].forEach(peso => {
       ctx.font = peso + px + "px " + fam;
-      apex  = Math.max(apex,  ctx.measureText(RAD_BP_TEXTO).actualBoundingBoxAscent || 0);
+      const m = ctx.measureText(RAD_BP_TEXTO);
+      apex  = Math.max(apex,  m.actualBoundingBoxAscent || 0);
+      // v18.15: quanto o DESENHO do √ passa do avanço dele. É onde fica o ápice,
+      // e varia por fonte (4,2% do em na Calibri, 0,28% na Segoe UI).
+      sobra = Math.max(sobra, (m.actualBoundingBoxRight || 0) - (m.width || 0));
       alg   = Math.max(alg,   ctx.measureText("0123456789").actualBoundingBoxAscent || 0);
       altoM = Math.max(altoM, ctx.measureText("0123456789\u00B2\u00B3\u207B()/").actualBoundingBoxAscent || 0);
     });
@@ -8533,19 +8556,27 @@ function calibraBarraDaRaiz(){
        esticado até encostar na barra. Dois regimes, porque um radicando com
        expoente sobe mais que um só de algarismos. */
     const FOLGA = 0.32 * alg;   // medido na referência: 0,30–0,35 da altura do algarismo
+    const FOLGA_X = 0.045;      // respiro entre o ápice do √ e o 1º sinal do radicando (em)
+    const ESTICA = 1.03;        // 3% a mais no √: a ponta alcança a barra, não para embaixo dela
     const pos = conteudo => {
       const alvo = Math.max(apex, conteudo + FOLGA);
+      const k = Math.min(1.6, Math.max(1, alvo / apex)) * ESTICA;
       return {
         bp: Math.max(0, (PT + asc - alvo) / px),
-        k: Math.min(1.6, Math.max(1, alvo / apex)),
+        k: k,
+        // desloca o radicando para o ápice ficar FOLGA_X à esquerda dele; é o que
+        // faz a barra (que começa FOLGA_X + sobreposição antes) nascer no ápice
+        ml: (k * sobra) / px + FOLGA_X,
       };
     };
     const normal = pos(alg), alto = pos(Math.max(altoM, alg));
     const raiz = document.documentElement.style;
     raiz.setProperty("--rad-bp", normal.bp.toFixed(4) + "em");
     raiz.setProperty("--rad-k",  normal.k.toFixed(4) + "em");
+    raiz.setProperty("--rad-ml", normal.ml.toFixed(4) + "em");
     raiz.setProperty("--rad-bp-a", alto.bp.toFixed(4) + "em");
     raiz.setProperty("--rad-k-a",  alto.k.toFixed(4) + "em");
+    raiz.setProperty("--rad-ml-a", alto.ml.toFixed(4) + "em");
   }catch(e){ /* fica o valor padrão do CSS */ }
 }
 
