@@ -534,9 +534,13 @@ body.mode-professor .qcard{box-shadow:0 25px 60px -25px rgba(0,0,0,.6), 0 0 0 1.
             </div>
           </div>
         </div>
+        <!-- v18.11 — "Gerar simulado" também aqui. É o MESMO botão da seção 6
+             (os dois chamam iniciarGeracao); serve para não ter de descer a
+             página inteira depois de configurar o lote. -->
         <div class="lote-actions">
           <button type="button" class="btn sm" id="btnAplicarLote">Aplicar às <span id="loteQtd">1</span> questões</button>
-          <span class="hint">Depois de aplicar, você ainda pode ajustar cada questão individualmente na seção 5.</span>
+          <button type="button" class="btn sm" id="btnGerarLote">✨ Gerar simulado</button>
+          <span class="hint">“Aplicar” preenche os blocos da seção 5, onde dá para ajustar questão por questão. “Gerar simulado” faz exatamente o mesmo que o botão da seção 6 — é um atalho para não precisar descer a página.</span>
         </div>
       </div>
     </div>

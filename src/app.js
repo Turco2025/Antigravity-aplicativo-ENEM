@@ -1014,7 +1014,18 @@ function uid(){ return "q" + (uidCounter++); }
 /* v18.6/v18.7 — a MESMA frase abaixo da caixa de orientações, no painel do lote (no
    template) e em cada bloco de questão. Uma constante só para nunca divergirem. */
 const ORIENT_AVISO = "Campo opcional para sugerir o enfoque ou a contextualização da questão. As orientações serão consideradas somente quando compatíveis com as diretrizes do INEP, a Matriz de Referência e os padrões de elaboração do ENEM.";
-let confirmaDisciplinaEm = 0;   // v18.4: instante do aviso de disciplina (ver btnGenerate)
+let confirmaDisciplinaEm = 0;   // v18.4: instante do aviso de disciplina (ver iniciarGeracao)
+let confirmaOrientacoesEm = 0;  // v18.11: instante do aviso de orientações não aplicadas
+
+/* v18.11 — o professor escreveu orientações no painel do lote e não clicou em
+   "Aplicar"? Então nenhuma questão carrega esse texto e ele não chegaria à IA.
+   Caixa vazia nunca acusa nada. */
+function orientacoesDoLotePendentes(){
+  const el = document.getElementById("loteOrientacoes");
+  const txt = el ? (el.value || "").trim().slice(0, 600) : "";
+  if(!txt) return false;
+  return !state.questions.some(q => (q.orientacoes || "").trim() === txt);
+}
 
 /* ---------------- Armazenamento local (opcional, à prova de falhas) ----------------
    Algumas telas de pré-visualização (ex.: pré-visualização de artefatos) bloqueiam
@@ -3007,6 +3018,46 @@ async function runPool(items, worker, concurrency){
     }
   });
   await Promise.all(runners);
+}
+
+/* v18.11 — A GERAÇÃO TEM UM CAMINHO SÓ. Antes, todo este corpo vivia dentro do
+   listener do botão da seção 6. Com o atalho "Gerar simulado" dentro do painel
+   do lote (seção 4), ele virou função nomeada e os dois botões a chamam — nada
+   é duplicado, então os dois se comportam exatamente igual, hoje e depois. */
+function iniciarGeracao(){
+  if(!exigirLogin()) return;
+  if(!state.area){ toast("Selecione a área do conhecimento.", "err"); return; }
+  if(!state.disciplina){ toast("Selecione a disciplina.", "err"); return; }
+  /* v18.11 — ORIENTAÇÕES DIGITADAS E NÃO APLICADAS. O campo "Orientações
+     adicionais" da seção 4 só chega às questões pelo botão "Aplicar às N
+     questões". Digitado e não aplicado, o texto ficava na tela e NÃO ia para a
+     IA, em silêncio. Com um "Gerar simulado" logo abaixo do campo, o descuido
+     passou a ser provável — então o primeiro clique explica e o segundo, dentro
+     de 30 s, gera assim mesmo (mesma mecânica do aviso de disciplina). */
+  if(orientacoesDoLotePendentes() && Date.now() - confirmaOrientacoesEm > 30000){
+    confirmaOrientacoesEm = Date.now();
+    toast('Você escreveu orientações adicionais na seção 4, mas não clicou em "Aplicar às ' + state.questions.length + ' questões" — do jeito que está, esse texto não vai para a IA. Clique em "Aplicar" para valer para todas, ou clique em "Gerar simulado" de novo para gerar sem ele.', "err");
+    return;
+  }
+  confirmaOrientacoesEm = 0;
+  simuladoAbertoId = null; // simulado novo, não é edição de um já arquivado
+  const sync = sincronizaTemaDoLote();
+  if(sync && sync.estado === "aplicado") toast(`Tema do lote aplicado às ${state.questions.length} questões: "${resumoTema(sync.novo, 120)}"${sync.itens > 1 ? ` (${sync.itens} conteúdos em rodízio: ${resumoTema(textoDistribuicaoLote(), 160)})` : ""}.`, "ok");
+  if(sync && sync.estado === "atualizado") toast(`Tema do lote atualizado nas ${state.questions.length} questões: "${resumoTema(sync.anterior, 60)}" → "${resumoTema(sync.novo, 120)}"${sync.itens > 1 ? ` (${sync.itens} conteúdos em rodízio: ${resumoTema(textoDistribuicaoLote(), 160)})` : ""}.`, "ok");
+  if(sync && sync.sobras && sync.sobras.length) toast(`Você listou ${sync.itens} conteúdos para ${state.questions.length} questões: ${sync.sobras.length === 1 ? "ficou de fora" : "ficaram de fora"} ${sync.sobras.map(t => `"${resumoTema(t, 40)}"`).join(", ")}.`, "err");
+  if(sync && sync.estado === "completado") toast(`Tema do lote aplicado ${sync.novas === 1 ? "à 1 questão que estava" : `às ${sync.novas} questões que estavam`} sem tema${sync.itens > 1 ? ` (rodízio: ${resumoTema(textoDistribuicaoLote(), 160)})` : `: "${resumoTema(sync.novo, 120)}"`}.`, "ok");
+  if(sync && sync.estado === "individuais") toast(`A caixa "Tema do lote" foi alterada, mas as questões têm temas diferentes entre si — nenhuma foi alterada. Para sobrescrever todas, use "Aplicar".`, "info");
+  /* v18.4: rede de segurança da disciplina (ver conteudosForaDaDisciplina).
+     Para a PRIMEIRA tentativa e explica; o segundo clique, dentro de 30 s, gera
+     assim mesmo — questão de Matemática ambientada em Química é legítima. */
+  const fora = conteudosForaDaDisciplina();
+  if(fora && Date.now() - confirmaDisciplinaEm > 30000){
+    confirmaDisciplinaEm = Date.now();
+    toast(`Você selecionou ${state.disciplina}, mas ${fora.quantos === fora.total ? "nenhum dos" : `${fora.total - fora.quantos} de ${fora.total}`} ${fora.total} conteúdos é de ${state.disciplina} — ${fora.quantos === fora.total ? "todos parecem" : "a maioria parece"} de ${fora.outra}. Confira a área e a disciplina acima. Se for mesmo o que você quer, clique em "Gerar" de novo.`, "err");
+    return;
+  }
+  confirmaDisciplinaEm = 0;
+  generateAll();
 }
 
 async function generateAll(){
@@ -7484,30 +7535,12 @@ function init(){
   document.getElementById("btnAplicarLote").addEventListener("click", () => { if(exigirLogin()) aplicarLoteATodas(); });
   sincronizaContadoresLote();
 
-  document.getElementById("btnGenerate").addEventListener("click", () => {
-    if(!exigirLogin()) return;
-    if(!state.area){ toast("Selecione a área do conhecimento.", "err"); return; }
-    if(!state.disciplina){ toast("Selecione a disciplina.", "err"); return; }
-    simuladoAbertoId = null; // simulado novo, não é edição de um já arquivado
-    const sync = sincronizaTemaDoLote();
-    if(sync && sync.estado === "aplicado") toast(`Tema do lote aplicado às ${state.questions.length} questões: "${resumoTema(sync.novo, 120)}"${sync.itens > 1 ? ` (${sync.itens} conteúdos em rodízio: ${resumoTema(textoDistribuicaoLote(), 160)})` : ""}.`, "ok");
-    if(sync && sync.estado === "atualizado") toast(`Tema do lote atualizado nas ${state.questions.length} questões: "${resumoTema(sync.anterior, 60)}" → "${resumoTema(sync.novo, 120)}"${sync.itens > 1 ? ` (${sync.itens} conteúdos em rodízio: ${resumoTema(textoDistribuicaoLote(), 160)})` : ""}.`, "ok");
-    if(sync && sync.sobras && sync.sobras.length) toast(`Você listou ${sync.itens} conteúdos para ${state.questions.length} questões: ${sync.sobras.length === 1 ? "ficou de fora" : "ficaram de fora"} ${sync.sobras.map(t => `"${resumoTema(t, 40)}"`).join(", ")}.`, "err");
-    if(sync && sync.estado === "completado") toast(`Tema do lote aplicado ${sync.novas === 1 ? "à 1 questão que estava" : `às ${sync.novas} questões que estavam`} sem tema${sync.itens > 1 ? ` (rodízio: ${resumoTema(textoDistribuicaoLote(), 160)})` : `: "${resumoTema(sync.novo, 120)}"`}.`, "ok");
-    if(sync && sync.estado === "individuais") toast(`A caixa "Tema do lote" foi alterada, mas as questões têm temas diferentes entre si — nenhuma foi alterada. Para sobrescrever todas, use "Aplicar".`, "info");
-    /* v18.4: rede de segurança da disciplina (ver conteudosForaDaDisciplina).
-       Para a PRIMEIRA tentativa e explica; o segundo clique, dentro de 30 s, gera
-       assim mesmo — questão de Matemática ambientada em Química é legítima. */
-    const fora = conteudosForaDaDisciplina();
-    if(fora && Date.now() - confirmaDisciplinaEm > 30000){
-      confirmaDisciplinaEm = Date.now();
-      toast(`Você selecionou ${state.disciplina}, mas ${fora.quantos === fora.total ? "nenhum dos" : `${fora.total - fora.quantos} de ${fora.total}`} ${fora.total} conteúdos é de ${state.disciplina} — ${fora.quantos === fora.total ? "todos parecem" : "a maioria parece"} de ${fora.outra}. Confira a área e a disciplina acima. Se for mesmo o que você quer, clique em "Gerar" de novo.`, "err");
-      return;
-    }
-    confirmaDisciplinaEm = 0;
-    generateAll();
-  });
-
+  /* v18.11 — os DOIS botões "Gerar simulado" (o da seção 4, dentro do painel do
+     lote, e o da seção 6) chamam a mesma função. Não há um segundo caminho de
+     geração: é o mesmo botão em dois lugares, para o professor não ter de descer
+     a página depois de configurar o lote. */
+  document.getElementById("btnGenerate").addEventListener("click", iniciarGeracao);
+  document.getElementById("btnGerarLote").addEventListener("click", iniciarGeracao);
   document.getElementById("btnBackToForm").addEventListener("click", () => {
     simuladoAbertoId = null;
     document.getElementById("formPanel").style.display = "block";

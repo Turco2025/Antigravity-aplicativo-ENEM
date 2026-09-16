@@ -92,6 +92,25 @@ Expoentes, índices, raízes e sinais chegam ao estudante prontos — x², 2⁴,
    sobrescritas/subscritas (`fontwork/ampliar_carlito.py`). Teste no navegador, sem rede:
    `node tests/verify_math_notation.js`.
 
+## "Gerar simulado" também dentro da seção 4 (v18.11, 16/09/2026)
+
+Depois de configurar o lote, era preciso descer a página inteira até a seção 6 para gerar. O botão
+passou a existir também na linha de ações do painel do lote, ao lado de "Aplicar às N questões".
+
+**Não é um segundo caminho de geração.** Todo o corpo que vivia dentro do listener do botão da seção
+6 virou a função nomeada `iniciarGeracao()`, e os **dois** botões a chamam — mesmas travas (login,
+área, disciplina), mesma sincronização do tema do lote, mesma rede de segurança da disciplina. O
+teste `verify_gerar_no_lote.js` protege exatamente isso.
+
+**Uma armadilha nova, fechada junto.** O campo "Orientações adicionais" só chega às questões pelo
+botão "Aplicar"; digitado e não aplicado, o texto ficava na tela e não ia para a IA, em silêncio. Com
+um "Gerar simulado" logo abaixo do campo, o descuido passaria a ser provável — então
+`orientacoesDoLotePendentes()` detecta o caso e o primeiro clique avisa; o segundo, dentro de 30 s,
+gera assim mesmo (mesma mecânica do aviso de disciplina da v18.4). Caixa vazia nunca acusa nada, e o
+aviso vale para os dois botões.
+
+Teste: `node tests/verify_gerar_no_lote.js <caminho absoluto do index.html>` — 18 verificações.
+
 ## O chip de disciplina diz que está marcado (v18.10, 16/09/2026)
 
 Na seção 2 o chip selecionado era pintado com o degradê `var(--accent-a/--accent-b)` — que ali é
