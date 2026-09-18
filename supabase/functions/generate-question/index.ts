@@ -682,6 +682,45 @@ COMO ISSO SE APLICA A VOCÊ, AGORA:
 · BUSQUE COM PONTARIA. Monte UMA consulta bem construída (nome próprio + obra/instituição + termo que identifique o documento) e leia os resultados com atenção: normalmente uma busca já entrega o que você precisa. Faça a segunda só se a primeira não tiver resolvido. Isso não é para verificar menos — é para verificar com menos ruído; o que você não confirmar, deixe em branco ou devolva "encontrou": false.
 · Não achando fonte adequada, devolva "encontrou": false. Você será chamado de novo para procurar OUTRA obra ou documento real sobre o mesmo tema, como manda o item 2 — desistir é melhor que inventar, mas procurar de novo é melhor que desistir.`;
 
+/* v74.16 — ACERVOS DE PRIORIDADE OBRIGATÓRIA (18/09/2026, decisão do professor).
+   Para Língua Portuguesa, Literatura e Artes, ele indicou cinco acervos reais e
+   já validados por ele, a serem consultados NESTA ORDEM antes de qualquer outro
+   lugar. Não é uma restrição: esgotada a lista, valem as demais fontes
+   confiáveis do item 1 da regra. Vai na mensagem do pesquisador (e não no
+   prompt de sistema) porque depende da disciplina — no sistema fragmentaria o
+   cache, e são só ~180 tokens por questão.
+
+   Os endereços estão SEM o parâmetro de rastreamento "?utm_source=..." com que
+   chegaram: ele não faz parte do endereço do acervo e acabaria dentro do campo
+   "referencia" das questões. */
+const ACERVOS_PRIORITARIOS: { nome: string; url: string }[] = [
+  { nome: "Biblioteca Nacional Digital", url: "https://bndigital.bn.gov.br/" },
+  { nome: "Hemeroteca Digital Brasileira (Biblioteca Nacional)", url: "https://bndigital.bn.gov.br/hemeroteca-digital/" },
+  { nome: "Brasiliana Guita e José Mindlin — BBM Digital (USP)", url: "https://search.bbm.usp.br/pt-br/projetos-digitais-da-bbm/bbm-digital/" },
+  { nome: "Busca Integrada USP", url: "https://www.buscaintegrada.usp.br/" },
+  { nome: "Portal Domínio Público (MEC)", url: "http://www.dominiopublico.gov.br/" },
+];
+const DISCIPLINAS_COM_ACERVO_PRIORITARIO = ["Língua Portuguesa", "Literatura", "Artes"];
+function temAcervoPrioritario(disciplina: string): boolean {
+  return DISCIPLINAS_COM_ACERVO_PRIORITARIO.includes(String(disciplina || "").trim());
+}
+function buildAcervosPrioritarios(disciplina: string): string {
+  if (!temAcervoPrioritario(disciplina)) return "";
+  const lista = ACERVOS_PRIORITARIOS.map((a, i) => `${i + 1}. ${a.nome} — ${a.url}`).join("\n");
+  return `
+🏛️ ACERVOS DE PRIORIDADE OBRIGATÓRIA — ${disciplina}
+O professor indicou estes acervos como fontes reais e já validadas por ele. Consulte-os PRIMEIRO, NESTA ORDEM, antes de procurar em qualquer outro lugar:
+${lista}
+
+COMO USAR:
+· Comece a busca restringindo ao domínio do acervo — por exemplo: site:bndigital.bn.gov.br <autor> <obra>.
+· Só passe ao acervo seguinte quando o anterior não tiver o material procurado.
+· Esgotada a lista inteira, aí sim procure nas demais fontes confiáveis que o item 1 da regra autoriza (universidades, bibliotecas, museus, institutos de pesquisa, fundações culturais, órgãos públicos, periódicos científicos, editoras reconhecidas, acervos oficiais).
+· A prioridade NÃO afrouxa nada: o que vier destes acervos passa pelas mesmas exigências de autoria, ano, referência e trecho conferido.
+· A regra da URL continua valendo integralmente: só declare em "url" um endereço que tenha aparecido DE FATO num resultado de busca desta conversa. NÃO monte endereço de acervo por dedução, nem copie a raiz da lista acima como se fosse a página da obra — o backend confere e reprova.
+`;
+}
+
 /* Quando o professor nomeia um autor/obra/movimento/acontecimento, o item 6 da
    regra manda achar obra REAL dele — nunca um texto que "pareça" dele. */
 function buildPesquisaFontePrompt(o: { area: string; disciplina: string; tema: string; eixoTematico?: string; recorte?: string; tentativaAnterior?: string }): string {
@@ -689,7 +728,8 @@ function buildPesquisaFontePrompt(o: { area: string; disciplina: string; tema: s
   const retry = String(o.tentativaAnterior || "").trim();
   return `ÁREA: ${o.area} · DISCIPLINA: ${o.disciplina}
 ASSUNTO PEDIDO PELO PROFESSOR: ${assunto}${o.eixoTematico && o.eixoTematico !== assunto ? `\nOBJETO DE CONHECIMENTO (Matriz do ENEM): ${o.eixoTematico}` : ""}${o.recorte && o.recorte !== assunto ? `\nRECORTE PEDIDO: ${o.recorte.slice(0, 300)}` : ""}
-${retry ? `\n⚠️ SEGUNDA TENTATIVA. A primeira não deu fonte utilizável (${retry.slice(0, 200)}). O item 2 da regra manda, nesse caso, "procurar outra obra, outro documento ou outra referência real relacionada ao tema" — então procure em OUTRO lugar: troque a obra, troque o documento, troque a instituição. Não repita a busca anterior e não baixe o nível da exigência.\n` : ""}
+${buildAcervosPrioritarios(o.disciplina)}
+${retry ? `\n⚠️ SEGUNDA TENTATIVA. A primeira não deu fonte utilizável (${retry.slice(0, 200)}). O item 2 da regra manda, nesse caso, "procurar outra obra, outro documento ou outra referência real relacionada ao tema" — então procure em OUTRO lugar: troque a obra, troque o documento, troque a instituição. Se você já varreu os acervos de prioridade e eles não tinham o material, procure AGORA fora deles, nas demais fontes confiáveis do item 1. Não repita a busca anterior e não baixe o nível da exigência.\n` : ""}
 ANTES DE BUSCAR, identifique o que o assunto acima nomeia:
 · um AUTOR (pessoa)? Então a fonte TEM de ser uma obra real DESSE autor, e o trecho tem de sair dela. Um texto que apenas imite o estilo dele está proibido pelo item 6.
 · uma OBRA, livro, poema, conto, romance ou artigo? Confirme que existe, de quem é, e extraia dela.
@@ -2892,6 +2932,7 @@ function selfTestResponse() {
     buscaDaGeracao.toString(),
     blocoNotacao.toString(), precisaNotacaoQuimica.toString(), JSON.stringify(AREAS_COM_NOTACAO_QUIMICA),   // v74.14
     SISTEMA_AUDITORIA_FONTES, escolheCacheControl.toString(), aquecerCacheResponse.toString(), registraUso.toString(),   // v74.15
+    JSON.stringify(ACERVOS_PRIORITARIOS), JSON.stringify(DISCIPLINAS_COM_ACERVO_PRIORITARIO), buildAcervosPrioritarios.toString(),   // v74.16
     JSON.stringify([WEB_SEARCH_TOOL, BUSCA_PESQUISADOR, BUSCA_PESQUISADOR_RETRY, BUSCA_AUDITORIA]),
     buildSystemPlanejamento.toString(),
     normalizarNotacaoTexto.toString(), normalizarNotacaoQuimica.toString(), qnConverteIon.toString(),
@@ -3254,7 +3295,40 @@ function selfTestResponse() {
         })(),
         v7415_marcaPassoExiste: typeof aquecerCacheResponse === "function"
           && aquecerCacheResponse.toString().includes("CACHE_1H")
-          && aquecerCacheResponse.toString().includes("16")      };
+          && aquecerCacheResponse.toString().includes("16"),
+        /* v74.16 — os cinco acervos que o professor mandou priorizar, na ordem
+           dele, e só nas três disciplinas que ele nomeou. */
+        v7416_acervosPrioritarios: (() => {
+          const urls = ACERVOS_PRIORITARIOS.map((a) => a.url);
+          const pt = buildAcervosPrioritarios("Língua Portuguesa");
+          return {
+            ordem: urls,
+            disciplinas: DISCIPLINAS_COM_ACERVO_PRIORITARIO,
+            // a ordem do professor, exatamente
+            ordemCorreta: urls.join("|") === [
+              "https://bndigital.bn.gov.br/",
+              "https://bndigital.bn.gov.br/hemeroteca-digital/",
+              "https://search.bbm.usp.br/pt-br/projetos-digitais-da-bbm/bbm-digital/",
+              "https://www.buscaintegrada.usp.br/",
+              "http://www.dominiopublico.gov.br/",
+            ].join("|"),
+            // sem o rastreador com que os endereços chegaram
+            semRastreador: urls.every((u) => !u.includes("utm_source")),
+            // entra nas três disciplinas nomeadas e em nenhuma outra
+            entraEmPortuguesLiteraturaArtes: ["Língua Portuguesa", "Literatura", "Artes"].every((d) => buildAcervosPrioritarios(d).includes("ACERVOS DE PRIORIDADE OBRIGATÓRIA")),
+            naoEntraNasDemais: ["História", "Geografia", "Filosofia", "Sociologia", "Biologia", "Química", "Física", "Matemática", "Práticas Corporais", "Língua Estrangeira (Inglês/Espanhol)"]
+              .every((d) => buildAcervosPrioritarios(d) === ""),
+            // chega ao prompt do pesquisador
+            noPromptDoPesquisador: buildPesquisaFontePrompt({ area: "linguagens", disciplina: "Literatura", tema: "Machado de Assis" }).includes("bndigital.bn.gov.br")
+              && !buildPesquisaFontePrompt({ area: "humanas", disciplina: "História", tema: "Canudos" }).includes("bndigital.bn.gov.br"),
+            // manda buscar por domínio, na ordem, e não afrouxa a regra da URL
+            mandaBuscarPorDominioNaOrdem: pt.includes("site:bndigital.bn.gov.br")
+              && pt.includes("Só passe ao acervo seguinte quando o anterior não tiver o material")
+              && pt.includes("Esgotada a lista inteira"),
+            mantemARegraDaUrl: pt.includes("tenha aparecido DE FATO num resultado de busca desta conversa")
+              && pt.includes("NÃO monte endereço de acervo por dedução"),
+          };
+        })()      };
     })(),
   });
 }
