@@ -92,6 +92,51 @@ Expoentes, índices, raízes e sinais chegam ao estudante prontos — x², 2⁴,
    sobrescritas/subscritas (`fontwork/ampliar_carlito.py`). Teste no navegador, sem rede:
    `node tests/verify_math_notation.js`.
 
+## Pesquisar a fonte ANTES de escrever, e aceitar autoria institucional (generate-question v74.9 e v74.10, 18/09/2026)
+
+Primeira leva real com a regra v74.8 ligada: **20 questões de Artes, 13 bloqueadas**. A autópsia,
+feita no simulado arquivado, separou duas causas bem diferentes.
+
+**7 bloqueios eram defeito da conferência, não da questão.** A checagem exigia um autor **pessoal**
+e reprovava justamente as fontes que a regra 4 do professor manda priorizar:
+
+```
+MUSEU AFRO BRASIL. Antônio Poteiro. Disponível em: …
+IPHAN. Conjunto Moderno da Pampulha — Belo Horizonte (MG). Portal do IPHAN…
+ITAÚ CULTURAL. Igreja de São Francisco de Assis. Enciclopédia Itaú Cultural…
+MAM RIO. Parangolés, 1964-1979…
+```
+
+Nenhuma delas ficou sem referência — todas as 17 questões com fonte externa tinham `referencia`
+preenchida. Faltava só o nome de uma pessoa, que essas fontes não têm: **autoria institucional é
+autoria legítima** e é o padrão da ABNT em acervo, museu e órgão público.
+
+**v74.9 — o que mudou.** O campo `instituicao` entra no schema; a conferência passa a exigir
+**autor OU instituição**, e a instituição declarada tem de aparecer na referência (o campo não é
+passe livre). `obra` deixou de travar: em página de acervo o título vive dentro da própria
+referência, e "a obra existe?" / "é desse autor?" são perguntas semânticas — quem responde é o
+auditor, com busca. `referencia` continua obrigatória sempre: é o que permite localizar a fonte,
+6º item da ficha do professor.
+
+**Os outros 6 bloqueios eram a regra funcionando** — e funcionando bem: o mural "A Lenda do Brasil",
+de Kobra, ganhou rostos indígenas que ele nunca pintou (é uma homenagem a Ayrton Senna); o Manto da
+Apresentação ganhou uma observação atribuída a "curadorias que já expuseram o manto" que nenhuma
+curadoria fez; uma exposição de 2021-2022 virou 2023; duas URLs de galeria não saíram de busca
+nenhuma. Tudo isso é exatamente o que a regra existe para pegar.
+
+**v74.10 — pesquisar antes de escrever.** O padrão dos 6 casos é o mesmo: a IA **compôs primeiro e
+foi procurar fonte depois**, e então a fonte real virou moldura para um conteúdo já inventado. A
+pedido do professor, a ordem foi invertida. Em Linguagens e Humanas, uma chamada curta e barata roda
+ANTES da geração: pesquisa o assunto, localiza uma fonte real e extrai dela o trecho ou os fatos
+(`pesquisarFonteReal` → `FERRAMENTA_DOSSIE_FONTE`). O material verificado entra no prompt como
+dossiê, com a instrução de que o texto-base nasce dele e **não pode afirmar sobre aquela obra nada
+que não esteja ali**. O sistema dessa chamada é mínimo de propósito — não carrega o prompt grande da
+área —, e ela é à prova de falha: sem achado ou com erro, a geração segue como antes.
+
+**Testes:** `verify_fontes_backend.ts` foi de 34 para **57 verificações**, incluindo uma regressão
+com os sete objetos `fonte` REAIS da leva de 18/09 — se a conferência voltar a reprovar IPHAN, Itaú
+Cultural ou MAM Rio, o teste acusa.
+
 ## PROIBIDO INVENTAR AUTORES, OBRAS, CITAÇÕES OU REFERÊNCIAS (v18.17 / generate-question v74.8, 17/09/2026)
 
 Regra do professor, implementada **ao pé da letra** e nas três etapas que ele exigiu — busca,

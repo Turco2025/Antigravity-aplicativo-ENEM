@@ -133,10 +133,11 @@ Regra central: na dúvida, verificar; sem confirmação, não utilizar. NUNCA IN
 
 COMO CUMPRIR ISSO NA ENTREGA — o campo "fonte" da ferramenta "entregar_questao" é OBRIGATÓRIO nesta área e é onde você registra a verificação:
 · "tipoUso": "citacao" (trecho literal entre aspas), "adaptacao", "parafrase" ou "proprio" (texto que VOCÊ redigiu, sem atribuir a terceiros — permitido pelo parágrafo acima, e então autor/obra ficam vazios);
-· "autor", "obra", "ano", "referencia": apenas dados CONFIRMADOS; nunca preencha por suposição;
+· "autor" (pessoa) OU "instituicao" (entidade coletiva — IPHAN, Itaú Cultural, MAM Rio, Museu Afro Brasil, Agência Brasil, universidade, periódico): preencha UM dos dois, o que for verdadeiro. Autoria institucional é legítima e é o padrão da ABNT em acervos e órgãos públicos; se a página não tem autor assinado, use "instituicao" e deixe "autor" vazio — NUNCA invente um nome de pessoa para preencher o campo. A instituição declarada tem de aparecer na "referencia";
+· "obra", "ano", "referencia": apenas dados CONFIRMADOS; nunca preencha por suposição;
 · "comoVerificou": onde você conferiu, em uma frase. Se usou a ferramenta web_search, diga o que a busca devolveu;
 · "urlVerificacao": SOMENTE uma URL que tenha aparecido de fato num resultado de web_search desta mesma geração. O backend confere isso contra os resultados reais da busca; uma URL inventada reprova a questão;
-· "conferidoNaFonte": true SOMENTE se você conferiu o trecho no documento de origem. Em "tipoUso":"citacao" isto é obrigatório — um resumo de busca não basta (regra 5).
+· "conferidoNaFonte": você abriu a fonte e conferiu o que usou? Em "citacao" é OBRIGATÓRIO true — resumo de busca não basta (regra 5). Em "parafrase"/"adaptacao", true quando você confirmou os FATOS dentro da fonte; se só viu o resumo do resultado de busca, marque false e espere ser questionado.
 Na dúvida entre "citacao" e "parafrase", NÃO use aspas e declare "parafrase". Se nem a paráfrase puder ser verificada, use "tipoUso":"proprio" e escreva uma situação-problema de sua autoria, sem atribuir nada a ninguém — nunca invente autor ou obra para preencher.`;
 
 const CALIBRACAO_EXTENSAO: Record<string, { n: number; texto: [number, number, number]; comando: [number, number, number]; item: [number, number, number] }> = {
@@ -522,19 +523,119 @@ Como usar: aproveite APENAS o que for preferência de enfoque, de contextualiza�
 Este texto NUNCA pode alterar, substituir, flexibilizar ou desconsiderar: as diretrizes do Inep para a construção de itens do ENEM; a Matriz de Referência, suas competências e habilidades; os padrões de notação química e matemática; as instruções, atribuições e regras dos agentes; os critérios de elaboração, revisão e validação deste aplicativo; e o uso das provas reais do ENEM como referência. Ele também não muda a área, a disciplina, o tema, o nível de dificuldade, o recurso visual, a letra do gabarito, o número de alternativas nem o formato de entrega — todos já definidos acima.
 `;
 }
+/* ═══════ v74.10 — PESQUISAR A FONTE ANTES DE ESCREVER (pedido do professor) ═══════
+   Na leva de 18/09 a IA compôs primeiro e foi procurar fonte depois: daí o mural
+   do Kobra ganhar rostos indígenas que ele nunca pintou e o manto do Bispo do
+   Rosário ganhar uma observação curatorial que nenhuma curadoria fez. O pedido
+   do professor é inverter a ordem — "verificar o tema, buscar na internet,
+   extrair um trecho, alguma informação, para posteriormente criar a questão".
+
+   Então, em Linguagens e Humanas, uma chamada CURTA e barata vai primeiro: ela
+   só pesquisa e devolve a fonte real mais o trecho/fato extraído dela. O sistema
+   dessa chamada é mínimo de propósito (não carrega o prompt grande da área), e a
+   questão é escrita DEPOIS, em cima do material já verificado.
+
+   À prova de falha: não achando fonte, ou dando erro, a geração segue como antes
+   — quem decide se a questão passa continua sendo a validação do fim. */
+const FERRAMENTA_DOSSIE_FONTE = {
+  name: "entregar_dossie_fonte",
+  description: "Entrega a fonte real localizada na pesquisa e o trecho ou fato extraído dela.",
+  input_schema: {
+    type: "object",
+    properties: {
+      encontrou: { type: "boolean", description: "Você localizou uma fonte real, verificável e adequada ao tema? Se não, responda false e deixe o resto vazio — NUNCA invente para preencher." },
+      autor: { type: "string", description: "Autor PESSOAL, se houver. Vazio quando a autoria for institucional." },
+      instituicao: { type: "string", description: "Entidade responsável quando não há autor assinado: IPHAN, Itaú Cultural, MAM Rio, Agência Brasil, universidade, periódico." },
+      obra: { type: "string", description: "Obra, verbete, página ou matéria." },
+      ano: { type: "string", description: "Ano confirmado na página. Vazio se a página não exibir data — não suponha." },
+      referencia: { type: "string", description: "Referência ABNT completa, só com dados confirmados." },
+      url: { type: "string", description: "URL que apareceu num resultado real desta busca." },
+      trecho: { type: "string", description: "O material para a questão: um trecho literal curto (até 300 caracteres) OU, quando não houver texto citável, os fatos confirmados em até cinco linhas. É isto que o texto-base vai usar." },
+      trechoEhLiteral: { type: "boolean", description: "true se 'trecho' são palavras copiadas da fonte; false se é um resumo dos fatos confirmados." },
+      abriuAFonte: { type: "boolean", description: "true se você abriu a página e leu o conteúdo; false se viu apenas o resumo do resultado de busca." },
+      comoVerificou: { type: "string", description: "Em uma frase: onde confirmou." },
+    },
+    required: ["encontrou", "autor", "instituicao", "obra", "ano", "referencia", "url", "trecho", "trechoEhLiteral", "abriuAFonte", "comoVerificou"],
+  },
+};
+
+const SISTEMA_PESQUISA_FONTE = `Você é um pesquisador de fontes para questões do ENEM. Sua ÚNICA tarefa agora é PESQUISAR — não escreva questão nenhuma.
+
+Encontre UMA fonte real, verificável e adequada ao ensino médio sobre o assunto pedido, e extraia dela o material que servirá de base. Priorize acervos e órgãos oficiais, museus, enciclopédias reconhecidas, universidades, periódicos e agências de notícias.
+
+REGRAS QUE NÃO ADMITEM EXCEÇÃO:
+· USE a ferramenta web_search. Sua memória, isoladamente, não comprova nada.
+· Só declare uma URL que tenha aparecido de fato num resultado de busca desta conversa.
+· Autoria institucional é legítima e é o padrão da ABNT em acervo e órgão público: se a página não tem autor assinado, preencha "instituicao" e deixe "autor" vazio. NUNCA invente nome de pessoa.
+· Preencha "ano" só se a página exibir a data. Campo não confirmado fica VAZIO.
+· Em "trecho", só entra o que está na fonte. Não complete, não embeleze, não deduza.
+· Não achando fonte adequada, devolva "encontrou": false. Isso é uma resposta aceitável — inventar não é.`;
+
+function buildPesquisaFontePrompt(o: { area: string; disciplina: string; tema: string; eixoTematico?: string; recorte?: string }): string {
+  const assunto = (o.tema || "").trim() || (o.recorte || "").trim() || (o.eixoTematico || "").trim() || o.disciplina;
+  return `ÁREA: ${o.area} · DISCIPLINA: ${o.disciplina}
+ASSUNTO A PESQUISAR: ${assunto}${o.eixoTematico && o.eixoTematico !== assunto ? `\nOBJETO DE CONHECIMENTO (Matriz do ENEM): ${o.eixoTematico}` : ""}${o.recorte && o.recorte !== assunto ? `\nRECORTE PEDIDO: ${o.recorte.slice(0, 300)}` : ""}
+
+Pesquise e devolva, pela ferramenta "entregar_dossie_fonte", UMA fonte real sobre esse assunto e o trecho ou os fatos que dela se aproveitam para um texto-base de questão do ENEM.`;
+}
+
+function buildDossieFonte(d: any): string {
+  if (!d || d.encontrou !== true || !String(d.trecho || "").trim()) return "";
+  const quem = String(d.autor || "").trim() || String(d.instituicao || "").trim();
+  return `📚 MATERIAL JÁ PESQUISADO E VERIFICADO — escreva a questão EM CIMA DELE.
+Uma etapa anterior pesquisou o assunto e trouxe esta fonte real. Use ESTA fonte no texto-base; não troque por outra de memória e não acrescente a ela nada que não esteja abaixo.
+· quem responde pela fonte: ${quem}${d.autor ? " (autor pessoal)" : " (autoria institucional)"}
+· obra/página: ${String(d.obra || "(no corpo da referência)")}
+· ano confirmado: ${String(d.ano || "(não confirmado — NÃO invente uma data)")}
+· referência: ${String(d.referencia || "")}
+· url verificada: ${String(d.url || "")}
+· a fonte foi aberta e lida: ${d.abriuAFonte === true ? "sim" : "não — só o resumo da busca"}
+· MATERIAL (${d.trechoEhLiteral === true ? "trecho literal" : "fatos confirmados"}):
+"""
+${String(d.trecho || "").slice(0, 1200)}
+"""
+
+Como usar: o texto-base nasce DESTE material. Você pode resumir, parafrasear e contextualizar, mas NÃO pode afirmar sobre esta obra, autor ou instituição nada que não esteja acima — foi exatamente assim que a leva anterior atribuiu a obras reais coisas que elas não têm. Ao preencher o campo "fonte" da entrega, copie autor/instituicao/obra/ano/referencia/url deste dossiê, sem alterar, e marque "conferidoNaFonte" conforme a linha "a fonte foi aberta e lida" acima. Se o material NÃO der uma boa questão, escreva uma situação-problema de sua autoria e declare "tipoUso":"proprio" — sem citar esta fonte no texto-base.
+
+`;
+}
+
+/* Uma chamada curta, com busca, ANTES da geração. Nunca derruba a geração. */
+async function pesquisarFonteReal(
+  o: { area: string; disciplina: string; tema: string; eixoTematico?: string; recorte?: string },
+  usos: any[], buscas: { url: string; title: string }[],
+): Promise<any | null> {
+  if (!fontesReaisEstrito(o.area)) return null;
+  try {
+    const sistema: SistemaPrompt = [{ type: "text", text: SISTEMA_PESQUISA_FONTE, cache_control: { type: "ephemeral" } }];
+    const d = await callClaudeForJSON(
+      sistema, buildPesquisaFontePrompt(o), WEB_SEARCH_TOOL, usos, FERRAMENTA_DOSSIE_FONTE, buscas,
+    );
+    if (d && typeof d === "object" && (d as any).encontrou === true) {
+      console.log(`[pesquisa] fonte encontrada: ${String((d as any).referencia || "").slice(0, 120)}`);
+      return d;
+    }
+    console.warn("[pesquisa] nenhuma fonte real encontrada para o assunto — a questão segue sem dossiê");
+    return null;
+  } catch (e) {
+    console.error(`[pesquisa] falhou (a geração continua): ${String((e as any)?.message || e).slice(0, 160)}`);
+    return null;
+  }
+}
+
 function buildUserPrompt(opts: {
   area: string; disciplina: string; tema: string; dificuldade: string;
   recurso: string; competenciaNum: number | null; habilidadeCod: string | null;
   instrucoesVisual?: string; gabaritoAlvo?: string | null;
   eixoTematico?: string; temasEvitar?: string[]; recorte?: string;
-  diversidade?: DiversidadeExtras; orientacoes?: string;
+  diversidade?: DiversidadeExtras; orientacoes?: string; dossie?: any;
 }) {
   // Trecho específico da Matriz (só quando o professor escolheu
   // competência/habilidade) — o caso "automático" está no bloco fixo.
   const matrizEspecifica = (opts.competenciaNum || opts.habilidadeCod)
     ? `\n\n${buildMatrizInstrucoes(opts.area, opts.competenciaNum, opts.habilidadeCod)}`
     : "";
-  return `Elabore UMA questão inédita, original, no padrão ENEM, com os seguintes parâmetros definidos pelo professor:
+  return `${buildDossieFonte(opts.dossie)}Elabore UMA questão inédita, original, no padrão ENEM, com os seguintes parâmetros definidos pelo professor:
 
 Área do conhecimento: ${AREA_LABELS[opts.area]}
 Disciplina: ${opts.disciplina}
@@ -1078,15 +1179,16 @@ const SCHEMA_FONTE = {
   description: 'Registro da fonte e da verificação feita. Preencha SOMENTE com dados confirmados — jamais por suposição.',
   properties: {
     tipoUso: { type: "string", enum: ["citacao", "adaptacao", "parafrase", "proprio"], description: '"citacao" = trecho literal entre aspas; "adaptacao"/"parafrase" = conteúdo real reescrito; "proprio" = situação-problema redigida por você, sem atribuição a terceiros.' },
-    autor: { type: "string", description: 'Autor real. Vazio apenas quando tipoUso = "proprio".' },
-    obra: { type: "string", description: 'Obra real do autor informado. Vazio apenas quando tipoUso = "proprio".' },
+    autor: { type: "string", description: 'Autor PESSOAL real (pessoa). Vazio quando a autoria for institucional (museu, instituto, órgão, agência, enciclopédia) — nesse caso preencha "instituicao" — ou quando tipoUso = "proprio".' },
+    instituicao: { type: "string", description: 'Entidade responsável quando a autoria for institucional/coletiva, como manda a ABNT: IPHAN, Itaú Cultural, MAM Rio, Museu Afro Brasil, Agência Brasil, universidade, periódico. Vazio quando houver autor pessoal ou tipoUso = "proprio".' },
+    obra: { type: "string", description: 'Obra, verbete, página ou matéria real. Vazio apenas quando tipoUso = "proprio".' },
     ano: { type: "string", description: "Ano confirmado, ou vazio se não puder ser confirmado. NUNCA suponha." },
     referencia: { type: "string", description: "Referência no formato ABNT, só com dados confirmados, que permita localizar a fonte." },
     comoVerificou: { type: "string", description: "Em uma frase: onde e como você confirmou autor, obra e conteúdo." },
     urlVerificacao: { type: "string", description: "SOMENTE uma URL que apareceu de fato num resultado de web_search desta geração. Inventar uma URL reprova a questão." },
-    conferidoNaFonte: { type: "boolean", description: 'true só se o trecho foi conferido no documento de origem. Obrigatório em tipoUso = "citacao".' },
+    conferidoNaFonte: { type: "boolean", description: 'Você ABRIU a fonte e conferiu o que usou? Em "citacao": só true se leu as palavras literais no documento (resumo de busca não basta — regra 5). Em "adaptacao"/"parafrase": true se confirmou os FATOS usados dentro da fonte; false se viu apenas o resumo do resultado de busca. Em "proprio": false.' },
   },
-  required: ["tipoUso", "autor", "obra", "referencia", "comoVerificou", "conferidoNaFonte"],
+  required: ["tipoUso", "autor", "instituicao", "obra", "referencia", "comoVerificou", "conferidoNaFonte"],
 };
 
 function ferramentaQuestaoPara(recurso: string, exigeFonte = false): any {
@@ -2103,21 +2205,44 @@ function conferenciaFontes(d: any, buscas?: { url: string; title: string }[]): {
     return { estado: "invalido", motivo: `"tipoUso" veio como "${String(f.tipoUso || "")}" — tem de ser citacao, adaptacao, parafrase ou proprio`, tipoUso };
   }
   const autor = String(f.autor || "").trim();
+  const instituicao = String(f.instituicao || "").trim();
   const obra = String(f.obra || "").trim();
   const referencia = String(f.referencia || "").trim();
   const comoVerificou = String(f.comoVerificou || "").trim();
   if (tipoUso === "proprio") {
-    if (autor || obra) {
-      return { estado: "incoerente", motivo: 'declarou "proprio" mas preencheu autor/obra — texto de autoria própria não se atribui a ninguém', tipoUso };
+    if (autor || instituicao || obra) {
+      return { estado: "incoerente", motivo: 'declarou "proprio" mas preencheu autor/instituicao/obra — texto de autoria própria não se atribui a ninguém', tipoUso };
     }
   } else {
+    /* v74.9 — AUTORIA INSTITUCIONAL. A conferência anterior exigia um autor
+       PESSOAL e reprovava as melhores fontes que a regra 4 do professor manda
+       priorizar: "IPHAN. Conjunto Moderno da Pampulha…", "ITAÚ CULTURAL.
+       Enciclopédia…", "MAM RIO. Parangolés…". Entidade coletiva é autoria
+       legítima em ABNT, e é o padrão em acervo, museu e órgão público. Passa a
+       valer: alguém tem de responder pela fonte — pessoa OU instituição — e a
+       referência, que é o que permite localizar (6º item da ficha), continua
+       obrigatória sempre. */
     const faltando: string[] = [];
-    if (!autor) faltando.push("autor");
-    if (!obra) faltando.push("obra");
+    if (!autor && !instituicao) faltando.push("autor ou instituicao");
     if (!referencia) faltando.push("referencia");
     if (!comoVerificou) faltando.push("comoVerificou");
+    /* "obra" NÃO trava: em página de acervo o título está dentro da própria
+       referência ("IPHAN. Conjunto Moderno da Pampulha…"), e exigi-lo em
+       separado reprovou 7 fontes oficiais legítimas na leva de 18/09. Se a obra
+       existe e é daquele autor é pergunta SEMÂNTICA — quem responde é o
+       auditor, com busca, nos itens obraExiste e obraPertenceAoAutor. */
     if (faltando.length) {
       return { estado: "incompleto", motivo: `faltou preencher: ${faltando.join(", ")}`, tipoUso };
+    }
+    /* Autoria institucional declarada tem de aparecer na referência — senão a
+       instituição é só uma palavra digitada no campo. */
+    if (!autor && instituicao) {
+      const ref = referencia.toLowerCase();
+      const inst = instituicao.toLowerCase().replace(/^(o |a |os |as )/, "");
+      const cabeca = inst.split(/[\s,.;()\/-]+/).filter((w) => w.length > 3)[0] || inst;
+      if (!ref.includes(inst) && !ref.includes(cabeca)) {
+        return { estado: "instituicao_fora_da_referencia", motivo: `a autoria institucional declarada ("${instituicao}") não aparece na referência`, tipoUso };
+      }
     }
   }
   if (tipoUso === "citacao" && f.conferidoNaFonte !== true) {
@@ -2199,6 +2324,12 @@ ${String(data?.resolucaoComentada || "").slice(0, 2500)}
 COMENTÁRIOS DAS ALTERNATIVAS
 ${comentarios.slice(0, 2500)}
 
+COMO JULGAR CADA ITEM, para não reprovar o que é correto:
+· AUTORIA INSTITUCIONAL é legítima e é o padrão da ABNT em acervo, museu, órgão público, enciclopédia e agência de notícias ("IPHAN. Conjunto Moderno da Pampulha…", "ITAÚ CULTURAL. …", "MAM RIO. …"). Quando a fonte não tem autor assinado e o campo "instituicao" traz a entidade, "autorExiste" é true se a INSTITUIÇÃO existe e realmente publica aquilo — não exija nome de pessoa, e não reprove por "autor vazio".
+· "obraExiste" vale para a obra, o verbete, a página ou a matéria citada; em fonte institucional o título costuma estar dentro da própria referência.
+· "trechoConferidoNaFonte": em "citacao", exige leitura das palavras literais na origem. Em "parafrase"/"adaptacao", basta que os FATOS usados estejam confirmados na fonte — paráfrase fiel de fato verificado NÃO é invenção. Reprove aqui quando o texto-base afirmar algo que a fonte não sustenta.
+· O que você DEVE reprovar sem hesitar: conteúdo inventado atribuído a obra, autor ou curadoria reais; data, edição ou local não confirmados; e qualquer afirmação do texto-base que a fonte não sustente.
+
 Quando o tipo de uso for "proprio", os três primeiros itens devem vir true (não há atribuição a conferir) — mas então confira com rigor redobrado se o texto-base NÃO está atribuindo nada a terceiros e se nenhuma outra parte da questão cita autor ou obra inventados.
 Na dúvida, reprove: "na dúvida, verificar; sem confirmação, não utilizar".`;
 }
@@ -2207,9 +2338,9 @@ Na dúvida, reprove: "na dúvida, verificar; sem confirmação, não utilizar".`
    a regra 8 manda interromper a questão afetada e pedir a fonte ao professor. */
 async function garantirFontesReais(
   data: any, system: SistemaPrompt, usos: any[], restanteMs: number,
-  area: string, buscas: { url: string; title: string }[],
+  area: string, buscas: { url: string; title: string }[], dossiePrevio?: any,
 ) {
-  const diag: any = { aplicavel: fontesReaisEstrito(area), chamadas: 0, buscasReais: (buscas || []).length };
+  const diag: any = { aplicavel: fontesReaisEstrito(area), chamadas: 0, buscasReais: (buscas || []).length, pesquisaPrevia: !!dossiePrevio };
   if (!diag.aplicavel) { diag.estado = "nao_se_aplica"; return diag; }
 
   const det = conferenciaFontes(data, buscas);
@@ -2303,6 +2434,8 @@ function selfTestResponse() {
     conferenciaGabarito.toString(), letraNaResolucao.toString(), buildConferenciaGabaritoPrompt.toString(),   // v74.6
     REGRA_FONTES_PROFESSOR, MENSAGEM_FONTE_BLOQUEIO, JSON.stringify(AREAS_FONTES_REAIS_ESTRITO),                 // v74.8
     fontesReaisEstrito.toString(), conferenciaFontes.toString(), normalizaUrl.toString(),
+    SISTEMA_PESQUISA_FONTE, JSON.stringify(FERRAMENTA_DOSSIE_FONTE),                                             // v74.10
+    buildPesquisaFontePrompt.toString(), buildDossieFonte.toString(), pesquisarFonteReal.toString(),
     buildAuditoriaFontesPrompt.toString(), garantirFontesReais.toString(), JSON.stringify(SCHEMA_FONTE),
     buildSystemPlanejamento.toString(),
     normalizarNotacaoTexto.toString(), normalizarNotacaoQuimica.toString(), qnConverteIon.toString(),
@@ -2733,7 +2866,11 @@ ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferrame
       { type: "text", text: buildSystemPrompt(area), cache_control: { type: "ephemeral" } },
       { type: "text", text: buildBlocoFixo({ area, disciplina, recurso, competenciaNum, habilidadeCod }), cache_control: { type: "ephemeral" } },
     ];
-    const userMsg = buildUserPrompt({ area, disciplina, tema, dificuldade, recurso, competenciaNum, habilidadeCod, instrucoesVisual, gabaritoAlvo, eixoTematico, temasEvitar, recorte, diversidade, orientacoes });
+    /* v74.10 — PESQUISA ANTES DE ESCREVER. Em Linguagens e Humanas o assunto é
+       pesquisado primeiro e a questão nasce do material verificado. Fora dessas
+       áreas, e quando nada é encontrado, dossie fica null e nada muda. */
+    const dossie = await pesquisarFonteReal({ area, disciplina, tema, eixoTematico, recorte }, usos, buscasWeb);
+    const userMsg = buildUserPrompt({ area, disciplina, tema, dificuldade, recurso, competenciaNum, habilidadeCod, instrucoesVisual, gabaritoAlvo, eixoTematico, temasEvitar, recorte, diversidade, orientacoes, dossie });
     const webSearch = (fontesReaisEstrito(area) || precisaFontesReais(disciplina)) ? webSearchTool(disciplina) : false;
     // v62: a ferramenta de entrega é específica do recurso pedido (com
     // imagem/gráfico/tabela, o campo "visual" é obrigatório e tipado).
@@ -2829,7 +2966,7 @@ ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferrame
        o que for auditado é exatamente o que vai ser entregue. Reprovando,
        a questão sai marcada e o app bloqueia a entrega. */
     const fontesDiag = await garantirFontesReais(
-      data, system, usos, LIMITE_FUNCAO_MS - (Date.now() - inicioReq), area, buscasWeb,
+      data, system, usos, LIMITE_FUNCAO_MS - (Date.now() - inicioReq), area, buscasWeb, dossie,
     );
 
     const diversidadeDiag = {
