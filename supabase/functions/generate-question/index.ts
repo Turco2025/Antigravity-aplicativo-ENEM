@@ -662,6 +662,7 @@ COMO ISSO SE APLICA A VOCÊ, AGORA:
 · Autoria institucional é legítima e é o padrão da ABNT em acervo e órgão público: sem autor assinado, preencha "instituicao" e deixe "autor" vazio. NUNCA invente nome de pessoa.
 · "ano" só se a página exibir a data. Campo não confirmado fica VAZIO — inventar data de publicação é proibido pelo item 2.
 · Em "trecho", só entra o que está na fonte. Não complete, não embeleze, não deduza.
+· BUSQUE COM PONTARIA. Monte UMA consulta bem construída (nome próprio + obra/instituição + termo que identifique o documento) e leia os resultados com atenção: normalmente uma busca já entrega o que você precisa. Faça a segunda só se a primeira não tiver resolvido. Isso não é para verificar menos — é para verificar com menos ruído; o que você não confirmar, deixe em branco ou devolva "encontrou": false.
 · Não achando fonte adequada, devolva "encontrou": false. Você será chamado de novo para procurar OUTRA obra ou documento real sobre o mesmo tema, como manda o item 2 — desistir é melhor que inventar, mas procurar de novo é melhor que desistir.`;
 
 /* Quando o professor nomeia um autor/obra/movimento/acontecimento, o item 6 da
@@ -698,6 +699,8 @@ Uma etapa anterior pesquisou o assunto e trouxe esta fonte real. Use ESTA fonte 
 ${String(d.trecho || "").slice(0, 1200)}
 """
 
+A BUSCA NA WEB ESTÁ DESLIGADA NESTA ETAPA, de propósito: a pesquisa já foi feita e validada na etapa anterior (itens 1 a 3 da regra), e o item 3 manda que a fonte ORIGINE a questão. Não procure outra fonte, não complete de memória: escreva a questão em cima do material acima. Se ele não bastar, use "tipoUso":"proprio".
+
 Como usar: o texto-base nasce DESTE material. Você pode resumir, parafrasear e contextualizar, mas NÃO pode afirmar sobre esta obra, autor ou instituição nada que não esteja acima — foi exatamente assim que a leva anterior atribuiu a obras reais coisas que elas não têm. Ao preencher o campo "fonte" da entrega, copie autor/instituicao/obra/ano/referencia/url deste dossiê, sem alterar, e marque "conferidoNaFonte" conforme a linha "a fonte foi aberta e lida" acima. Se o material NÃO der uma boa questão, escreva uma situação-problema de sua autoria e declare "tipoUso":"proprio" — sem citar esta fonte no texto-base.
 
 `;
@@ -718,7 +721,7 @@ async function pesquisarFonteReal(
     try {
       const d = await callClaudeForJSON(
         sistema, buildPesquisaFontePrompt({ ...o, tentativaAnterior: motivoAnterior }),
-        WEB_SEARCH_TOOL, usos, FERRAMENTA_DOSSIE_FONTE, buscas,
+        tentativa === 1 ? BUSCA_PESQUISADOR : BUSCA_PESQUISADOR_RETRY, usos, FERRAMENTA_DOSSIE_FONTE, buscas,
       );
       const bom = d && typeof d === "object" && (d as any).encontrou === true && String((d as any).trecho || "").trim();
       if (bom) {
@@ -1169,10 +1172,46 @@ async function callClaude(system: SistemaPrompt, userMsg: string, maxTokens: num
   throw lastErr || new Error("Falha ao contatar a Anthropic após múltiplas tentativas.");
 }
 
-const WEB_SEARCH_TOOL = { type: "web_search_20250305", name: "web_search", max_uses: 5 };
+/* v74.13 — TETO DE BUSCAS POR ETAPA (18/09/2026).
+   Medição da leva de 18/09 (20 questões, US$ 5,0108): o custo por questão é
+   quase todo payload de busca reprocessado. Cada resultado de web_search entra
+   na conversa e é relido em TODA rodada seguinte da mesma chamada, então o
+   gasto cresce com o quadrado das buscas, não com o tamanho do prompt.
+   Regressão sobre as 20 questões reais: custo ≈ 0,032 + 0,047 × buscas
+   (2 buscas → US$ 0,125 · 7 buscas → US$ 0,360). Com 4,10 buscas de média a
+   questão saía a US$ 0,2486 — muito acima do teto de R$ 0,50 pedido pelo
+   professor. O teto cai de 5 para 3, e cada etapa ganha o seu. */
+const WEB_SEARCH_TOOL = { type: "web_search_20250305", name: "web_search", max_uses: 3 };
+/* Quem PESQUISA é o pesquisador (itens 1 a 3 da regra do professor): é a única
+   etapa que varre a web. Teto 2, e o prompt pede UMA busca bem construída, com
+   a segunda reservada para quando a primeira não resolver — é o que põe a
+   questão dentro dos R$ 0,50. Quando nem assim aparece fonte, ele ainda tem a
+   SEGUNDA TENTATIVA inteira do item 2 da regra, então economizar aqui não é
+   desistir mais cedo. */
+const BUSCA_PESQUISADOR = { ...WEB_SEARCH_TOOL, max_uses: 2 };
+/* Segunda tentativa do pesquisador: já sabe o que não funcionou, procura em
+   outro lugar — duas buscas bastam e evitam a leva cara do item 2. */
+const BUSCA_PESQUISADOR_RETRY = { ...WEB_SEARCH_TOOL, max_uses: 2 };
+/* Auditoria SEM dossiê (o pesquisador não achou nada): aí ela ainda precisa
+   confirmar por fora. Com dossiê ela não busca — confere a questão CONTRA a
+   fonte já validada, que é o item 7 da regra ("REVISAR"), não uma segunda
+   pesquisa do zero. */
+const BUSCA_AUDITORIA = { ...WEB_SEARCH_TOOL, max_uses: 2 };
 // v69: em Biologia o teto cai para 2 buscas por questão (ver BUSCA_BIOLOGIA).
 function webSearchTool(disciplina: string) {
   return ehBiologia(disciplina) ? { ...WEB_SEARCH_TOOL, max_uses: 2 } : WEB_SEARCH_TOOL;
+}
+
+/* v74.13 — COM DOSSIÊ, A GERAÇÃO NÃO BUSCA. A fonte já foi pesquisada, aberta e
+   validada na etapa anterior e vai inteira no prompt (buildDossieFonte); o item
+   3 da regra do professor manda que a questão nasça DELA. Deixar a busca ligada
+   aqui era a maior fatia do custo — e, pior, era por onde o gerador trocava a
+   fonte verificada por outra lembrada de memória. Sem dossiê (fora de
+   Linguagens e Humanas, ou quando a pesquisa não achou nada), nada muda. */
+function buscaDaGeracao(dossie: any, area: string, disciplina: string) {
+  const temDossie = !!(dossie && dossie.encontrou === true && String(dossie.trecho || "").trim());
+  if (temDossie) return false;
+  return (fontesReaisEstrito(area) || precisaFontesReais(disciplina)) ? webSearchTool(disciplina) : false;
 }
 
 /* ENTREGA POR FERRAMENTA, NÃO POR TEXTO LIVRE.
@@ -2373,6 +2412,64 @@ function conferenciaFontes(d: any, buscas?: { url: string; title: string }[]): {
   return { estado: "ok", motivo: "", tipoUso };
 }
 
+/* v74.13 — A QUESTÃO TEM DE SER A DO DOSSIÊ.
+   Quando a etapa de pesquisa trouxe uma fonte real e validada, a geração roda
+   SEM busca: o material vai inteiro no prompt e a questão deve nascer dele
+   (item 3 da regra do professor). Isso fecha o buraco por onde o gerador
+   trocava a fonte pesquisada por outra lembrada de memória — mas só se alguém
+   conferir que a fonte declarada é mesmo a do dossiê. É o que esta conferência
+   faz, de graça, sem chamada nenhuma.
+
+   Ela é DELIBERADAMENTE tolerante: reprova apenas quando a fonte declarada não
+   tem NENHUMA palavra significativa em comum com o dossiê — ou seja, quando é
+   visivelmente outra fonte. Formato de referência diferente, ABNT abreviada,
+   título encurtado, acento trocado: tudo isso passa. A lição da leva de 18/09 é
+   que um gate apertado demais reprova fonte boa (7 fontes institucionais
+   legítimas caíram assim), e isso é pior do que não ter gate. */
+function tokensDeFonte(s: string): string[] {
+  return String(s || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length >= 4 && !/^[0-9]+$/.test(w) && !PALAVRAS_VAZIAS_FONTE.has(w));
+}
+
+/* Palavras que aparecem em qualquer referência e não identificam fonte nenhuma. */
+const PALAVRAS_VAZIAS_FONTE = new Set([
+  "sobre", "para", "como", "pela", "pelo", "pelas", "pelos", "esta", "este", "isso",
+  "disponivel", "acesso", "https", "http", "www", "com", "org", "net", "edu", "gov",
+  "html", "htm", "index", "php", "aspx", "titulo", "obra", "fonte", "texto", "artigo",
+  "pagina", "site", "portal", "brasil", "brasileira", "brasileiro", "nacional",
+  "edicao", "editora", "revista", "jornal", "online", "internet", "digital",
+  "cultura", "cultural", "arte", "artes", "museu", "instituto", "fundacao",
+  "enciclopedia", "verbete", "colecao", "acervo", "exposicao", "biblioteca",
+]);
+
+function conferenciaDossie(d: any, dossie: any): { estado: string; motivo: string } {
+  const temDossie = !!(dossie && dossie.encontrou === true && String(dossie.trecho || "").trim());
+  if (!temDossie) return { estado: "sem_dossie", motivo: "" };
+  const f = d && typeof d === "object" ? d.fonte : null;
+  if (!f || typeof f !== "object") return { estado: "sem_fonte", motivo: "" };
+  // Autoria própria não cita ninguém — nada a casar com o dossiê.
+  if (String(f.tipoUso || "").trim().toLowerCase() === "proprio") return { estado: "proprio", motivo: "" };
+
+  const doDossie = new Set(tokensDeFonte(
+    [dossie.autor, dossie.instituicao, dossie.obra, dossie.referencia, dossie.url].join(" "),
+  ));
+  const daQuestao = tokensDeFonte([f.autor, f.instituicao, f.obra, f.referencia].join(" "));
+  if (!doDossie.size || !daQuestao.length) return { estado: "indeterminado", motivo: "" };
+  const emComum = daQuestao.filter((w) => doDossie.has(w));
+  if (!emComum.length) {
+    const quem = String(f.autor || "").trim() || String(f.instituicao || "").trim() || String(f.obra || "").trim();
+    const pesquisado = String(dossie.autor || "").trim() || String(dossie.instituicao || "").trim() || String(dossie.obra || "").trim();
+    return {
+      estado: "fonte_trocada",
+      motivo: `a pesquisa validou "${pesquisado.slice(0, 80)}" (${String(dossie.referencia || "").slice(0, 120)}) e a questão foi escrita sobre outra fonte, "${quem.slice(0, 80)}", que ninguém verificou — o item 3 da regra manda que a questão nasça da fonte pesquisada`,
+    };
+  }
+  return { estado: "ok", motivo: "" };
+}
+
 const FERRAMENTA_AUDITORIA_FONTE = {
   name: "entregar_auditoria_fonte",
   description: "Entrega o resultado da VALIDAÇÃO OBRIGATÓRIA de autoria, obra e referências da questão.",
@@ -2402,7 +2499,7 @@ const FERRAMENTA_AUDITORIA_FONTE = {
   },
 };
 
-function buildAuditoriaFontesPrompt(data: any): string {
+function buildAuditoriaFontesPrompt(data: any, dossie?: any): string {
   const alts = (data && data.alternativas) || {};
   const f = (data && data.fonte) || {};
   const an = (data && data.analiseAlternativas) || {};
@@ -2410,10 +2507,40 @@ function buildAuditoriaFontesPrompt(data: any): string {
   const comentarios = LETRAS_ALT_FONTE
     .map((L) => `${L}) ${String((an[L] && an[L].comentario) || "")}`)
     .join("\n");
+  /* v74.13 — o dossiê da pesquisa prévia entra na auditoria. É ele que permite
+     conferir sem buscar de novo: a fonte já foi aberta e validada, com busca
+     real, na etapa 2 da regra. O auditor compara a questão com o que a fonte de
+     fato diz — que é exatamente o item decisivo (comprovavelPelaFonte), o que
+     teria pego o mural do Kobra. */
+  const temDossie = !!(dossie && dossie.encontrou === true && String(dossie.trecho || "").trim());
+  const blocoDossie = temDossie
+    ? `
+
+DOSSIÊ DA PESQUISA PRÉVIA — esta é a fonte real, já pesquisada e aberta, de onde a questão deveria ter nascido
+· autor: ${String(dossie.autor || "(sem autor pessoal)")}
+· instituição: ${String(dossie.instituicao || "(sem autoria institucional)")}
+· obra/página: ${String(dossie.obra || "(no corpo da referência)")}
+· ano confirmado: ${String(dossie.ano || "(não confirmado)")}
+· referência: ${String(dossie.referencia || "")}
+· url verificada: ${String(dossie.url || "")}
+· a fonte foi aberta e lida: ${dossie.abriuAFonte === true ? "sim" : "não — só o resumo da busca"}
+· MATERIAL CONFIRMADO (${dossie.trechoEhLiteral === true ? "trecho literal" : "fatos confirmados"}):
+"""
+${String(dossie.trecho || "").slice(0, 1500)}
+"""
+
+COMO USAR O DOSSIÊ:
+· "autorExiste", "obraExiste", "obraPertenceAoAutor", "fonteExiste", "instituicaoExiste" e "referenciaLocalizavelEConfirmada" já foram confirmados pela pesquisa prévia PARA A FONTE DO DOSSIÊ. Se a questão declara ESSA fonte, esses itens são true — não reprove por não ter buscado agora.
+· Se a questão declara OUTRA fonte, que não é a do dossiê, isso é grave: o gerador trocou a fonte verificada por uma lembrada de memória. Reprove ("nadaFoiInventado" = false) e diga isso no motivo.
+· "comprovavelPelaFonte" é o item decisivo e é aqui que está o seu trabalho: leia o texto-base, as alternativas, as legendas e a resolução e verifique, frase a frase, se o MATERIAL acima sustenta cada afirmação sobre a obra, o autor ou a instituição. O que o dossiê não sustenta, reprove — mesmo que a fonte seja real e o autor exista.
+· "trechoConferidoNaFonte": em "citacao", as palavras entre aspas têm de estar no MATERIAL acima. Em "parafrase"/"adaptacao", os fatos usados têm de estar nele.`
+    : "";
   return `VALIDAÇÃO OBRIGATÓRIA DE FONTES — audite a questão abaixo contra a regra do professor, que não admite exceções: é EXPRESSAMENTE PROIBIDO INVENTAR AUTORES, OBRAS, CITAÇÕES OU REFERÊNCIAS.
 
 Responda às DEZ perguntas da ficha de validação final do professor, uma a uma, e só então decida:
-O autor existe? · A obra existe? · A fonte existe? · A instituição citada existe? · O trecho pertence realmente à obra indicada? · Se houve paráfrase, ela está fiel à fonte? · A referência bibliográfica corresponde ao material consultado? · Alguma informação foi inventada? · Alguma frase foi atribuída indevidamente a um autor? · A questão poderia ser comprovada por meio da fonte indicada? USE a ferramenta web_search sempre que precisar confirmar a existência de um autor, de uma obra, a autoria ou o conteúdo — a sua memória, isoladamente, NÃO comprova autenticidade (regra 4). Não afirme que verificou algo que não verificou.
+O autor existe? · A obra existe? · A fonte existe? · A instituição citada existe? · O trecho pertence realmente à obra indicada? · Se houve paráfrase, ela está fiel à fonte? · A referência bibliográfica corresponde ao material consultado? · Alguma informação foi inventada? · Alguma frase foi atribuída indevidamente a um autor? · A questão poderia ser comprovada por meio da fonte indicada? ${temDossie
+    ? "VOCÊ TEM, LOGO ABAIXO, O DOSSIÊ DA PESQUISA QUE ORIGINOU ESTA QUESTÃO: a fonte já foi pesquisada, aberta e validada numa etapa anterior, com busca real na web. A sua tarefa agora é a etapa 7 da regra (REVISAR), não uma segunda pesquisa: confira a questão CONTRA esse dossiê. Por isso a busca está desligada nesta chamada — e não precisa dela: o que o dossiê não sustentar, você reprova."
+    : "USE a ferramenta web_search sempre que precisar confirmar a existência de um autor, de uma obra, a autoria ou o conteúdo — a sua memória, isoladamente, NÃO comprova autenticidade (regra 4)."} Não afirme que verificou algo que não verificou.${blocoDossie}
 
 A auditoria cobre TODAS as partes: texto-base, enunciado, alternativas, legendas, gabarito e resolução comentada. Distratores podem trazer interpretações erradas, mas NÃO podem usar autores, obras ou citações inventados.
 
@@ -2477,6 +2604,18 @@ async function garantirFontesReais(
     return diag;
   }
 
+  /* v74.13 — com dossiê, a fonte declarada tem de ser a fonte pesquisada.
+     Custo zero, e é o que sustenta a auditoria poder rodar sem busca. */
+  const doss = conferenciaDossie(data, dossiePrevio);
+  diag.dossie = doss.estado;
+  if (doss.estado === "fonte_trocada") {
+    diag.estado = "reprovado";
+    diag.motivo = doss.motivo;
+    data.fonteNaoVerificada = { motivo: doss.motivo, mensagem: MENSAGEM_FONTE_BLOQUEIO, etapa: "conferência do dossiê" };
+    console.error(`[fontes] BLOQUEADA: fonte trocada em relação ao dossiê pesquisado`);
+    return diag;
+  }
+
   /* Sem tempo para auditar não é o mesmo que aprovado: "sem confirmação, não
      utilizar". A questão é bloqueada e o professor regenera. */
   if (restanteMs < 30_000) {
@@ -2488,8 +2627,14 @@ async function garantirFontesReais(
   }
 
   try {
+    /* v74.13 — SÓ O PESQUISADOR BUSCA. Com dossiê, a auditoria confere a
+       questão CONTRA a fonte já validada (item 7 da regra: REVISAR) e não
+       repete a pesquisa — era a segunda maior fatia do custo. Sem dossiê, ela
+       continua buscando, com teto de 2. */
+    const buscaDaAuditoria = diag.dossie === "sem_dossie" ? BUSCA_AUDITORIA : false;
+    diag.auditoriaBuscou = !!buscaDaAuditoria;
     const bruto = await callClaudeForJSON(
-      system, buildAuditoriaFontesPrompt(data), WEB_SEARCH_TOOL, usos, FERRAMENTA_AUDITORIA_FONTE,
+      system, buildAuditoriaFontesPrompt(data, dossiePrevio), buscaDaAuditoria, usos, FERRAMENTA_AUDITORIA_FONTE,
     );
     diag.chamadas = 1;
     const a = (bruto && typeof bruto === "object") ? bruto as any : {};
@@ -2591,6 +2736,9 @@ function selfTestResponse() {
     JSON.stringify(OBJETOS_POR_DISCIPLINA), buildRecorteDaDisciplina.toString(),                                 // v74.11
     objetosDaDisciplina.toString(), conferenciaObjeto.toString(), garantirObjetoDaDisciplina.toString(),
     buildAuditoriaFontesPrompt.toString(), garantirFontesReais.toString(), JSON.stringify(SCHEMA_FONTE),
+    conferenciaDossie.toString(), tokensDeFonte.toString(), JSON.stringify([...PALAVRAS_VAZIAS_FONTE]),            // v74.13
+    buscaDaGeracao.toString(),
+    JSON.stringify([WEB_SEARCH_TOOL, BUSCA_PESQUISADOR, BUSCA_PESQUISADOR_RETRY, BUSCA_AUDITORIA]),
     buildSystemPlanejamento.toString(),
     normalizarNotacaoTexto.toString(), normalizarNotacaoQuimica.toString(), qnConverteIon.toString(),
     JSON.stringify([QN_FORMULAS_COMUNS, QN_FORMULAS_DISCIPLINA, QN_GASES, QN_GASES_SEMPRE, QN_IONS]),
@@ -2832,6 +2980,62 @@ function selfTestResponse() {
         aceitaTextoProprio: conferenciaFontes({ fonte: { tipoUso: "proprio", autor: "", obra: "", referencia: "", comoVerificou: "", conferidoNaFonte: false } }).estado === "ok",
       };
     })(),
+    /* v74.13 — SÓ O PESQUISADOR BUSCA. Prova, no endpoint de produção, de onde
+       saiu a economia e de que ela não afrouxou a regra: os tetos de busca por
+       etapa; a geração e a auditoria desligando a busca QUANDO (e só quando) há
+       dossiê validado; o dossiê entrando no prompt da auditoria; e a nova
+       conferência determinística que reprova a troca de fonte — que é o que
+       permite auditar sem buscar de novo. */
+    economiaBuscas: (() => {
+      const doss = {
+        encontrou: true, autor: "", instituicao: "IPHAN", obra: "Conjunto Moderno da Pampulha",
+        ano: "2016", referencia: "IPHAN. Conjunto Moderno da Pampulha. Brasília, 2016.",
+        url: "https://portal.iphan.gov.br/pampulha", trecho: "O conjunto foi inscrito na Lista do Patrimônio Mundial em 2016.",
+        trechoEhLiteral: false, abriuAFonte: true, comoVerificou: "portal do IPHAN",
+      };
+      const mesma = { fonte: { tipoUso: "parafrase", autor: "", instituicao: "IPHAN", obra: "Conjunto Moderno da Pampulha", referencia: "IPHAN. Conjunto Moderno da Pampulha. Brasília, 2016.", comoVerificou: "c", conferidoNaFonte: true } };
+      const outra = { fonte: { tipoUso: "citacao", autor: "Machado de Assis", instituicao: "", obra: "Dom Casmurro", referencia: "ASSIS, Machado de. Dom Casmurro. Garnier, 1899.", comoVerificou: "c", conferidoNaFonte: true } };
+      const propria = { fonte: { tipoUso: "proprio", autor: "", instituicao: "", obra: "", referencia: "", comoVerificou: "c", conferidoNaFonte: false } };
+      return {
+        tetoGeral: WEB_SEARCH_TOOL.max_uses,
+        tetoPesquisador: BUSCA_PESQUISADOR.max_uses,
+        tetoPesquisadorRetry: BUSCA_PESQUISADOR_RETRY.max_uses,
+        tetoAuditoria: BUSCA_AUDITORIA.max_uses,
+        tetoBiologia: webSearchTool("Biologia").max_uses,
+        // o pesquisador continua sendo o único com teto maior, e só ele varre a web
+        soOPesquisadorBusca: BUSCA_PESQUISADOR.max_uses >= BUSCA_AUDITORIA.max_uses
+          && pesquisarFonteReal.toString().includes("BUSCA_PESQUISADOR")
+          && garantirFontesReais.toString().includes('diag.dossie === "sem_dossie" ? BUSCA_AUDITORIA : false'),
+        // a auditoria recebe o dossiê e o dossiê aparece no prompt dela
+        auditoriaRecebeDossie: garantirFontesReais.toString().includes("buildAuditoriaFontesPrompt(data, dossiePrevio)")
+          && buildAuditoriaFontesPrompt({ fonte: {} }, doss).includes("DOSSIÊ DA PESQUISA PRÉVIA")
+          && buildAuditoriaFontesPrompt({ fonte: {} }, doss).includes("Conjunto Moderno da Pampulha")
+          && !buildAuditoriaFontesPrompt({ fonte: {} }).includes("DOSSIÊ DA PESQUISA PRÉVIA")
+          // sem dossiê a ordem de buscar continua lá, com dossiê ela sai
+          && buildAuditoriaFontesPrompt({ fonte: {} }).includes("USE a ferramenta web_search")
+          && !buildAuditoriaFontesPrompt({ fonte: {} }, doss).includes("USE a ferramenta web_search"),
+        // o gerador é avisado de que a busca está desligada de propósito
+        dossieDizQueBuscaEstaDesligada: buildDossieFonte(doss).includes("A BUSCA NA WEB ESTÁ DESLIGADA NESTA ETAPA")
+          && buildDossieFonte(doss).includes("Não procure outra fonte"),
+        // conferência determinística da troca de fonte (custo zero)
+        reprovaFonteTrocada: conferenciaDossie(outra, doss).estado === "fonte_trocada"
+          && conferenciaDossie(outra, doss).motivo.includes("Machado de Assis"),
+        aceitaMesmaFonte: conferenciaDossie(mesma, doss).estado === "ok",
+        aceitaProprioComDossie: conferenciaDossie(propria, doss).estado === "proprio",
+        semDossieNaoConfere: conferenciaDossie(mesma, null).estado === "sem_dossie"
+          && conferenciaDossie(mesma, { encontrou: false }).estado === "sem_dossie",
+        // tolerância: referência abreviada/sem acento continua casando
+        toleraFormatoDiferente: conferenciaDossie(
+          { fonte: { tipoUso: "adaptacao", autor: "", instituicao: "Iphan", obra: "Pampulha", referencia: "IPHAN. Pampulha, 2016.", comoVerificou: "c", conferidoNaFonte: true } }, doss,
+        ).estado === "ok",
+        // a geração desliga a busca com dossiê — e SÓ com dossiê
+        geracaoDesligaBuscaComDossie: buscaDaGeracao(doss, "linguagens", "Artes") === false
+          && buscaDaGeracao(null, "linguagens", "Artes") !== false
+          && buscaDaGeracao({ encontrou: false }, "humanas", "História") !== false
+          && buscaDaGeracao({ encontrou: true, trecho: "" }, "humanas", "História") !== false
+          && buscaDaGeracao(null, "matematica", "Matemática") === false,
+      };
+    })(),
   });
 }
 
@@ -3025,7 +3229,8 @@ ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferrame
        áreas, e quando nada é encontrado, dossie fica null e nada muda. */
     const dossie = await pesquisarFonteReal({ area, disciplina, tema, eixoTematico, recorte }, usos, buscasWeb);
     const userMsg = buildUserPrompt({ area, disciplina, tema, dificuldade, recurso, competenciaNum, habilidadeCod, instrucoesVisual, gabaritoAlvo, eixoTematico, temasEvitar, recorte, diversidade, orientacoes, dossie });
-    const webSearch = (fontesReaisEstrito(area) || precisaFontesReais(disciplina)) ? webSearchTool(disciplina) : false;
+    // v74.13 — com dossiê validado a geração não busca (ver buscaDaGeracao).
+    const webSearch = buscaDaGeracao(dossie, area, disciplina);
     // v62: a ferramenta de entrega é específica do recurso pedido (com
     // imagem/gráfico/tabela, o campo "visual" é obrigatório e tipado).
     let data = await callClaudeForJSON(system, userMsg, webSearch, usos, ferramentaQuestaoPara(recurso, fontesReaisEstrito(area)), buscasWeb);

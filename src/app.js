@@ -3002,12 +3002,28 @@ function somaUso(u){
   if(!state.uso) zeraUso();
   Object.keys(state.uso).forEach(k => { state.uso[k] += Number(u[k]) || 0; });
 }
+/* v18.20 — TETO DE CUSTO POR QUESTÃO. O professor fixou o máximo em R$ 0,50 por
+   questão. O backend já devolve o custo real de cada uma (medição, não
+   estimativa); aqui a leva inteira é dividida pelo número de questões e o
+   resultado é dito em reais, para o teto poder ser conferido a cada geração em
+   vez de acreditado. A cotação abaixo serve SÓ para essa conversão de tela —
+   nenhuma decisão do app depende dela. */
+const COTACAO_USD_BRL = 5.13;          // USD→BRL em 17/09/2026 (frankfurter.dev); ajuste quando quiser a conversão mais fiel
+const TETO_BRL_POR_QUESTAO = 0.50;     // o teto que o professor fixou
 function relatoUso(){
   const u = state.uso;
   if(!u || !u.chamadas) return "";
   const total = u.entradaNova + u.cacheEscrito + u.cacheLido;
   const pct = total ? Math.round((u.cacheLido / total) * 100) : 0;
-  return `[tokens] ${u.chamadas} chamadas · entrada nova ${u.entradaNova} · cache escrito ${u.cacheEscrito} · cache lido ${u.cacheLido} (${pct}% da entrada) · saída ${u.saida} · buscas web ${u.buscasWeb || 0} · texto ≈ US$ ${(u.custoUSD || 0).toFixed(4)}`;
+  const n = (state.questions && state.questions.length) || 0;
+  const porQuestao = n ? (u.custoUSD || 0) / n : 0;
+  const brl = porQuestao * COTACAO_USD_BRL;
+  const buscasPorQuestao = n ? (u.buscasWeb || 0) / n : 0;
+  const veredito = !n ? "" : (brl <= TETO_BRL_POR_QUESTAO
+    ? ` · dentro do teto de R$ ${TETO_BRL_POR_QUESTAO.toFixed(2)}`
+    : ` · ACIMA do teto de R$ ${TETO_BRL_POR_QUESTAO.toFixed(2)}`);
+  return `[tokens] ${u.chamadas} chamadas · entrada nova ${u.entradaNova} · cache escrito ${u.cacheEscrito} · cache lido ${u.cacheLido} (${pct}% da entrada) · saída ${u.saida} · buscas web ${u.buscasWeb || 0} · texto ≈ US$ ${(u.custoUSD || 0).toFixed(4)}`
+    + (n ? `\n[custo] ${n} questões · US$ ${porQuestao.toFixed(4)} por questão ≈ R$ ${brl.toFixed(2)}${veredito} · ${buscasPorQuestao.toFixed(2)} buscas por questão · ${(u.chamadas / n).toFixed(2)} chamadas por questão` : "");
 }
 
 async function runPool(items, worker, concurrency){

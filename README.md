@@ -92,6 +92,83 @@ Expoentes, índices, raízes e sinais chegam ao estudante prontos — x², 2⁴,
    sobrescritas/subscritas (`fontwork/ampliar_carlito.py`). Teste no navegador, sem rede:
    `node tests/verify_math_notation.js`.
 
+## O custo por questão dentro dos R$ 0,50: só o pesquisador busca (generate-question v74.13 / app v18.20, 18/09/2026)
+
+O professor fixou um teto: **uma questão não pode passar de R$ 0,50**. A leva de 18/09 (20 questões
+de Artes, a primeira na v74.12) saiu por **US$ 5,0108 — US$ 0,2486 por questão**, com 3,00 chamadas
+e **4,10 buscas web** por questão. Cerca de R$ 1,28 cada: duas vezes e meia o teto.
+
+**Onde o dinheiro estava — e onde não estava.** A primeira suspeita era o tamanho dos prompts. Medido
+bloco a bloco, o sistema inteiro dá **10 a 13 mil tokens** (`universalModel` 4.854, matriz da área
+1.561, notação química 1.073, notação matemática 1.236, `REGRA_FONTES_PROFESSOR` 1.324,
+`JSON_SCHEMA_TXT` 947, `REGRA_PESQUISA_PROFESSOR` 1.176) — e ele é **cacheado**, lido a US$ 0,20/M.
+Produção, porém, registrava **56.353 tokens de entrada por chamada**. A diferença não é prompt: é
+**payload de busca**. Cada resultado de `web_search` entra na conversa e é **relido em toda rodada
+seguinte da mesma chamada**, sem cache — então o gasto cresce com o *quadrado* das buscas.
+
+A correlação nas 20 questões reais confirma, e é quase uma reta:
+
+| buscas na questão | 2 | 3 | 4 | 5 | 7 |
+|---|---|---|---|---|---|
+| custo medido (US$) | 0,1254 | ≈0,20 | ≈0,235 | ≈0,286 | 0,3599 |
+
+Regressão: **custo ≈ 0,032 + 0,047 × buscas**. O termo fixo (US$ 0,032) é essencialmente a *saída* —
+a questão escrita, a US$ 10/M — e é irredutível sem encurtar a questão, o que ninguém quer. Tudo o
+mais é busca. Para caber em US$ 0,09 (≈ R$ 0,46 a 5,13) a leva precisa de **cerca de 1,2 buscas por
+questão**, contra as 4,10 de hoje.
+
+**O que mudou.** As buscas estavam espalhadas por três etapas — pesquisa, geração e auditoria —, cada
+uma com teto 5, cada uma varrendo a web pela mesma coisa. Agora **só o pesquisador busca**:
+
+1. **Teto geral de 5 para 3**, e um teto por etapa: pesquisador 2 (mais a segunda tentativa inteira
+   do item 2 da regra, também com 2), auditoria sem dossiê 2, Biologia continua em 2.
+2. **A geração não busca quando há dossiê** (`buscaDaGeracao`). A fonte já foi pesquisada, aberta e
+   validada na etapa anterior e vai inteira no prompt; o item 3 da regra manda que a questão nasça
+   *dela*. O dossiê passou a dizer isso em voz alta ao gerador ("A BUSCA NA WEB ESTÁ DESLIGADA NESTA
+   ETAPA… Não procure outra fonte"). Sem dossiê — fora de Linguagens e Humanas, ou quando a pesquisa
+   não achou nada — nada muda.
+3. **A auditoria não busca quando há dossiê**: ela recebe o dossiê inteiro no prompt e confere a
+   questão **contra** a fonte validada, que é o item 7 da regra (REVISAR), não uma segunda pesquisa do
+   zero. Isso torna `comprovavelPelaFonte` — o item que teria pego o mural do Kobra — *mais* fácil de
+   responder, porque o material confirmado está ali, frase a frase, em vez de ter de ser reachado.
+4. **O pesquisador busca com pontaria**: uma consulta bem construída, a segunda só se a primeira não
+   resolver. Não é verificar menos; é verificar com menos ruído.
+
+**A trava que compensa a busca desligada.** Sem auditor buscando, abre-se um buraco: o gerador poderia
+ignorar o dossiê e escrever sobre uma fonte lembrada de memória. `conferenciaDossie` fecha isso de
+graça, sem chamada nenhuma — a fonte declarada tem de ser a do dossiê. Ela é **deliberadamente
+tolerante**: só reprova quando não há **nenhuma** palavra significativa em comum (ABNT abreviada,
+título encurtado, acento ou caixa diferentes passam; palavras genéricas de referência — "acervo",
+"digital", "disponível", "brasileira" — não contam). A lição de 18/09 é que gate apertado demais
+reprova fonte boa: 7 fontes institucionais legítimas caíram assim, e isso é pior que não ter gate.
+Fonte trocada bloqueia **antes** da auditoria, sem gastar a chamada.
+
+**O que NÃO foi tocado, de propósito:** o teto de 1.200 caracteres do trecho do dossiê (é a substância
+da questão; 1.200 caracteres são ~300 tokens, US$ 0,0006 — cortar aqui economiza nada e emburrece a
+questão) e o aquecimento de cache do app, que já existia desde a v12 (a primeira questão grava o
+cache, as 19 seguintes leem: sem isso, 20 chamadas simultâneas pagariam o prompt inteiro 20 vezes,
+US$ 0,03 a mais por questão).
+
+**App v18.20.** O relatório de uso passa a dizer o custo **por questão**, em dólar e em real, com
+buscas e chamadas por questão e o veredito contra o teto — para o R$ 0,50 ser *conferido* a cada
+geração em vez de acreditado. `COTACAO_USD_BRL` (5,13, 17/09/2026) serve só para essa conversão de
+tela; nenhuma decisão do app depende dela.
+
+**Projeção, honesta:** com ~1,3 buscas por questão a conta cai para **≈ US$ 0,093 ≈ R$ 0,48** — em
+cima do teto, não muito abaixo dele. A regressão foi ajustada num regime em que as buscas aconteciam
+dentro de chamadas com o sistema de 13 mil tokens; concentradas no pesquisador (sistema de ~1,4 mil
+tokens) o custo marginal por busca deve ser **menor** que 0,047, mas isso é previsão, não medição. O
+número que vale é o da próxima leva.
+
+Selftest: `economiaBuscas` (tetos por etapa, geração e auditoria desligando a busca só com dossiê, o
+dossiê no prompt da auditoria, e as quatro travas de `conferenciaDossie`).
+Teste: `deno run -A tests/verify_fontes_backend.ts supabase/functions/generate-question/index.ts` —
+**68 verificações**, seções A–I. O arquivo foi reescrito: a versão anterior tinha 34 verificações e
+**5 já falhavam** contra o código de produção, porque não acompanhou a v74.9 (autoria institucional,
+`obra` deixou de travar) nem a v74.12 (a ficha passou de 6 para 10 perguntas). As seções G (as sete
+fontes institucionais reais da leva de 18/09), H (economia de buscas) e I (a questão é a do dossiê)
+são novas.
+
 ## A fonte origina a questão: regra de pesquisa do professor, ao pé da letra (generate-question v74.12, 18/09/2026)
 
 Depois da leva de 20 questões de Artes, o professor escreveu a regra de pesquisa e validação. Ela
