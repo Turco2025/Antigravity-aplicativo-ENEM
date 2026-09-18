@@ -2515,6 +2515,36 @@ function selfTestResponse() {
         buildConferenciaGabaritoPrompt({ textoBase: "t", comando: "c", alternativas: { A: "a", B: "b", C: "c", D: "d", E: "e" } }, "motivo").includes("RESOLVA a questão abaixo do zero")
       );
     })(),
+    /* v74.8 — REGRA DE FONTES, CONFERÍVEL DE FORA. Sem isto dava para provar a
+       v74.6 pelo endpoint, mas não a regra do professor: o codigoHash mudaria
+       por qualquer motivo. Aqui o texto dele tem hash próprio — reescrever uma
+       vírgula da regra muda regraHash — e as travas dizem se estão de pé. */
+    regraFontes: (() => {
+      const comFonte = ferramentaQuestaoPara("nenhum", true).input_schema.required;
+      const semFonte = ferramentaQuestaoPara("nenhum", false).input_schema.required;
+      const url = { tipoUso: "parafrase", autor: "a", obra: "o", referencia: "r", comoVerificou: "c", conferidoNaFonte: true, urlVerificacao: "https://x.test/p" };
+      return {
+        areas: AREAS_FONTES_REAIS_ESTRITO,
+        mensagem: MENSAGEM_FONTE_BLOQUEIO,
+        regraChars: REGRA_FONTES_PROFESSOR.length,
+        regraHash: fnv1a(REGRA_FONTES_PROFESSOR),
+        oitoRegras: [1,2,3,4,5,6,7,8].every((n) => REGRA_FONTES_PROFESSOR.includes("\n" + n + ". ")),
+        seisItens: ["O autor existe?", "A obra existe?", "A obra pertence ao autor informado?",
+                    "O trecho utilizado foi conferido na fonte?",
+                    "A citação, adaptação ou paráfrase está identificada corretamente?",
+                    "A referência permite localizar a fonte e contém apenas dados confirmados?"]
+                   .every((q) => REGRA_FONTES_PROFESSOR.includes(q)),
+        campoFonteObrigatorio: comFonte.includes("fonte") && !semFonte.includes("fonte"),
+        escopoPorArea: fontesReaisEstrito("linguagens") && fontesReaisEstrito("humanas")
+          && !fontesReaisEstrito("natureza") && !fontesReaisEstrito("matematica"),
+        capturaBuscasReais: callClaude.toString().includes("web_search_tool_result"),
+        reprovaLinkInventado: conferenciaFontes({ fonte: url }, []).estado === "url_nao_confirmada"
+          && conferenciaFontes({ fonte: url }, [{ url: "https://x.test/p", title: "t" }]).estado === "ok",
+        reprovaCitacaoNaoConferida: conferenciaFontes({ fonte: { ...url, urlVerificacao: "", tipoUso: "citacao", conferidoNaFonte: false } }).estado === "citacao_nao_conferida",
+        reprovaSemCampoFonte: conferenciaFontes({}).estado === "ausente",
+        aceitaTextoProprio: conferenciaFontes({ fonte: { tipoUso: "proprio", autor: "", obra: "", referencia: "", comoVerificou: "", conferidoNaFonte: false } }).estado === "ok",
+      };
+    })(),
   });
 }
 
