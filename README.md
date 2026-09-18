@@ -92,6 +92,54 @@ Expoentes, índices, raízes e sinais chegam ao estudante prontos — x², 2⁴,
    sobrescritas/subscritas (`fontwork/ampliar_carlito.py`). Teste no navegador, sem rede:
    `node tests/verify_math_notation.js`.
 
+## Auditoria das 20 questões reais contra as três referências (v18.18 / generate-question v74.11, 18/09/2026)
+
+As 20 questões de Artes da leva de 18/09 foram medidas, uma a uma, contra a Matriz, o Guia do Inep e
+a calibração das provas reais. O resultado é diferente em cada frente.
+
+**Matriz de Referência — conforme.** 20/20 códigos de habilidade existem em Linguagens e batem com a
+competência declarada (H1, H4, H9, H12–H19, H21, H22, H24, H30). Os quatro objetos usados constam do
+Anexo.
+
+**Guia do Inep — conforme, com duas ressalvas.** Zero comando interrogativo, zero
+"exceto/incorreto/errado/falso", zero "pode-se afirmar que", zero "todas as anteriores"; 100 de 100
+alternativas em minúscula e com ponto final. **O gabarito é exemplar**: sequência `EBACD · EDCBA ·
+DEABC · DEACB`, nenhuma questão repete a anterior, nenhum bloco de cinco tem letra repetida, 4 de
+cada letra. Ressalvas: 2 questões com linguagem absolutista e 6 com a maior alternativa passando 25%
+da menor.
+
+Sobre paridade do gabarito a medição desmentiu a suspeita inicial: o gabarito tem **108,4** caracteres
+em média contra **110,1** do maior distrator, e em **0 de 20** ele estoura o maior distrator em +25% e
++25 caracteres. Pela regra que o Guia de fato proíbe — a correta não pode se destacar pelo tamanho —
+está 20/20 conforme, e por isso **nenhuma trava de paridade foi criada**: ela reprovaria questão boa.
+
+**Provas reais 2015–2025 — NÃO conforme.** Contra a faixa medida em 50 questões reais de Artes:
+
+| parte | gerado | faixa real | dentro |
+|---|---|---|---|
+| texto-base | **1022** car. | 384–798 (méd 610) | 1 de 20 |
+| comando | 130 car. | 107–189 (méd 143) | 16 de 20 |
+| alternativa | **103** car. | 48–70 (méd 61) | **0 de 20** |
+
+**v74.11 — o recorte da disciplina passa a valer.** 7 das 20 questões pedidas como **Artes**
+declararam objeto de **outra** disciplina — 5 delas "Estudo do texto literário". Objeto oficial, mas
+fora do que o professor pediu: um terço do simulado de Artes virou Literatura. A causa é que o prompt
+do sistema lista os 8 objetos da ÁREA (o revisor precisa da lista inteira) e nada prendia a escolha à
+disciplina. Agora `buildRecorteDaDisciplina` declara, no bloco fixo, qual objeto a disciplina admite,
+e `conferenciaObjeto` é a rede embaixo: objeto fora do recorte marca a questão e o app
+(`bloqueiaSeObjetoForaDoRecorte`, v18.18) trava as quatro exportações. Disciplina sem recorte próprio
+— Humanas, Matemática — fica exatamente como era.
+
+**v74.11 — a calibração vira teto.** O texto que dizia "META DE REFERÊNCIA, não contagem rígida" foi
+substituído por um teto com os números medidos e a instrução de CONTAR e cortar antes de entregar,
+citando a própria medição de 18/09. No app, a extensão fora da faixa vira **aviso** no card
+(`CALIBRACAO_APP`) — e só aviso: extensão é estilo, não verdade, e travar por ela reprovaria questão
+correta. Se a próxima leva não encurtar, aí sim se discute trava.
+
+**Testes:** `verify_fontes_backend.ts` foi de 57 para **74 verificações**, com os três casos reais da
+leva ("Estudo do texto literário", "Estudo do texto" e "Estudo das práticas corporais" pedidos como
+Artes) virando regressão.
+
 ## Pesquisar a fonte ANTES de escrever, e aceitar autoria institucional (generate-question v74.9 e v74.10, 18/09/2026)
 
 Primeira leva real com a regra v74.8 ligada: **20 questões de Artes, 13 bloqueadas**. A autópsia,

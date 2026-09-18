@@ -140,6 +140,47 @@ COMO CUMPRIR ISSO NA ENTREGA — o campo "fonte" da ferramenta "entregar_questao
 · "conferidoNaFonte": você abriu a fonte e conferiu o que usou? Em "citacao" é OBRIGATÓRIO true — resumo de busca não basta (regra 5). Em "parafrase"/"adaptacao", true quando você confirmou os FATOS dentro da fonte; se só viu o resumo do resultado de busca, marque false e espere ser questionado.
 Na dúvida entre "citacao" e "parafrase", NÃO use aspas e declare "parafrase". Se nem a paráfrase puder ser verificada, use "tipoUso":"proprio" e escreva uma situação-problema de sua autoria, sem atribuir nada a ninguém — nunca invente autor ou obra para preencher.`;
 
+/* v74.11 — O OBJETO DE CONHECIMENTO TEM DE CABER NA DISCIPLINA ESCOLHIDA.
+   Na leva de 18/09, 7 das 20 questões pedidas como ARTES declararam objeto de
+   outra disciplina ("Estudo do texto literário" em 5 delas). São objetos
+   oficiais do Anexo — a Matriz foi respeitada —, mas fora do recorte que o
+   professor pediu: um terço do simulado de Artes virou Literatura. O prompt do
+   sistema lista os 8 objetos da ÁREA (o revisor precisa da lista inteira), e
+   era por ali que o modelo escapava. Espelha OBJETOS_POR_DISCIPLINA do app. */
+const OBJETOS_POR_DISCIPLINA: Record<string, string[]> = {
+  "Física": ["Conhecimentos básicos e fundamentais", "O movimento, o equilíbrio e a descoberta de leis físicas", "Energia, trabalho e potência", "A Mecânica e o funcionamento do Universo", "Fenômenos Elétricos e Magnéticos", "Oscilações, ondas, óptica e radiação", "O calor e os fenômenos térmicos"],
+  "Química": ["Transformações Químicas", "Representação das transformações químicas", "Materiais, suas propriedades e usos", "Água", "Transformações Químicas e Energia", "Dinâmica das Transformações Químicas", "Transformação Química e Equilíbrio", "Compostos de Carbono", "Relações da Química com as Tecnologias, a Sociedade e o Meio Ambiente", "Energias Químicas no Cotidiano"],
+  "Biologia": ["Moléculas, células e tecidos", "Hereditariedade e diversidade da vida", "Identidade dos seres vivos", "Ecologia e ciências ambientais", "Origem e evolução da vida", "Qualidade de vida das populações humanas"],
+  "Língua Portuguesa": ["Estudo do texto", "Estudo dos aspectos linguísticos em diferentes textos", "Estudo do texto argumentativo, seus gêneros e recursos linguísticos", "Estudo dos aspectos linguísticos da língua portuguesa", "Estudo dos gêneros digitais"],
+  "Literatura": ["Estudo do texto literário", "Produção e recepção de textos artísticos"],
+  "Artes": ["Produção e recepção de textos artísticos"],
+  "Práticas Corporais": ["Estudo das práticas corporais"],
+  "Língua Estrangeira (Inglês/Espanhol)": ["Estudo do texto", "Estudo dos aspectos linguísticos em diferentes textos"],
+};
+
+/* Objetos que a questão PODE declarar. Disciplina sem recorte próprio (Humanas,
+   Matemática): todos os da área, como sempre foi. */
+function objetosDaDisciplina(area: string, disciplina: string): string[] {
+  const oficiais: string[] = (APP_DATA.objetosConhecimento ? APP_DATA.objetosConhecimento[area] : null) || [];
+  const proprios = OBJETOS_POR_DISCIPLINA[String(disciplina || "").trim()];
+  if (Array.isArray(proprios)) {
+    const ok = proprios.filter((o) => oficiais.includes(o));
+    if (ok.length) return ok;
+  }
+  return oficiais.slice();
+}
+
+function buildRecorteDaDisciplina(area: string, disciplina: string): string {
+  const permitidos = objetosDaDisciplina(area, disciplina);
+  const oficiais: string[] = (APP_DATA.objetosConhecimento ? APP_DATA.objetosConhecimento[area] : null) || [];
+  if (!permitidos.length || permitidos.length === oficiais.length) return "";
+  return `
+
+🎯 RECORTE DESTA DISCIPLINA — o professor escolheu "${disciplina}", e em Linguagens cada disciplina cobre uma parte do Anexo. O campo "objetoConhecimento" TEM de ser, literalmente, ${permitidos.length === 1 ? "este" : "um destes"}:
+${permitidos.map((o, i) => `${i + 1}. ${o}`).join("\n")}
+Os demais objetos da área pertencem a OUTRAS disciplinas e estão PROIBIDOS aqui, por mais que o assunto pareça caber: pedir Artes e receber "Estudo do texto literário" entrega ao professor uma questão de Literatura no lugar da que ele pediu.${permitidos.length === 1 ? ` Com um objeto só, a variedade da leva vem do ASSUNTO e do CONTEXTO — nunca de trocar o objeto.` : ""}`;
+}
+
 const CALIBRACAO_EXTENSAO: Record<string, { n: number; texto: [number, number, number]; comando: [number, number, number]; item: [number, number, number] }> = {
   "Língua Portuguesa": { n: 213, texto: [608, 1201, 902], comando: [82, 180, 138], item: [44, 70, 58] },
   "Literatura": { n: 105, texto: [608, 1122, 868], comando: [82, 164, 118], item: [45, 67, 57] },
@@ -191,7 +232,12 @@ function buildCalibracaoExtensao(disciplina: string): string {
 - Texto-suporte (campo "textoBase"): mire em torno de ${tMean} caracteres; a maioria das questões reais desta disciplina fica entre ${tP25} e ${tP75} caracteres.
 - Comando (campo "comando"): mire em torno de ${cMean} caracteres; faixa típica real: ${cP25}–${cP75} caracteres.
 - Cada alternativa (A-E): mire em torno de ${iMean} caracteres cada; faixa típica real: ${iP25}–${iP75} caracteres (alternativas numéricas curtas são normais quando ${iMean} for baixo).
-Trate estes números como META DE REFERÊNCIA, não como contagem rígida obrigatória: o objetivo é que a questão gerada "pareça" uma questão real do ENEM em tamanho — nem artificialmente mais curta nem mais longa que o padrão histórico desta disciplina. Pequena variação em torno da meta é normal e aceitável; o que deve ser evitado é uma questão sistematicamente muito mais longa ou muito mais curta que a média real acima.`;
+ESTES NÚMEROS SÃO TETO, NÃO SUGESTÃO. Medição da leva de 18/09/2026 (20 questões de Artes): o texto-suporte saiu com 1022 caracteres em média contra 610 das provas reais (+68%), e a alternativa média saiu com 103 contra 61 (+69%) — NENHUMA das 100 alternativas caiu dentro da faixa real. Questão desse tamanho não se parece com questão do ENEM: o candidato tem três minutos por item.
+Antes de entregar, CONTE e ajuste:
+· "textoBase" acima de ${tP75} caracteres: corte. O texto-suporte apresenta a situação e para — contexto histórico, biografia do autor e juízo de valor sobram e devem sair.
+· cada alternativa acima de ${iP75} caracteres: reescreva mais curta. Alternativa do ENEM é uma oração, não um parágrafo; se as cinco estão longas, o problema é o recorte, não a redação.
+· "comando" acima de ${cP75} caracteres: enxugue.
+Cortar NÃO é empobrecer: é tirar o que não é preciso ler para responder. Se a questão só funciona com texto longo, escolha outro recorte do mesmo objeto de conhecimento.`;
 }
 
 function jsonResponse(body: unknown, status = 200) {
@@ -479,7 +525,7 @@ function buildBlocoFixo(opts: {
     : "";
   return `═══════ INSTRUÇÕES FIXAS DESTA CONFIGURAÇÃO (disciplina ${opts.disciplina}, recurso visual: ${opts.recurso}) ═══════
 As instruções abaixo valem para a questão pedida no prompt do usuário e devem ser seguidas integralmente junto com ele.
-${buildRegraFontesReais(opts.disciplina, opts.area)}
+${buildRecorteDaDisciplina(opts.area, opts.disciplina)}${buildRegraFontesReais(opts.disciplina, opts.area)}
 ${buildCalibracaoExtensao(opts.disciplina)}
 
 ${buildRegraAlternativas()}
@@ -2405,6 +2451,35 @@ async function garantirFontesReais(
   }
 }
 
+
+/* v74.11 — TRAVA DO RECORTE. O prompt acima já restringe; isto é a rede embaixo.
+   Objeto fora da disciplina escolhida marca a questão e o app trava a entrega,
+   do mesmo jeito que gabarito incoerente e fonte não verificada. */
+function conferenciaObjeto(d: any, area: string, disciplina: string): { estado: string; motivo: string } {
+  const declarado = String((d && d.objetoConhecimento) || "").trim();
+  if (!declarado) return { estado: "ausente", motivo: "a questão não declarou objeto de conhecimento" };
+  const permitidos = objetosDaDisciplina(area, disciplina);
+  if (!permitidos.length) return { estado: "ok", motivo: "" };
+  const norm = (t: string) => t.trim().toLowerCase();
+  if (permitidos.some((o) => norm(o) === norm(declarado))) return { estado: "ok", motivo: "" };
+  const oficiais: string[] = (APP_DATA.objetosConhecimento ? APP_DATA.objetosConhecimento[area] : null) || [];
+  const eOficial = oficiais.some((o) => norm(o) === norm(declarado));
+  return {
+    estado: eOficial ? "fora_da_disciplina" : "fora_da_matriz",
+    motivo: eOficial
+      ? `o objeto "${declarado}" existe na Matriz, mas pertence a outra disciplina — o professor pediu "${disciplina}", cujo recorte é: ${permitidos.join("; ")}`
+      : `o objeto "${declarado}" não consta do Anexo da Matriz de Referência`,
+  };
+}
+
+function garantirObjetoDaDisciplina(data: any, area: string, disciplina: string) {
+  const c = conferenciaObjeto(data, area, disciplina);
+  if (c.estado === "ok") { delete data.objetoForaDoRecorte; return c; }
+  data.objetoForaDoRecorte = { motivo: c.motivo, estado: c.estado };
+  console.error(`[objeto] BLOQUEADA: ${c.motivo}`);
+  return c;
+}
+
 /* ═══════════ FIM DO BLOCO DE VALIDAÇÃO DE FONTES (v74.8) ═══════════ */
 
 function selfTestResponse() {
@@ -2436,6 +2511,8 @@ function selfTestResponse() {
     fontesReaisEstrito.toString(), conferenciaFontes.toString(), normalizaUrl.toString(),
     SISTEMA_PESQUISA_FONTE, JSON.stringify(FERRAMENTA_DOSSIE_FONTE),                                             // v74.10
     buildPesquisaFontePrompt.toString(), buildDossieFonte.toString(), pesquisarFonteReal.toString(),
+    JSON.stringify(OBJETOS_POR_DISCIPLINA), buildRecorteDaDisciplina.toString(),                                 // v74.11
+    objetosDaDisciplina.toString(), conferenciaObjeto.toString(), garantirObjetoDaDisciplina.toString(),
     buildAuditoriaFontesPrompt.toString(), garantirFontesReais.toString(), JSON.stringify(SCHEMA_FONTE),
     buildSystemPlanejamento.toString(),
     normalizarNotacaoTexto.toString(), normalizarNotacaoQuimica.toString(), qnConverteIon.toString(),
@@ -2965,6 +3042,9 @@ ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferrame
        reescrita possível (visual, revisão matemática, coerência do gabarito):
        o que for auditado é exatamente o que vai ser entregue. Reprovando,
        a questão sai marcada e o app bloqueia a entrega. */
+    /* v74.11 — o objeto declarado tem de caber na disciplina pedida. */
+    const objetoDiag = garantirObjetoDaDisciplina(data, area, disciplina);
+
     const fontesDiag = await garantirFontesReais(
       data, system, usos, LIMITE_FUNCAO_MS - (Date.now() - inicioReq), area, buscasWeb, dossie,
     );
@@ -2999,7 +3079,7 @@ ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferrame
     notacaoDiag.residuoFinal = temResiduoNotacao(data, area);
     if (notacaoDiag.residuoFinal) console.warn(`[notação] resíduo ASCII na questão entregue (${disciplina}: "${String(data?.tema || "").slice(0, 60)}") — ` + JSON.stringify(notacaoDiag.notacao?.residuosDepois ?? notacaoDiag));
     else if (notacaoDiag.residuoAntesDoRevisor) console.log(`[notação] resíduo corrigido pelo revisor (${notacaoDiag.notacao?.tentativas ?? "?"} tentativa(s))`);
-    return jsonResponse({ question: corrigirQuebrasLiterais(data), uso, visualDiag, diversidadeDiag, notacaoDiag, gabaritoDiag, fontesDiag });
+    return jsonResponse({ question: corrigirQuebrasLiterais(data), uso, visualDiag, diversidadeDiag, notacaoDiag, gabaritoDiag, fontesDiag, objetoDiag });
   } catch (err) {
     return jsonResponse({ error: `Erro ao gerar questão: ${String((err as any)?.message || err)}` }, 502);
   }

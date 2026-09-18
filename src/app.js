@@ -3850,6 +3850,46 @@ function bloqueiaSeGabaritoInconsistente(doneQuestions){
    marca e portanto passam, exatamente como passavam antes. */
 const MENSAGEM_FONTE_BLOQUEIO = "Não foi possível verificar uma fonte real para o autor ou a obra solicitada. Envie o texto ou uma referência confiável para continuar.";
 
+/* v18.18 — TRAVA DO RECORTE DA DISCIPLINA. Na leva de 18/09, 7 das 20 questões
+   pedidas como Artes declararam objeto de outra disciplina (5 delas "Estudo do
+   texto literário"): objeto oficial da Matriz, mas fora do que o professor
+   pediu. O backend (v74.11) marca; aqui nenhuma sai em PDF, Word, impressão
+   ou HTML. Simulado antigo não tem a marca e continua exportável. */
+function bloqueiaSeObjetoForaDoRecorte(doneQuestions){
+  const ruins = [];
+  (doneQuestions || []).forEach(o => {
+    const d = o.q && o.q.data;
+    if(d && d.objetoForaDoRecorte) ruins.push({ n: o.idx + 1, motivo: String(d.objetoForaDoRecorte.motivo || "") });
+  });
+  if(!ruins.length) return false;
+  console.error("[objeto] exportação bloqueada:", ruins);
+  const lista = ruins.length === 1 ? "a questão " + ruins[0].n : "as questões " + ruins.map(r => r.n).join(", ");
+  toast("Exportação bloqueada em " + lista + ": o objeto de conhecimento está fora do recorte da disciplina escolhida. " +
+        ruins[0].motivo + ' Use "Regenerar".', "err");
+  return true;
+}
+
+/* Faixas reais medidas nas provas do ENEM 2015-2025 (mesmos números do backend,
+   em references/calibracao_extensao.md): [p25, p75, média] por parte. Aqui só
+   geram AVISO — extensão é questão de estilo, não de verdade, e travar por ela
+   reprovaria questão correta. */
+const CALIBRACAO_APP = {
+  "Língua Portuguesa": { texto: [608,1201,902], comando: [82,180,138], item: [44,70,58] },
+  "Literatura": { texto: [608,1122,868], comando: [82,164,118], item: [45,67,57] },
+  "Artes": { texto: [384,798,610], comando: [107,189,143], item: [48,70,61] },
+  "Práticas Corporais": { texto: [799,1134,962], comando: [83,128,106], item: [35,73,59] },
+  "Educação Física": { texto: [799,1134,962], comando: [83,128,106], item: [35,73,59] },
+  "Língua Estrangeira (Inglês/Espanhol)": { texto: [409,1073,761], comando: [77,179,129], item: [37,60,50] },
+  "História": { texto: [469,757,620], comando: [84,130,104], item: [33,53,45] },
+  "Geografia": { texto: [398,737,554], comando: [76,126,101], item: [29,43,37] },
+  "Filosofia": { texto: [477,671,596], comando: [78,118,95], item: [31,51,41] },
+  "Sociologia": { texto: [497,780,625], comando: [76,123,107], item: [28,49,40] },
+  "Biologia": { texto: [374,634,527], comando: [41,102,93], item: [13,49,34] },
+  "Física": { texto: [476,805,648], comando: [47,122,109], item: [5,40,25] },
+  "Química": { texto: [483,780,641], comando: [56,110,104], item: [7,41,26] },
+  "Matemática": { texto: [420,725,586], comando: [47,134,142], item: [3,10,9] },
+};
+
 function bloqueiaSeFonteNaoVerificada(doneQuestions){
   const ruins = [];
   (doneQuestions || []).forEach(o => {
@@ -4033,6 +4073,25 @@ function auditaQuestaoLocal(q){
      de exportação está em bloqueiaSeFonteNaoVerificada(). */
   if(d.fonteNaoVerificada){
     aviso(MENSAGEM_FONTE_BLOQUEIO + (d.fonteNaoVerificada.motivo ? " (motivo: " + d.fonteNaoVerificada.motivo + ")" : ""));
+  }
+
+  /* v18.18 — recorte da disciplina e extensão medida nas provas reais. */
+  if(d.objetoForaDoRecorte){
+    aviso("Objeto de conhecimento fora do recorte da disciplina. " + String(d.objetoForaDoRecorte.motivo || "") +
+          ' A questão não pode ser exportada assim — use "Regenerar".');
+  }
+  const cal = CALIBRACAO_APP[String(d.disciplina || "").trim()];
+  if(cal){
+    const tb = String(d.textoBase || "").length;
+    const cm = String(d.comando || "").length;
+    const tamItens = GABARITO_LETRAS.map(k => txt(k).length).filter(v => v > 0);
+    const im = tamItens.length ? Math.round(tamItens.reduce((a,b) => a+b, 0) / tamItens.length) : 0;
+    const fora = [];
+    if(tb > cal.texto[1]) fora.push("texto-base com " + tb + " caracteres (faixa real: " + cal.texto[0] + "–" + cal.texto[1] + ", média " + cal.texto[2] + ")");
+    if(cm > cal.comando[1]) fora.push("comando com " + cm + " (faixa " + cal.comando[0] + "–" + cal.comando[1] + ")");
+    if(im > cal.item[1]) fora.push("alternativas com " + im + " em média (faixa " + cal.item[0] + "–" + cal.item[1] + ", média " + cal.item[2] + ")");
+    if(fora.length) info("Mais longa que o padrão real do ENEM em " + d.disciplina + ": " + fora.join("; ") +
+                         ". Medido em provas de 2015 a 2025 — o candidato tem três minutos por questão.");
   }
 
   const confAud = conferenciaGabarito(d);
@@ -4763,6 +4822,7 @@ async function exportHtmlSnapshot(){
     if(bloqueiaSeQuimicaInvalida(doneQuestions)) return;
     if(bloqueiaSeGabaritoInconsistente(doneQuestions)) return;
     if(bloqueiaSeFonteNaoVerificada(doneQuestions)) return;
+    if(bloqueiaSeObjetoForaDoRecorte(doneQuestions)) return;
     const html = enemBuildHtmlComPdf(doneQuestions, professor);
     const blob = new Blob([html], { type: "text/html;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -4869,6 +4929,7 @@ async function printExam(){
     if(bloqueiaSeQuimicaInvalida(doneQuestions)) return;
     if(bloqueiaSeGabaritoInconsistente(doneQuestions)) return;
     if(bloqueiaSeFonteNaoVerificada(doneQuestions)) return;
+    if(bloqueiaSeObjetoForaDoRecorte(doneQuestions)) return;
     const abriu = enemPrintPdf(doneQuestions, professor);
     toast(abriu ? "Documento aberto para impressão no padrão do caderno ENEM."
                 : "Seu navegador bloqueou a janela; o arquivo foi baixado — abra-o e imprima.", abriu ? "ok" : "err");
@@ -7315,6 +7376,7 @@ async function exportPdf(){
     if(bloqueiaSeQuimicaInvalida(doneQuestions)) return;
     if(bloqueiaSeGabaritoInconsistente(doneQuestions)) return;
     if(bloqueiaSeFonteNaoVerificada(doneQuestions)) return;
+    if(bloqueiaSeObjetoForaDoRecorte(doneQuestions)) return;
     enemExportPdf(doneQuestions, !isAluno);
     toast("PDF exportado com sucesso.", "ok");
     return;
@@ -7655,6 +7717,7 @@ async function exportDocx(){
     if(bloqueiaSeQuimicaInvalida(doneQuestions)) return;
     if(bloqueiaSeGabaritoInconsistente(doneQuestions)) return;
     if(bloqueiaSeFonteNaoVerificada(doneQuestions)) return;
+    if(bloqueiaSeObjetoForaDoRecorte(doneQuestions)) return;
     const docEnem = new Document({
       evenAndOddHeaderAndFooters: true,
       sections: enemDocxSections(doneQuestions, !isAluno),
