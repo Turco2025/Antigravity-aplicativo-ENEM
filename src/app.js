@@ -2199,6 +2199,8 @@ async function planejaRecortesPorTema(){
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({
           planejarRecortes: true,
+          // v18.21: tamanho da leva — o backend decide por ele o TTL do cache
+          quantidadeLeva: (state.questions && state.questions.length) || 1,
           area: state.area,
           disciplina: state.disciplina,
           tema: g.tema,
@@ -2709,6 +2711,8 @@ async function generateQuestion(q){
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({
+          // v18.21: tamanho da leva — o backend decide por ele o TTL do cache
+          quantidadeLeva: (state.questions && state.questions.length) || 1,
           area: state.area,
           disciplina: state.disciplina,
           tema: q.tema || "",
@@ -2868,6 +2872,7 @@ async function refazerVisualPeloBackend(q){
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({
       regenerarVisual: true,
+      quantidadeLeva: (state.questions && state.questions.length) || 1,   // v18.21
       area: state.area,
       disciplina: state.disciplina,
       tema: q.data.tema || q.tema || "",
@@ -2997,10 +3002,24 @@ async function regenerarQuestaoEArquivar(q){
 function zeraUso(){
   // buscasWeb/custoUSD: medição real por questão devolvida pelo backend (v63).
   state.uso = { chamadas: 0, entradaNova: 0, cacheEscrito: 0, cacheLido: 0, saida: 0, buscasWeb: 0, custoUSD: 0 };
+  state.usoEtapas = {};   // v18.21: o mesmo, separado por etapa
 }
 function somaUso(u){
   if(!state.uso) zeraUso();
   Object.keys(state.uso).forEach(k => { state.uso[k] += Number(u[k]) || 0; });
+  /* v18.21 — o backend passa a dizer, por ETAPA (pesquisa, geração, auditoria),
+     quanto de cache foi gravado e quanto foi lido. É o que mostra ONDE o cache
+     vaza: o total por questão não distingue "gravou tudo de novo" de "leu tudo".
+     Guardado aqui e somado por etapa no relatório do fim da leva. */
+  if(Array.isArray(u.porEtapa)){
+    state.usoEtapas = state.usoEtapas || {};
+    u.porEtapa.forEach(e => {
+      const k = String(e.etapa || "?");
+      const a = state.usoEtapas[k] || (state.usoEtapas[k] = { chamadas:0, entrada:0, cacheEscrito:0, cacheLido:0, saida:0, buscas:0 });
+      a.chamadas++;
+      ["entrada","cacheEscrito","cacheLido","saida","buscas"].forEach(c => { a[c] += Number(e[c]) || 0; });
+    });
+  }
 }
 /* v18.20 — TETO DE CUSTO POR QUESTÃO. O professor fixou o máximo em R$ 0,50 por
    questão. O backend já devolve o custo real de cada uma (medição, não
@@ -3023,7 +3042,68 @@ function relatoUso(){
     ? ` · dentro do teto de R$ ${TETO_BRL_POR_QUESTAO.toFixed(2)}`
     : ` · ACIMA do teto de R$ ${TETO_BRL_POR_QUESTAO.toFixed(2)}`);
   return `[tokens] ${u.chamadas} chamadas · entrada nova ${u.entradaNova} · cache escrito ${u.cacheEscrito} · cache lido ${u.cacheLido} (${pct}% da entrada) · saída ${u.saida} · buscas web ${u.buscasWeb || 0} · texto ≈ US$ ${(u.custoUSD || 0).toFixed(4)}`
-    + (n ? `\n[custo] ${n} questões · US$ ${porQuestao.toFixed(4)} por questão ≈ R$ ${brl.toFixed(2)}${veredito} · ${buscasPorQuestao.toFixed(2)} buscas por questão · ${(u.chamadas / n).toFixed(2)} chamadas por questão` : "");
+    + (n ? `\n[custo] ${n} questões · US$ ${porQuestao.toFixed(4)} por questão ≈ R$ ${brl.toFixed(2)}${veredito} · ${buscasPorQuestao.toFixed(2)} buscas por questão · ${(u.chamadas / n).toFixed(2)} chamadas por questão` : "")
+    + relatoCachePorEtapa(n);
+}
+
+/* v18.21 — ONDE o cache acerta e onde erra. Uma linha por etapa, com o que ela
+   gravou e o que leu, e quanto isso custou. Gravar custa 12,5 vezes mais que
+   ler: é aqui que se vê se o aquecimento está valendo ou se cada questão está
+   pagando o prompt inteiro de novo. */
+function relatoCachePorEtapa(n){
+  const e = state.usoEtapas;
+  if(!e || !Object.keys(e).length || !n) return "";
+  const linhas = Object.keys(e).sort().map(k => {
+    const a = e[k];
+    const custoEscrito = a.cacheEscrito * 2.5 / 1e6, custoLido = a.cacheLido * 0.2 / 1e6;
+    const veredito = a.cacheEscrito === 0 ? "cache OK" : a.cacheLido === 0 ? "CACHE PERDIDO" : "parcial";
+    return `\n  ${k.padEnd(22)} ${String(a.chamadas).padStart(3)} chamadas · gravado ${String(Math.round(a.cacheEscrito / n)).padStart(7)}/q · lido ${String(Math.round(a.cacheLido / n)).padStart(7)}/q · US$ ${((custoEscrito + custoLido) / n).toFixed(4)}/q · ${veredito}`;
+  });
+  return `\n[cache por etapa] (gravar custa US$ 2,50/M · ler US$ 0,20/M)` + linhas.join("");
+}
+
+/* v18.21 — MARCA-PASSO DO CACHE (medida 2 do plano de custo).
+   O prefixo do sistema custa US$ 0,037 para gravar e US$ 0,003 para ler, e o
+   cache de 1 hora morre passada a hora. Quem gera uma questão avulsa 70 minutos
+   depois da leva paga a gravação inteira de novo. Uma renovação de ~US$ 0,004,
+   50 minutos depois da leva, evita esses US$ 0,05.
+
+   Regras: só com a caixa marcada (padrão DESMARCADA — nada roda em segundo
+   plano sem o professor mandar); UMA renovação agendada por leva, cancelando a
+   anterior; no máximo 3 seguidas, para a aba esquecida aberta não ficar gastando
+   a noite toda; e tudo aparece no console. */
+const AQUECIMENTO_INTERVALO_MS = 50 * 60 * 1000;
+const AQUECIMENTO_MAX_SEGUIDOS = 3;
+let aquecimentoTimer = null, aquecimentoSeguidos = 0;
+
+async function aquecerCacheAgora(){
+  const url = `${QUESTION_BACKEND_URL}?aquecer=1&area=${encodeURIComponent(state.area || "")}`
+    + `&disciplina=${encodeURIComponent(state.disciplina || "")}`
+    + `&recurso=${encodeURIComponent((state.questions && state.questions[0] && state.questions[0].recurso) || "nenhum")}`;
+  const resp = await fetch(url, { headers: { ...authHeaders() } });
+  const payload = await resp.json().catch(() => ({}));
+  if(!resp.ok || payload.error) throw new Error(payload.error || `HTTP ${resp.status}`);
+  console.log(`[cache] aquecido (${(payload.etapas || []).join(", ") || "nenhuma etapa"}) · US$ ${Number((payload.uso && payload.uso.custoUSD) || 0).toFixed(4)}`);
+  return payload;
+}
+
+function agendaMarcaPassoDoCache(){
+  if(aquecimentoTimer){ clearTimeout(aquecimentoTimer); aquecimentoTimer = null; }
+  const caixa = document.getElementById("chkAquecerCache");
+  if(!caixa || !caixa.checked){ aquecimentoSeguidos = 0; return; }
+  if(aquecimentoSeguidos >= AQUECIMENTO_MAX_SEGUIDOS){
+    console.log(`[cache] marca-passo parado após ${AQUECIMENTO_MAX_SEGUIDOS} renovações seguidas sem geração nova.`);
+    return;
+  }
+  aquecimentoTimer = setTimeout(async () => {
+    aquecimentoTimer = null;
+    try{
+      aquecimentoSeguidos++;
+      await aquecerCacheAgora();
+      agendaMarcaPassoDoCache();   // encadeia a próxima, até o teto
+    }catch(e){ console.warn("[cache] marca-passo falhou (sem efeito na geração):", e && e.message); }
+  }, AQUECIMENTO_INTERVALO_MS);
+  console.log(`[cache] marca-passo agendado para daqui a ${Math.round(AQUECIMENTO_INTERVALO_MS / 60000)} min.`);
 }
 
 async function runPool(items, worker, concurrency){
@@ -3142,6 +3222,9 @@ async function generateAll(){
   loadScriptOnce(CDN_URLS.jspdf).catch(() => {});
   const relato = relatoUso();
   if(relato) console.log(relato);
+  // v18.21: leva nova zera o contador do marca-passo e reagenda (ver agendaMarcaPassoDoCache)
+  aquecimentoSeguidos = 0;
+  agendaMarcaPassoDoCache();
 
   // Auditoria da distribuição do gabarito, com o resultado dito em voz alta.
   const presos = state.questions.filter(q => q.gabaritoStatus === "impossivel").length;
@@ -4737,6 +4820,7 @@ async function redoVisual(q, body, titleEl, redoBtn){
       headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({
         regenerarVisual: true,
+        quantidadeLeva: (state.questions && state.questions.length) || 1,   // v18.21
         area: state.area,
         disciplina: state.disciplina,
         tema: q.data.tema || q.tema || "",

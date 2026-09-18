@@ -729,7 +729,7 @@ async function pesquisarFonteReal(
   usos: any[], buscas: { url: string; title: string }[],
 ): Promise<any | null> {
   if (!fontesReaisEstrito(o.area)) return null;
-  const sistema: SistemaPrompt = [{ type: "text", text: SISTEMA_PESQUISA_FONTE, cache_control: { type: "ephemeral" } }];
+  const sistema: SistemaPrompt = [{ type: "text", text: SISTEMA_PESQUISA_FONTE, cache_control: cacheControlAtual() }];
   /* Item 2 da regra: não achando fonte, "deve-se procurar outra obra, outro
      documento ou outra referência real relacionada ao tema". Duas tentativas —
      desistir na primeira seria desobedecer; insistir para sempre custaria caro. */
@@ -739,6 +739,7 @@ async function pesquisarFonteReal(
       const d = await callClaudeForJSON(
         sistema, buildPesquisaFontePrompt({ ...o, tentativaAnterior: motivoAnterior }),
         tentativa === 1 ? BUSCA_PESQUISADOR : BUSCA_PESQUISADOR_RETRY, usos, FERRAMENTA_DOSSIE_FONTE, buscas,
+        `pesquisa/tentativa-${tentativa}`,
       );
       const bom = d && typeof d === "object" && (d as any).encontrou === true && String((d as any).trecho || "").trim();
       if (bom) {
@@ -1065,7 +1066,7 @@ async function callClaude(system: SistemaPrompt, userMsg: string, maxTokens: num
              universal + contexto da área; bloco 2 = instruções fixas desta
              configuração (ver buildBlocoFixo). Uma string simples continua
              aceita e vira um bloco único, como sempre foi. */
-          system: Array.isArray(system) ? system : [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
+          system: Array.isArray(system) ? system : [{ type: "text", text: system, cache_control: cacheControlAtual() }],
           messages: [{ role: "user", content: userMsg }],
           thinking: { type: "disabled" },
           /* EFFORT FIXO EM "medium" PARA TODA E QUALQUER CHAMADA AO SONNET 5.
@@ -1198,6 +1199,28 @@ async function callClaude(system: SistemaPrompt, userMsg: string, maxTokens: num
    (2 buscas → US$ 0,125 · 7 buscas → US$ 0,360). Com 4,10 buscas de média a
    questão saía a US$ 0,2486 — muito acima do teto de R$ 0,50 pedido pelo
    professor. O teto cai de 5 para 3, e cada etapa ganha o seu. */
+/* v74.15 — TTL DO CACHE POR CONTEXTO (medida 1 do plano de custo).
+   O cache de 5 minutos SE RENOVA a cada uso: dentro de uma leva contínua ele
+   não expira, e grava a 1,25× o preço de entrada. O de 1 hora grava a 2×, mas
+   sobrevive ENTRE levas. Medido: numa leva isolada o de 5 minutos é sempre
+   mais barato; a partir da segunda geração dentro da hora, o de 1 hora ganha —
+   quatro questões avulsas ao longo de uma hora saem por US$ 0,122 com 1 h
+   contra US$ 0,149 com 5 min.
+
+   Regra: 1 hora quando a leva tem 3 ou mais questões OU quando houve geração
+   nos últimos 55 minutos. 5 minutos no resto — ou seja, na questão avulsa
+   isolada, que é justamente onde a gravação cara não teria quem a aproveitasse.
+   O app manda "quantidadeLeva"; a geração recente sai da mesma tabela que o
+   limite diário já consulta. */
+type CacheControl = { type: "ephemeral"; ttl?: string };
+const CACHE_5MIN: CacheControl = { type: "ephemeral" };
+const CACHE_1H: CacheControl = { type: "ephemeral", ttl: "1h" };
+let _cacheControlAtual: CacheControl = CACHE_5MIN;
+function cacheControlAtual(): CacheControl { return _cacheControlAtual; }
+function escolheCacheControl(quantidadeLeva: number, geracaoRecente: boolean): CacheControl {
+  return (Number(quantidadeLeva) >= 3 || geracaoRecente) ? CACHE_1H : CACHE_5MIN;
+}
+
 const WEB_SEARCH_TOOL = { type: "web_search_20250305", name: "web_search", max_uses: 3 };
 /* Quem PESQUISA é o pesquisador (itens 1 a 3 da regra do professor): é a única
    etapa que varre a web. Teto 2, e o prompt pede UMA busca bem construída, com
@@ -1728,12 +1751,27 @@ function lerFerramenta(bruto: string): any | null {
   return null;
 }
 
-async function callClaudeForJSON(system: SistemaPrompt, userMsg: string, enableWebSearch: false | { type: string; name: string; max_uses: number } = false, usos?: any[], ferramenta: any = FERRAMENTA_QUESTAO, buscas?: { url: string; title: string }[]) {
+/* v74.15 — cada chamada passa a se identificar ("etapa"), e o acerto/erro de
+   cache dela vai para o log. Sem isso, o total por questão não diz ONDE o cache
+   está vazando — e a medição de 18/09 mostrou 31.685 tokens gravados por
+   questão onde a estrutura prevê uma gravação por leva. */
+function registraUso(usos: any[] | undefined, usage: any, etapa: string) {
+  if (!usos || !usage) return;
+  try {
+    usage.etapa = etapa;
+    const esc = Number(usage.cache_creation_input_tokens) || 0;
+    const lid = Number(usage.cache_read_input_tokens) || 0;
+    console.log(`[cache] ${etapa}: ${lid > 0 && esc === 0 ? "ACERTO" : esc > 0 && lid > 0 ? "parcial" : "ERRO"} · gravado ${esc} · lido ${lid} · entrada ${Number(usage.input_tokens) || 0} · saída ${Number(usage.output_tokens) || 0}`);
+  } catch (_e) { /* medir nunca pode derrubar a geração */ }
+  usos.push(usage);
+}
+
+async function callClaudeForJSON(system: SistemaPrompt, userMsg: string, enableWebSearch: false | { type: string; name: string; max_uses: number } = false, usos?: any[], ferramenta: any = FERRAMENTA_QUESTAO, buscas?: { url: string; title: string }[], etapa = "geracao") {
   const juntaBuscas = (r: { buscas?: { url: string; title: string }[] }) => { if (buscas && r && Array.isArray(r.buscas)) buscas.push(...r.buscas); };
   const primeira = await callClaude(system, userMsg, 8000, enableWebSearch, ferramenta);
   juntaBuscas(primeira);
   const { text, truncated, usage } = primeira;
-  if (usos && usage) usos.push(usage);
+  registraUso(usos, usage, etapa);
   // Caminho normal: a resposta veio como argumento de ferramenta, já válido.
   const daFerramenta = lerFerramenta(primeira.ferramentaJSON);
   if (daFerramenta) return daFerramenta;
@@ -1749,7 +1787,7 @@ async function callClaudeForJSON(system: SistemaPrompt, userMsg: string, enableW
     if (truncated) {
       const retry = await callClaude(system, userMsg, 12000, enableWebSearch, ferramenta);
       juntaBuscas(retry);
-      if (usos && retry.usage) usos.push(retry.usage);
+      registraUso(usos, retry.usage, etapa + "/retry");
       return lerFerramenta(retry.ferramentaJSON) ?? parseJSONLoose(retry.text);
     }
     const correcao = `${userMsg}
@@ -1759,7 +1797,7 @@ ATENÇÃO — sua resposta anterior não pôde ser lida como JSON. O erro do int
 Reenvie a MESMA questão, agora como JSON estritamente válido. Verifique, antes de responder: toda aspa dupla que faça parte de um texto está escapada como \\" ; não há barra invertida solta (nada de LaTeX como \\pi ou \\sqrt — escreva por extenso); não há quebra de linha literal dentro de uma string; não há vírgula sobrando antes de } ou ]. Entregue chamando a ferramenta indicada acima, sem crase e sem texto em volta.`;
     const retry = await callClaude(system, correcao, 8000, enableWebSearch, ferramenta);
     juntaBuscas(retry);
-    if (usos && retry.usage) usos.push(retry.usage);
+    registraUso(usos, retry.usage, etapa + "/retry-json");
     return lerFerramenta(retry.ferramentaJSON) ?? parseJSONLoose(retry.text);
   }
 }
@@ -1786,6 +1824,15 @@ function resumoUso(usos: any[]) {
     saida: soma("output_tokens"),
     buscasWeb,
     custoUSD: 0,
+    // v74.15: onde o cache acertou e onde errou, por etapa
+    porEtapa: usos.map((u: any) => ({
+      etapa: String(u?.etapa || "?"),
+      entrada: Number(u?.input_tokens) || 0,
+      cacheEscrito: Number(u?.cache_creation_input_tokens) || 0,
+      cacheLido: Number(u?.cache_read_input_tokens) || 0,
+      saida: Number(u?.output_tokens) || 0,
+      buscas: Number(u?.server_tool_use?.web_search_requests) || 0,
+    })),
   };
   r.custoUSD = Number((
     (r.entradaNova * PRECO_USD_POR_M.entrada + r.cacheEscrito * PRECO_USD_POR_M.cacheEscrito +
@@ -1796,6 +1843,21 @@ function resumoUso(usos: any[]) {
 }
 
 /* ---------------- HTTP handler ---------------- */
+
+/* v74.15 — houve geração nos últimos 55 minutos? É o que decide o TTL do cache
+   (ver escolheCacheControl). Uma consulta indexada na mesma tabela que o limite
+   diário já usa; falhando, devolve false e o cache cai no de 5 minutos — nunca
+   derruba a geração. */
+async function houveGeracaoRecente(): Promise<boolean> {
+  try {
+    const desde = new Date(Date.now() - 55 * 60 * 1000).toISOString();
+    const { count, error } = await supabase
+      .from("question_generation_log")
+      .select("id", { count: "exact", head: true })
+      .gte("created_at", desde);
+    return !error && typeof count === "number" && count > 0;
+  } catch (_e) { return false; }
+}
 
 async function checkDailyCap(): Promise<Response | null> {
   // Sem limite configurado: não consulta o log nem bloqueia nada.
@@ -2119,7 +2181,7 @@ async function garantirVisual(data: any, opts: { area: string; disciplina: strin
         gabarito: String(data.gabarito || ""), resolucaoComentada: String(data.resolucaoComentada || ""),
         instrucoesVisual: opts.instrucoesVisual, motivoFaltante: check.motivo,
       });
-      const novo = await callClaudeForJSON(buildSystemVisual(opts.area), userMsg, false, usos, ferramentaVisualPara(opts.recurso));
+      const novo = await callClaudeForJSON(buildSystemVisual(opts.area), userMsg, false, usos, ferramentaVisualPara(opts.recurso), undefined, "visual/refazer");
       const visualNovo = normalizarVisual(novo?.visual, opts.recurso);
       const c2 = visualConforme(visualNovo, opts.recurso);
       diag.refeito = n;
@@ -2303,7 +2365,7 @@ async function garantirGabaritoCoerente(data: any, system: SistemaPrompt, usos: 
     return diag;
   }
   try {
-    const bruto = await callClaudeForJSON(system, buildConferenciaGabaritoPrompt(data, motivo), false, usos, FERRAMENTA_GABARITO);
+    const bruto = await callClaudeForJSON(system, buildConferenciaGabaritoPrompt(data, motivo), false, usos, FERRAMENTA_GABARITO, undefined, "gabarito");
     diag.chamadas = 1;
     const letra = bruto && typeof bruto === "object" ? String((bruto as any).gabarito || "").trim().toUpperCase() : "";
     if (LETRAS_ALTERNATIVAS.includes(letra)) {
@@ -2601,6 +2663,33 @@ Quando o tipo de uso for "proprio", os itens de autoria devem vir true (não há
 Na dúvida, reprove: "na dúvida, verificar; sem confirmação, não utilizar".`;
 }
 
+/* v74.15 — SISTEMA PRÓPRIO DA AUDITORIA (medida 3 do plano de custo).
+   A auditoria vinha carregando o prompt de sistema INTEIRO da geração — 48.203
+   caracteres: modelo pedagógico do INEP, Matriz de Referência, objetos de
+   conhecimento, notação, calibração de extensão, protocolos de recurso visual,
+   regra das alternativas. Nada disso serve para o trabalho dela, que é conferir
+   a questão pronta contra a regra de fontes e contra o dossiê. Como cada
+   chamada paga a gravação do seu próprio prefixo (a ferramenta muda, então o
+   cache da geração não serve para a auditoria), eram ~11.900 tokens por questão
+   pagos à toa.
+
+   O que ENTRA aqui é o que a auditoria de fato usa: o papel dela e o texto
+   INTEGRAL da regra do professor. Tudo o mais que ela precisa — a questão, a
+   fonte declarada, o dossiê, a ficha das dez perguntas e o critério de autoria
+   institucional — já vai na mensagem do usuário (buildAuditoriaFontesPrompt).
+   Nenhuma exigência foi afrouxada: a regra vai inteira, palavra por palavra. */
+const SISTEMA_AUDITORIA_FONTES = `Você é o VALIDADOR DE FONTES de questões do ENEM. Uma questão já foi escrita por outro agente e chega a você pronta. A sua ÚNICA tarefa é a etapa 7 da sequência do professor — REVISAR —, decidindo se a fonte em que ela se apoia é real, se é a fonte certa e se tudo o que a questão afirma se sustenta nela.
+
+Você NÃO reescreve a questão, NÃO corrige, NÃO sugere melhoria e NÃO opina sobre a qualidade pedagógica do item: outro agente cuida disso. Você responde à ficha de validação que vem na mensagem e devolve o veredito pela ferramenta indicada.
+
+${REGRA_FONTES_PROFESSOR}
+
+COMO ISSO SE APLICA A VOCÊ, AGORA:
+· A regra acima é o seu critério — inteira, sem exceção. "Na dúvida, verificar; sem confirmação, não utilizar."
+· Você julga TODAS as partes da questão: texto-base, enunciado, alternativas, legendas, gabarito e resolução comentada. Distratores podem trazer interpretações erradas, mas NUNCA autores, obras ou citações inventados.
+· Autoria institucional é legítima e é o padrão da ABNT em acervo, museu, órgão público, enciclopédia e agência de notícias. Fonte sem autor assinado, com a entidade no campo "instituicao", é autoria válida — não exija nome de pessoa.
+· Não afirme que verificou algo que não verificou. Se um item não puder ser confirmado, ele é false.`;
+
 /* Roda a validação e, reprovando, MARCA a questão para bloqueio. Não repara:
    a regra 8 manda interromper a questão afetada e pedir a fonte ao professor. */
 async function garantirFontesReais(
@@ -2650,8 +2739,15 @@ async function garantirFontesReais(
        continua buscando, com teto de 2. */
     const buscaDaAuditoria = diag.dossie === "sem_dossie" ? BUSCA_AUDITORIA : false;
     diag.auditoriaBuscou = !!buscaDaAuditoria;
+    /* v74.15 — a auditoria usa o SISTEMA DELA, não o da geração (ver
+       SISTEMA_AUDITORIA_FONTES). O parâmetro `system` continua na assinatura
+       porque o restante do fluxo o passa, mas esta chamada não o usa mais. */
+    const sistemaAuditoria: SistemaPrompt = [
+      { type: "text", text: SISTEMA_AUDITORIA_FONTES, cache_control: cacheControlAtual() },
+    ];
     const bruto = await callClaudeForJSON(
-      system, buildAuditoriaFontesPrompt(data, dossiePrevio), buscaDaAuditoria, usos, FERRAMENTA_AUDITORIA_FONTE,
+      sistemaAuditoria, buildAuditoriaFontesPrompt(data, dossiePrevio), buscaDaAuditoria, usos, FERRAMENTA_AUDITORIA_FONTE,
+      undefined, "auditoria",
     );
     diag.chamadas = 1;
     const a = (bruto && typeof bruto === "object") ? bruto as any : {};
@@ -2720,6 +2816,45 @@ function garantirObjetoDaDisciplina(data: any, area: string, disciplina: string)
 
 /* ═══════════ FIM DO BLOCO DE VALIDAÇÃO DE FONTES (v74.8) ═══════════ */
 
+/* v74.15 — MARCA-PASSO DO CACHE (medida 2 do plano de custo).
+   O cache de 1 hora só serve a quem gera de novo dentro da hora. Quem gera uma
+   questão avulsa 70 minutos depois da leva anterior paga a gravação inteira de
+   novo — US$ 0,05 — e ninguém aproveita. Este endpoint faz três chamadas
+   mínimas (16 tokens de saída cada) com EXATAMENTE os mesmos prefixos das três
+   etapas, só para renovar o cache: custa cerca de US$ 0,004 e evita US$ 0,05.
+
+   Não gera questão, não grava no log de geração e não conta para o limite
+   diário. É deliberadamente explícito: o app só o chama quando o professor
+   deixa a opção ligada, e cada chamada aparece no console. */
+async function aquecerCacheResponse(url: URL) {
+  const area = (url.searchParams.get("area") || "linguagens").trim().toLowerCase();
+  const disciplina = (url.searchParams.get("disciplina") || "Artes").trim();
+  const recurso = (url.searchParams.get("recurso") || "nenhum").trim();
+  if (!AREA_LABELS[area]) return jsonResponse({ error: `área desconhecida: ${area}` }, 400);
+  _cacheControlAtual = CACHE_1H;
+  const usos: any[] = [];
+  const etapas: string[] = [];
+  const tentar = async (nome: string, sistema: SistemaPrompt, ferramenta: any) => {
+    try {
+      const r = await callClaude(sistema, "ok", 16, false, ferramenta);
+      registraUso(usos, r.usage, `aquecimento/${nome}`);
+      etapas.push(nome);
+    } catch (e) { console.error(`[aquecimento] ${nome} falhou: ${String((e as any)?.message || e).slice(0, 160)}`); }
+  };
+  const sistemaGeracao: SistemaPrompt = [
+    { type: "text", text: buildSystemPrompt(area), cache_control: CACHE_1H },
+    { type: "text", text: buildBlocoFixo({ area, disciplina, recurso, competenciaNum: null, habilidadeCod: null }), cache_control: CACHE_1H },
+  ];
+  await tentar("geracao", sistemaGeracao, ferramentaQuestaoPara(recurso, fontesReaisEstrito(area)));
+  if (fontesReaisEstrito(area)) {
+    await tentar("pesquisa", [{ type: "text", text: SISTEMA_PESQUISA_FONTE, cache_control: CACHE_1H }], FERRAMENTA_DOSSIE_FONTE);
+    await tentar("auditoria", [{ type: "text", text: SISTEMA_AUDITORIA_FONTES, cache_control: CACHE_1H }], FERRAMENTA_AUDITORIA_FONTE);
+  }
+  const uso = resumoUso(usos);
+  console.log(`[aquecimento] ${area}/${disciplina}/${recurso} · etapas ${etapas.join(", ") || "(nenhuma)"} · US$ ${uso.custoUSD}`);
+  return jsonResponse({ aquecido: true, area, disciplina, recurso, ttl: "1h", etapas, uso });
+}
+
 function selfTestResponse() {
   const canonico = JSON.stringify(APP_DATA);
   /* O mesmo cuidado vale para o código: um caractere trocado dentro de um
@@ -2756,6 +2891,7 @@ function selfTestResponse() {
     conferenciaDossie.toString(), tokensDeFonte.toString(), JSON.stringify([...PALAVRAS_VAZIAS_FONTE]),            // v74.13
     buscaDaGeracao.toString(),
     blocoNotacao.toString(), precisaNotacaoQuimica.toString(), JSON.stringify(AREAS_COM_NOTACAO_QUIMICA),   // v74.14
+    SISTEMA_AUDITORIA_FONTES, escolheCacheControl.toString(), aquecerCacheResponse.toString(), registraUso.toString(),   // v74.15
     JSON.stringify([WEB_SEARCH_TOOL, BUSCA_PESQUISADOR, BUSCA_PESQUISADOR_RETRY, BUSCA_AUDITORIA]),
     buildSystemPlanejamento.toString(),
     normalizarNotacaoTexto.toString(), normalizarNotacaoQuimica.toString(), qnConverteIon.toString(),
@@ -3085,7 +3221,40 @@ function selfTestResponse() {
           && buscaDaGeracao({ encontrou: false }, "humanas", "História") !== false
           && buscaDaGeracao({ encontrou: true, trecho: "" }, "humanas", "História") !== false
           && buscaDaGeracao(null, "matematica", "Matemática") === false,
-      };
+        /* v74.15 — as três medidas do plano de custo, conferíveis de fora. */
+        v7415_auditoriaTemSistemaProprio:
+          garantirFontesReais.toString().includes("SISTEMA_AUDITORIA_FONTES")
+          && SISTEMA_AUDITORIA_FONTES.includes(REGRA_FONTES_PROFESSOR)
+          && SISTEMA_AUDITORIA_FONTES.includes("VALIDADOR DE FONTES")
+          && SISTEMA_AUDITORIA_FONTES.includes("Autoria institucional é legítima")
+          // e é MUITO menor que o da geração, que é de onde vem a economia
+          && SISTEMA_AUDITORIA_FONTES.length < 9000
+          && SISTEMA_AUDITORIA_FONTES.length < buildSystemPrompt("linguagens").length / 3,
+        v7415_auditoriaSemMatrizNemModelo:
+          !SISTEMA_AUDITORIA_FONTES.includes(APP_DATA.universalModel)
+          && !SISTEMA_AUDITORIA_FONTES.includes(NOTACAO_MATEMATICA)
+          && !SISTEMA_AUDITORIA_FONTES.includes(JSON_SCHEMA_TXT),
+        v7415_charsAuditoria: SISTEMA_AUDITORIA_FONTES.length,
+        v7415_charsGeracao: buildSystemPrompt("linguagens").length + buildBlocoFixo({ area: "linguagens", disciplina: "Artes", recurso: "nenhum", competenciaNum: null, habilidadeCod: null }).length,
+        v7415_regraDoTtl:
+          escolheCacheControl(1, false).ttl === undefined
+          && escolheCacheControl(2, false).ttl === undefined
+          && escolheCacheControl(3, false).ttl === "1h"
+          && escolheCacheControl(20, false).ttl === "1h"
+          && escolheCacheControl(1, true).ttl === "1h"
+          && escolheCacheControl(2, true).ttl === "1h",
+        v7415_instrumentacaoPorEtapa: (() => {
+          const usos: any[] = [];
+          registraUso(usos, { input_tokens: 10, cache_creation_input_tokens: 0, cache_read_input_tokens: 500, output_tokens: 3 }, "geracao");
+          registraUso(usos, { input_tokens: 20, cache_creation_input_tokens: 700, cache_read_input_tokens: 0, output_tokens: 4 }, "auditoria");
+          const r: any = resumoUso(usos);
+          return Array.isArray(r.porEtapa) && r.porEtapa.length === 2
+            && r.porEtapa[0].etapa === "geracao" && r.porEtapa[0].cacheLido === 500
+            && r.porEtapa[1].etapa === "auditoria" && r.porEtapa[1].cacheEscrito === 700;
+        })(),
+        v7415_marcaPassoExiste: typeof aquecerCacheResponse === "function"
+          && aquecerCacheResponse.toString().includes("CACHE_1H")
+          && aquecerCacheResponse.toString().includes("16")      };
     })(),
   });
 }
@@ -3111,6 +3280,11 @@ Deno.serve(async (req: Request) => {
   }
   if (req.method === "GET" && new URL(req.url).searchParams.get("selftest") === "1") {
     return selfTestResponse();
+  }
+  // v74.15 — marca-passo do cache (ver aquecerCacheResponse).
+  if (req.method === "GET" && new URL(req.url).searchParams.get("aquecer") === "1") {
+    if (!ANTHROPIC_API_KEY) return jsonResponse({ error: "Backend não configurado." }, 500);
+    return await aquecerCacheResponse(new URL(req.url));
   }
   if (req.method !== "POST") {
     return jsonResponse({ error: "Método não suportado. Use POST." }, 405);
@@ -3164,7 +3338,7 @@ Deno.serve(async (req: Request) => {
       // Sem cache_control de propósito: o prompt é pequeno e a chamada é única.
       const system: SistemaPrompt = [{ type: "text", text: buildSystemPlanejamento(area) }];
       const userMsg = buildPlanejamentoPrompt({ area, disciplina, tema, quantidade, dificuldades, dominios, dominiosAlternativos, temasPorQuestao });
-      let data = await callClaudeForJSON(system, userMsg, false, usos, FERRAMENTA_RECORTES);
+      let data = await callClaudeForJSON(system, userMsg, false, usos, FERRAMENTA_RECORTES, undefined, "planejamento");
       let recortes = normalizarRecortes(data, quantidade);
       if (!recortes.length) {
         /* v65: forma inesperada — registra o que veio e pede UMA vez mais,
@@ -3173,7 +3347,7 @@ Deno.serve(async (req: Request) => {
         const correcao = `${userMsg}
 
 ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferramenta "entregar_recortes" precisa ser exatamente {"recortes": [ {"conteudo": "...", "contexto": "...", "habilidade": "..."}, ... ]} — uma LISTA de ${quantidade} objetos, com estas três chaves em minúsculas e sem acento, cada valor uma string. Reenvie o plano nesse formato.`;
-        data = await callClaudeForJSON(system, correcao, false, usos, FERRAMENTA_RECORTES);
+        data = await callClaudeForJSON(system, correcao, false, usos, FERRAMENTA_RECORTES, undefined, "planejamento/retry");
         recortes = normalizarRecortes(data, quantidade);
       }
       if (!recortes.length) return jsonResponse({ error: "O modelo não devolveu recortes utilizáveis." }, 502);
@@ -3213,7 +3387,7 @@ ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferrame
       // v69: sistema enxuto — a imagem não precisa do modelo pedagógico inteiro.
       const system = buildSystemVisual(area);
       const userMsg = buildVisualRedoPrompt({ tema, disciplina, recurso, textoBase, comando, alternativas, gabarito, resolucaoComentada, instrucoesVisual });
-      const data = await callClaudeForJSON(system, userMsg, false, usos, ferramentaVisualPara(recurso));
+      const data = await callClaudeForJSON(system, userMsg, false, usos, ferramentaVisualPara(recurso), undefined, "visual");
       if (!data || !data.visual) {
         return jsonResponse({ error: "O modelo não retornou um novo recurso visual válido." }, 502);
       }
@@ -3263,6 +3437,13 @@ ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferrame
   const contextosEvitar: string[] = listaCurta(body.contextosEvitar, 10, 120);
   const diversidade: DiversidadeExtras = { subtopico, dominioContexto, dominioAlternativo, dominiosEvitar, contextosEvitar };
 
+  /* v74.15 — TTL do cache desta requisição: 1 hora quando a leva tem 3 ou mais
+     questões ou quando houve geração recente; 5 minutos na questão avulsa
+     isolada. Ver escolheCacheControl. */
+  const quantidadeLeva = Number(body.quantidadeLeva) || 1;
+  _cacheControlAtual = escolheCacheControl(quantidadeLeva, quantidadeLeva >= 3 ? true : await houveGeracaoRecente());
+  console.log(`[cache] TTL desta requisição: ${_cacheControlAtual.ttl || "5min"} (leva de ${quantidadeLeva})`);
+
   const capResponse = await checkDailyCap();
   if (capResponse) return capResponse;
 
@@ -3272,8 +3453,8 @@ ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferrame
   const buscasWeb: { url: string; title: string }[] = [];
   try {
     const system: SistemaPrompt = [
-      { type: "text", text: buildSystemPrompt(area), cache_control: { type: "ephemeral" } },
-      { type: "text", text: buildBlocoFixo({ area, disciplina, recurso, competenciaNum, habilidadeCod }), cache_control: { type: "ephemeral" } },
+      { type: "text", text: buildSystemPrompt(area), cache_control: cacheControlAtual() },
+      { type: "text", text: buildBlocoFixo({ area, disciplina, recurso, competenciaNum, habilidadeCod }), cache_control: cacheControlAtual() },
     ];
     /* v74.10 — PESQUISA ANTES DE ESCREVER. Em Linguagens e Humanas o assunto é
        pesquisado primeiro e a questão nasce do material verificado. Fora dessas
@@ -3284,7 +3465,7 @@ ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferrame
     const webSearch = buscaDaGeracao(dossie, area, disciplina);
     // v62: a ferramenta de entrega é específica do recurso pedido (com
     // imagem/gráfico/tabela, o campo "visual" é obrigatório e tipado).
-    let data = await callClaudeForJSON(system, userMsg, webSearch, usos, ferramentaQuestaoPara(recurso, fontesReaisEstrito(area)), buscasWeb);
+    let data = await callClaudeForJSON(system, userMsg, webSearch, usos, ferramentaQuestaoPara(recurso, fontesReaisEstrito(area)), buscasWeb, "geracao");
     // v67: alternativas/análise/competência/habilidade sempre como objeto.
     data = normalizarCamposEstruturados(data);
     // "promptImagem"/"descricao" sempre como string — ver normalizarVisual().

@@ -591,6 +591,17 @@ body.mode-professor .qcard{box-shadow:0 25px 60px -25px rgba(0,0,0,.6), 0 0 0 1.
           <input type="checkbox" id="chkValidacao" checked style="width:auto;">
           Revisão matemática independente — 2ª chamada à IA (~US$ 0,02 por questão), só para Matemática
         </label>
+        <!-- v18.21 — MARCA-PASSO DO CACHE. O prompt do sistema (modelo do INEP,
+             Matriz, objetos de conhecimento) custa US$ 0,037 para gravar e
+             US$ 0,003 para ler. O cache dura 1 hora; passada a hora, a próxima
+             questão paga a gravação inteira de novo. Marcado, o app renova o
+             cache uma vez, 50 minutos depois da leva, por ~US$ 0,004 — e a
+             questão seguinte sai ~US$ 0,05 mais barata. Desmarcado (padrão),
+             nada roda em segundo plano. -->
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-1);">
+          <input type="checkbox" id="chkAquecerCache" style="width:auto;">
+          Manter o cache aquecido por 1 hora (~US$ 0,004 por renovação) — vale se você for gerar de novo dentro da hora
+        </label>
         <button class="btn" id="btnGenerate">✨ Gerar simulado completo</button>
       </div>
       <p class="hint" style="margin-top:10px;">A validação em duas etapas faz o agente revisar cada questão (gabarito único, distratores plausíveis, coerência com a dificuldade e com a habilidade) antes de te entregar — recomendado, porém um pouco mais lento.</p>

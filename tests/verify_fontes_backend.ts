@@ -43,6 +43,20 @@ function recorta(nome: string): string {
   console.error(`FALHA: função ${nome} não fecha`); Deno.exit(1); return "";
 }
 
+/* Recorta uma const declarada com template literal (`...`) do arquivo de
+   produção — o texto do professor entra no teste como ele está lá, não copiado. */
+function recortaConstTemplate(nome: string): string {
+  const marca = `const ${nome} = \``;
+  const a = fonte.indexOf(marca);
+  if (a < 0) { console.error(`FALHA: não achei a const ${nome} em ${alvo}`); Deno.exit(1); }
+  const ini = a + marca.length;
+  for (let p = ini; p < fonte.length; p++) {
+    if (fonte[p] === "\\") { p++; continue; }
+    if (fonte[p] === "`") return fonte.slice(ini, p);
+  }
+  console.error(`FALHA: a const ${nome} não fecha`); Deno.exit(1); return "";
+}
+
 // A mensagem, o escopo e os tetos de busca são lidos do MESMO arquivo, não
 // copiados à mão: se alguém reescrever o texto do professor ou afrouxar um
 // teto, o teste acusa.
@@ -56,6 +70,10 @@ if (!mMsg || !mAreas) { console.error("FALHA: não achei MENSAGEM_FONTE_BLOQUEIO
 if (!mWS || !mBP || !mBR || !mBA) { console.error("FALHA: não achei os tetos de busca (WEB_SEARCH_TOOL / BUSCA_*)"); Deno.exit(1); }
 
 const modulo = `type SistemaPrompt = any;
+// o texto integral da regra do professor, lido do arquivo de producao
+const REGRA_FONTES_PROFESSOR = ${JSON.stringify(recortaConstTemplate("REGRA_FONTES_PROFESSOR"))};
+// v74.15: o TTL do cache e decidido fora do bloco; aqui basta um duble
+function cacheControlAtual() { return { type: "ephemeral" }; }
 const WEB_SEARCH_TOOL = { type: "web_search_20250305", name: "web_search", max_uses: ${mWS[1]} };
 const BUSCA_PESQUISADOR = { ...WEB_SEARCH_TOOL, max_uses: ${mBP[1]} };
 const BUSCA_PESQUISADOR_RETRY = { ...WEB_SEARCH_TOOL, max_uses: ${mBR[1]} };
@@ -73,7 +91,7 @@ function webSearchTool(disciplina: string) {
 const MENSAGEM_FONTE_BLOQUEIO = ${JSON.stringify(mMsg[1])};
 export const __stub: any = { resposta: null, erro: null, chamadas: 0, ultimoPrompt: "", buscaLigada: null };
 async function callClaudeForJSON(_s: any, userMsg: string, w: any, usos: any[], _f: any) {
-  __stub.chamadas++; __stub.ultimoPrompt = userMsg; __stub.buscaLigada = w;
+  __stub.chamadas++; __stub.ultimoPrompt = userMsg; __stub.buscaLigada = w; __stub.sistema = _s;
   if (usos) usos.push({ input_tokens: 1, output_tokens: 1 });
   if (__stub.erro) throw new Error(__stub.erro);
   return __stub.resposta;
@@ -81,6 +99,7 @@ async function callClaudeForJSON(_s: any, userMsg: string, w: any, usos: any[], 
 ` + fonte.slice(i, j) + `
 ` + recorta("buscaDaGeracao") + `
 ` + recorta("buildDossieFonte") + `
+export { SISTEMA_AUDITORIA_FONTES, REGRA_FONTES_PROFESSOR };
 export { conferenciaFontes, conferenciaDossie, tokensDeFonte, normalizaUrl, buildAuditoriaFontesPrompt,
          garantirFontesReais, FERRAMENTA_AUDITORIA_FONTE, MENSAGEM_FONTE_BLOQUEIO, fontesReaisEstrito,
          buscaDaGeracao, buildDossieFonte,
@@ -93,7 +112,7 @@ const M: any = await import("file://" + caminho);
 const { conferenciaFontes, conferenciaDossie, normalizaUrl, buildAuditoriaFontesPrompt, garantirFontesReais,
         FERRAMENTA_AUDITORIA_FONTE, MENSAGEM_FONTE_BLOQUEIO, fontesReaisEstrito, buscaDaGeracao,
         buildDossieFonte, WEB_SEARCH_TOOL, BUSCA_PESQUISADOR, BUSCA_PESQUISADOR_RETRY, BUSCA_AUDITORIA,
-        __stub } = M;
+        SISTEMA_AUDITORIA_FONTES, REGRA_FONTES_PROFESSOR, __stub } = M;
 
 let ok = 0, bad = 0;
 const t = (n: string, c: boolean, extra = "") => { if (c) { ok++; console.log("PASS " + n); } else { bad++; console.log("FAIL " + n + (extra ? "\n     " + extra : "")); } };
@@ -367,6 +386,43 @@ t("I8 fonte trocada bloqueia a questão SEM gastar a chamada de auditoria",
   d13.estado === "reprovado" && __stub.chamadas === 0
   && q13.fonteNaoVerificada.etapa === "conferência do dossiê"
   && q13.fonteNaoVerificada.mensagem === MSG_ESPERADA, JSON.stringify(d13));
+
+/* ---------- J. v74.15 — a auditoria tem sistema próprio, curto e completo ----------
+   A economia vem de a auditoria deixar de carregar o prompt da geração. O que
+   NÃO pode acontecer é ela perder a regra do professor no caminho. */
+t("J1 o sistema da auditoria existe e diz o papel dela",
+  typeof SISTEMA_AUDITORIA_FONTES === "string"
+  && SISTEMA_AUDITORIA_FONTES.includes("VALIDADOR DE FONTES")
+  && SISTEMA_AUDITORIA_FONTES.includes("NÃO reescreve a questão"));
+t("J2 a regra do professor vai INTEIRA, palavra por palavra",
+  SISTEMA_AUDITORIA_FONTES.includes(REGRA_FONTES_PROFESSOR)
+  && [1,2,3,4,5,6,7,8].every((n) => SISTEMA_AUDITORIA_FONTES.includes("\n" + n + ". ")),
+  `chars=${SISTEMA_AUDITORIA_FONTES.length} regra=${REGRA_FONTES_PROFESSOR.length}`);
+t("J3 os seis itens da ficha do professor continuam no sistema da auditoria",
+  ["O autor existe?", "A obra existe?", "A obra pertence ao autor informado?",
+   "O trecho utilizado foi conferido na fonte?",
+   "A citação, adaptação ou paráfrase está identificada corretamente?",
+   "A referência permite localizar a fonte e contém apenas dados confirmados?"]
+  .every((q) => SISTEMA_AUDITORIA_FONTES.includes(q)));
+t("J4 autoria institucional segue reconhecida como legítima",
+  SISTEMA_AUDITORIA_FONTES.includes("Autoria institucional é legítima")
+  && SISTEMA_AUDITORIA_FONTES.includes("não exija nome de pessoa"));
+t("J5 a regra de ouro continua lá",
+  SISTEMA_AUDITORIA_FONTES.includes("Na dúvida, verificar; sem confirmação, não utilizar"));
+t("J6 é curto — abaixo de 9.000 caracteres (o da geração tem 48.203)",
+  SISTEMA_AUDITORIA_FONTES.length < 9000, String(SISTEMA_AUDITORIA_FONTES.length));
+t("J7 garantirFontesReais usa o sistema próprio, não o da geração",
+  garantirFontesReais.toString().includes("SISTEMA_AUDITORIA_FONTES")
+  && garantirFontesReais.toString().includes("sistemaAuditoria"));
+
+__stub.resposta = fichaBoa(); __stub.erro = null; __stub.chamadas = 0;
+let q14: any = questao(fonteBoa());
+// o `system` passado é propositalmente lixo: se a auditoria ainda o usasse, apareceria
+await garantirFontesReais(q14, [{ type: "text", text: "<<<SISTEMA DA GERACAO>>>" }], [], 120_000, "linguagens", [], null);
+t("J8 o sistema da geração NÃO chega à auditoria",
+  JSON.stringify(__stub.sistema || "").includes("VALIDADOR DE FONTES")
+  && !JSON.stringify(__stub.sistema || "").includes("<<<SISTEMA DA GERACAO>>>"),
+  JSON.stringify(__stub.sistema || "").slice(0, 120));
 
 console.log(`\n${ok} verificações passaram, ${bad} falharam.`);
 if (bad) Deno.exit(1);

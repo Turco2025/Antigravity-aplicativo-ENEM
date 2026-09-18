@@ -92,6 +92,70 @@ Expoentes, índices, raízes e sinais chegam ao estudante prontos — x², 2⁴,
    sobrescritas/subscritas (`fontwork/ampliar_carlito.py`). Teste no navegador, sem rede:
    `node tests/verify_math_notation.js`.
 
+## Cache, e só cache: as três primeiras medidas do teto de US$ 0,09 (generate-question v74.15 / app v18.21, 18/09/2026)
+
+Medição de produção, 7 dias, por área: **Linguagens US$ 0,1814 por questão · Natureza US$ 0,0601 ·
+Matemática US$ 0,0384**. Linguagens custa 4,7× uma questão de Matemática, e a diferença (US$ 0,1430)
+se explica inteira: gravação de cache +US$ 0,072 · saída +US$ 0,024 · buscas +US$ 0,026 · leitura de
+cache +US$ 0,016 · entrada nova +US$ 0,005.
+
+**O que é intocável.** A chamada que escreve a questão tem dois itens que não se pode cortar sem
+mexer no que o professor proibiu: a **saída** (4.700 tokens — texto-suporte, comando, cinco
+alternativas, resolução comentada, cinco comentários), US$ 0,047; e o **prompt de sistema** (14.983
+tokens — modelo pedagógico do INEP, Matriz de Referência, objetos de conhecimento, regra das
+alternativas), **US$ 0,0375 para gravar e US$ 0,0030 para ler**. Doze vezes mais caro gravar do que
+ler: é aí que está o problema inteiro. Não é o prompt que está caro — é o cache desperdiçado.
+
+**Medida 1 — TTL por contexto.** O cache de 5 minutos **se renova a cada uso**: dentro de uma leva
+contínua ele não expira, e grava a 1,25× contra 2× do de 1 hora. Simulado sobre os componentes
+medidos: numa leva isolada o de 5 minutos ganha sempre (n=1: US$ 0,149 contra 0,179; n=20: 0,1054
+contra 0,1069); **a partir da segunda geração dentro da hora o de 1 hora ganha** (quatro questões
+avulsas ao longo de uma hora: US$ 0,122 contra US$ 0,149). Regra implementada
+(`escolheCacheControl`): **1 hora quando a leva tem 3+ questões ou houve geração nos últimos 55
+minutos; 5 minutos no resto**. O app manda `quantidadeLeva`; a geração recente sai da mesma tabela
+que o limite diário já consulta.
+
+**Medida 1 (outra metade) — instrumentação.** O total por questão não distingue "gravou tudo de
+novo" de "leu tudo". Cada chamada passa a se identificar (`registraUso` com `etapa`), o acerto/erro
+de cache dela vai para o console do backend e o `uso` devolvido ganha `porEtapa`. O app imprime
+`[cache por etapa]` ao fim da leva, com gravado/lido por questão e o veredito (`cache OK`,
+`parcial`, `CACHE PERDIDO`). É o que vai dizer por que a leva de 18/09 gravou 31.685 tokens por
+questão onde a estrutura prevê uma gravação por leva — a suspeita é a concorrência 5, com as
+questões da mesma onda se atropelando, mas suspeita não é medição.
+
+**Medida 2 — marca-passo do cache.** `GET ?aquecer=1&area=…&disciplina=…&recurso=…` faz três
+chamadas mínimas (16 tokens de saída cada) com **exatamente** os mesmos prefixos das três etapas, só
+para renovar o cache de 1 hora: ~US$ 0,004, contra os US$ 0,05 que a próxima questão pagaria
+gravando tudo de novo. Não gera questão, não grava no log e não conta no limite diário. No app, uma
+caixa **desmarcada por padrão** — nada roda em segundo plano sem o professor mandar — com uma
+renovação por leva, encadeada até o teto de 3 seguidas, e tudo no console.
+
+**Medida 3 — sistema próprio da auditoria.** Ela vinha carregando o prompt da geração inteiro —
+**48.203 caracteres**: modelo pedagógico, Matriz, objetos de conhecimento, notação, calibração de
+extensão, protocolos de recurso visual, regra das alternativas. Nada disso serve para conferir uma
+questão pronta contra a regra de fontes e contra o dossiê. E como a ferramenta muda entre as duas
+chamadas, o cache da geração **nunca** serviu para a auditoria — ela sempre pagou a gravação do seu
+próprio prefixo. `SISTEMA_AUDITORIA_FONTES` tem **6.655 caracteres**: o papel dela mais o texto
+**integral** da regra do professor. Nenhuma exigência foi afrouxada — a regra vai palavra por
+palavra, os seis itens da ficha continuam lá, a autoria institucional continua reconhecida e
+"na dúvida, verificar" continua sendo o critério. O que saiu foi o que ela não usava.
+
+**O que NÃO foi feito, e por quê.** Modelo mais barato (Haiku) nas pontas: o auditor custa US$ 0,009
+e é o portão que decide o que é bloqueado — trocar por um modelo mais fraco renderia US$ 0,0046 e
+mexeria justamente na trava. Fora. Teto de busca e banco de fontes: ficam para depois da leva de
+medição, por decisão do professor. **A geração continua exatamente como estava**: mesmo modelo
+(Sonnet 5), mesmo prompt, mesma Matriz, mesmo protocolo do INEP.
+
+**Projeção:** de US$ 0,199 para **≈ US$ 0,103** por questão com as buscas como estão (1,8 por
+questão). Acima do teto de US$ 0,09, que só sai com o banco de fontes ou com teto de busca — as duas
+deixadas de fora de propósito. O número que vale é o da próxima leva.
+
+Selftest: `economiaBuscas.v7415_*` (sistema próprio da auditoria com a regra inteira e sem Matriz nem
+modelo pedagógico, tamanho 6.655 contra 48.203, a regra do TTL nos seis casos, a instrumentação por
+etapa e o marca-passo).
+Testes: `verify_fontes_backend.ts` **76 verificações**, seções A–J — a J prova que o sistema da
+geração não chega mais à auditoria e que a regra do professor chegou inteira.
+
 ## A notação química sai de Linguagens e Humanas (generate-question v74.14, 18/09/2026)
 
 Decisão do professor: questões de Linguagens e de Humanas não precisam da notação química. Ela está
