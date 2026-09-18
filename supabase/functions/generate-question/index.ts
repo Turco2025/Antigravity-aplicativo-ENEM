@@ -83,6 +83,62 @@ function precisaFontesReais(disciplina: string): boolean {
   return DISCIPLINAS_FONTES_REAIS_OBRIGATORIAS.some((alvo) => d.includes(alvo));
 }
 
+/* v74.8 — REGRA DO PROFESSOR, AO PÉ DA LETRA (17/09/2026).
+   O pedido é explícito: vale "em todas as gerações individuais e em bloco das
+   áreas de Linguagens, Códigos e suas Tecnologias e Ciências Humanas e suas
+   Tecnologias". Por isso o escopo aqui é por ÁREA, não por disciplina: a lista
+   DISCIPLINAS_FONTES_REAIS_OBRIGATORIAS deixava de fora "Práticas Corporais"
+   (antes rotulada "Educação Física"), que é Linguagens e passava sem regra
+   nenhuma. A lista por disciplina continua valendo para Biologia, que é de
+   outra área e tem regra própria (BUSCA_BIOLOGIA). */
+const AREAS_FONTES_REAIS_ESTRITO = ["linguagens", "humanas"];
+function fontesReaisEstrito(area: string): boolean {
+  return AREAS_FONTES_REAIS_ESTRITO.includes(String(area || "").trim().toLowerCase());
+}
+
+/* Mensagem de bloqueio — texto literal exigido pelo professor. Não reescrever. */
+const MENSAGEM_FONTE_BLOQUEIO = "Não foi possível verificar uma fonte real para o autor ou a obra solicitada. Envie o texto ou uma referência confiável para continuar.";
+
+/* Texto integral da regra, copiado do pedido do professor SEM alteração. Entra
+   no bloco fixo do sistema (buildBlocoFixo), que é o mesmo nas duas vias de
+   geração — avulsa e em leva. */
+const REGRA_FONTES_PROFESSOR = `
+
+⛔ REGRA OBRIGATÓRIA DO PROFESSOR — VALE PARA TODAS AS GERAÇÕES, INDIVIDUAIS E EM BLOCO, DESTA ÁREA:
+
+É EXPRESSAMENTE PROIBIDO INVENTAR AUTORES, OBRAS, CITAÇÕES OU REFERÊNCIAS. Essa regra não admite exceções.
+
+1. Utilize exclusivamente autores reais e obras reais. Não invente escritores, poetas, filósofos, historiadores, pesquisadores, jornalistas ou qualquer outra autoria apresentada como fonte da questão. Não invente livros, poemas, contos, crônicas, artigos, músicas, documentos históricos ou outras obras.
+2. Um autor real não pode receber uma obra ou um trecho inventado. É proibido gerar um texto e atribuí-lo a um autor conhecido, mesmo que imite seu estilo ou pareça coerente com suas ideias. Também é proibido atribuir a um autor uma obra de outra pessoa.
+3. Quando o professor solicitar um autor específico, utilize uma obra real desse autor. Confirme a existência da obra, sua autoria e a correspondência do conteúdo utilizado com a fonte. Não substitua a obra por uma criação da IA.
+4. Busque fontes confiáveis quando necessário. Se o conteúdo não estiver disponível em uma base documental verificável do aplicativo, pesquise na internet. Priorize obras digitalizadas, bibliotecas, acervos oficiais, editoras, universidades, periódicos e instituições reconhecidas. A memória do modelo, isoladamente, não comprova a autenticidade de uma referência. Não declare que pesquisou ou verificou uma fonte sem ter feito isso.
+5. Citações diretas devem corresponder ao texto da fonte consultada. Não coloque entre aspas uma frase criada pela IA como se fosse uma citação verdadeira. Confira o trecho no documento de origem; um resultado resumido de busca não basta para validar uma citação.
+6. Adaptações e paráfrases precisam partir de conteúdo real e verificado. Identifique-as claramente, preserve o sentido original e informe a fonte. A expressão "adaptado de" jamais poderá ser usada para legitimar um texto inventado ou uma atribuição falsa. Uma paráfrase não deve aparecer como citação literal.
+7. Não invente dados bibliográficos. Títulos, datas, editoras, edições, páginas, endereços eletrônicos e demais informações devem ser verdadeiros e verificáveis. Se um dado não puder ser confirmado, não o preencha por suposição. Nunca crie links para aparentar que existe uma fonte.
+8. Se não conseguir verificar, não use. Quando não houver acesso à fonte ou confirmação suficiente, interrompa a geração da questão afetada e informe: "${MENSAGEM_FONTE_BLOQUEIO}" Se não houver autor obrigatório, você poderá selecionar outra fonte real e verificável, respeitando o tema solicitado.
+
+VALIDAÇÃO OBRIGATÓRIA ANTES DE LIBERAR CADA QUESTÃO
+Confirme:
+
+* O autor existe?
+* A obra existe?
+* A obra pertence ao autor informado?
+* O trecho utilizado foi conferido na fonte?
+* A citação, adaptação ou paráfrase está identificada corretamente?
+* A referência permite localizar a fonte e contém apenas dados confirmados?
+
+Qualquer falha deve bloquear a liberação da questão até sua correção. A verificação deve abranger texto-base, enunciado, alternativas, legendas, gabarito e resolução comentada. Distratores podem conter interpretações incorretas, mas não podem usar autores, obras ou citações inventados.
+O aplicativo pode elaborar comandos, contextualizações e explicações próprias, desde que não os apresente como textos de terceiros nem fabrique informações históricas ou bibliográficas.
+Regra central: na dúvida, verificar; sem confirmação, não utilizar. NUNCA INVENTAR PARA COMPLETAR UMA QUESTÃO.
+
+COMO CUMPRIR ISSO NA ENTREGA — o campo "fonte" da ferramenta "entregar_questao" é OBRIGATÓRIO nesta área e é onde você registra a verificação:
+· "tipoUso": "citacao" (trecho literal entre aspas), "adaptacao", "parafrase" ou "proprio" (texto que VOCÊ redigiu, sem atribuir a terceiros — permitido pelo parágrafo acima, e então autor/obra ficam vazios);
+· "autor", "obra", "ano", "referencia": apenas dados CONFIRMADOS; nunca preencha por suposição;
+· "comoVerificou": onde você conferiu, em uma frase. Se usou a ferramenta web_search, diga o que a busca devolveu;
+· "urlVerificacao": SOMENTE uma URL que tenha aparecido de fato num resultado de web_search desta mesma geração. O backend confere isso contra os resultados reais da busca; uma URL inventada reprova a questão;
+· "conferidoNaFonte": true SOMENTE se você conferiu o trecho no documento de origem. Em "tipoUso":"citacao" isto é obrigatório — um resumo de busca não basta (regra 5).
+Na dúvida entre "citacao" e "parafrase", NÃO use aspas e declare "parafrase". Se nem a paráfrase puder ser verificada, use "tipoUso":"proprio" e escreva uma situação-problema de sua autoria, sem atribuir nada a ninguém — nunca invente autor ou obra para preencher.`;
+
 const CALIBRACAO_EXTENSAO: Record<string, { n: number; texto: [number, number, number]; comando: [number, number, number]; item: [number, number, number] }> = {
   "Língua Portuguesa": { n: 213, texto: [608, 1201, 902], comando: [82, 180, 138], item: [44, 70, 58] },
   "Literatura": { n: 105, texto: [608, 1122, 868], comando: [82, 164, 118], item: [45, 67, 57] },
@@ -226,7 +282,9 @@ function buildMatrizInstrucoes(area: string, competenciaNum: number | null, habi
 // tipicamente cita autor/obra/pesquisa real (ver DISCIPLINAS_FONTES_REAIS_OBRIGATORIAS).
 // Instrui o modelo a nunca inventar autoria e a usar a ferramenta web_search (quando
 // disponível na chamada) para verificar qualquer dado do qual não tenha certeza.
-function buildRegraFontesReais(disciplina: string): string {
+function buildRegraFontesReais(disciplina: string, area?: string): string {
+  // Áreas do pedido do professor: a regra literal dele, íntegra, substitui o texto antigo.
+  if (fontesReaisEstrito(area || "")) return REGRA_FONTES_PROFESSOR + "\n" + (ehBiologia(disciplina) ? BUSCA_BIOLOGIA : BUSCA_PADRAO);
   if (!precisaFontesReais(disciplina)) return "";
   return `
 
@@ -420,7 +478,7 @@ function buildBlocoFixo(opts: {
     : "";
   return `═══════ INSTRUÇÕES FIXAS DESTA CONFIGURAÇÃO (disciplina ${opts.disciplina}, recurso visual: ${opts.recurso}) ═══════
 As instruções abaixo valem para a questão pedida no prompt do usuário e devem ser seguidas integralmente junto com ele.
-${buildRegraFontesReais(opts.disciplina)}
+${buildRegraFontesReais(opts.disciplina, opts.area)}
 ${buildCalibracaoExtensao(opts.disciplina)}
 
 ${buildRegraAlternativas()}
@@ -744,7 +802,7 @@ function backoffDelay(attempt: number) {
 
 type SistemaPrompt = string | Array<{ type: "text"; text: string; cache_control?: { type: "ephemeral" } }>;
 
-async function callClaude(system: SistemaPrompt, userMsg: string, maxTokens: number, enableWebSearch: false | { type: string; name: string; max_uses: number } = false, ferramenta: any = null): Promise<{ text: string; truncated: boolean; usage: any; ferramentaJSON: string }> {
+async function callClaude(system: SistemaPrompt, userMsg: string, maxTokens: number, enableWebSearch: false | { type: string; name: string; max_uses: number } = false, ferramenta: any = null): Promise<{ text: string; truncated: boolean; usage: any; ferramentaJSON: string; buscas: { url: string; title: string }[] }> {
   let lastErr: any;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const controller = new AbortController();
@@ -833,6 +891,14 @@ async function callClaude(system: SistemaPrompt, userMsg: string, maxTokens: num
       // A busca na web também é uma ferramenta, então filtramos pelo nome.
       let ferramentaJSON = "";
       let blocoEhNossaFerramenta = false;
+      /* v74.8 — RESULTADOS REAIS DA BUSCA. A regra 4 do professor diz "Não
+         declare que pesquisou ou verificou uma fonte sem ter feito isso", e a
+         regra 7, "Nunca crie links para aparentar que existe uma fonte".
+         Para poder CONFERIR isso (em vez de confiar na palavra do modelo), o
+         parser passa a guardar as URLs que a ferramenta web_search de fato
+         devolveu. O resultado de uma ferramenta de servidor chega inteiro no
+         content_block_start, não em deltas. */
+      const buscas: { url: string; title: string }[] = [];
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
@@ -851,6 +917,12 @@ async function callClaude(system: SistemaPrompt, userMsg: string, maxTokens: num
           } else if (evt.type === "content_block_start") {
             const bloco = evt.content_block || {};
             blocoEhNossaFerramenta = bloco.type === "tool_use" && !!ferramenta && bloco.name === ferramenta.name;
+            if (bloco.type === "web_search_tool_result" && Array.isArray(bloco.content)) {
+              for (const r of bloco.content) {
+                const url = String((r && r.url) || "").trim();
+                if (url) buscas.push({ url, title: String((r && r.title) || "").slice(0, 200) });
+              }
+            }
           } else if (evt.type === "content_block_stop") {
             blocoEhNossaFerramenta = false;
           } else if (evt.type === "content_block_delta" && evt.delta?.type === "text_delta") {
@@ -867,7 +939,7 @@ async function callClaude(system: SistemaPrompt, userMsg: string, maxTokens: num
       }
       clearTimeout(watchdog);
       if (streamErrorMsg) throw new Error(streamErrorMsg);
-      return { text, truncated: stopReason === "max_tokens", usage, ferramentaJSON };
+      return { text, truncated: stopReason === "max_tokens", usage, ferramentaJSON, buscas };
     } catch (err: any) {
       clearTimeout(watchdog);
       const isAbort = err?.name === "AbortError";
@@ -998,7 +1070,26 @@ function visualSchemaPara(recurso: string): any {
   return VISUAL_SCHEMA;
 }
 
-function ferramentaQuestaoPara(recurso: string): any {
+/* v74.8 — O campo "fonte" existe para que a VALIDAÇÃO tenha o que conferir.
+   Sem ele a fonte era só prosa no fim do textoBase e nenhuma checagem era
+   possível. Em Linguagens e Humanas ele é OBRIGATÓRIO (exigeFonte). */
+const SCHEMA_FONTE = {
+  type: "object",
+  description: 'Registro da fonte e da verificação feita. Preencha SOMENTE com dados confirmados — jamais por suposição.',
+  properties: {
+    tipoUso: { type: "string", enum: ["citacao", "adaptacao", "parafrase", "proprio"], description: '"citacao" = trecho literal entre aspas; "adaptacao"/"parafrase" = conteúdo real reescrito; "proprio" = situação-problema redigida por você, sem atribuição a terceiros.' },
+    autor: { type: "string", description: 'Autor real. Vazio apenas quando tipoUso = "proprio".' },
+    obra: { type: "string", description: 'Obra real do autor informado. Vazio apenas quando tipoUso = "proprio".' },
+    ano: { type: "string", description: "Ano confirmado, ou vazio se não puder ser confirmado. NUNCA suponha." },
+    referencia: { type: "string", description: "Referência no formato ABNT, só com dados confirmados, que permita localizar a fonte." },
+    comoVerificou: { type: "string", description: "Em uma frase: onde e como você confirmou autor, obra e conteúdo." },
+    urlVerificacao: { type: "string", description: "SOMENTE uma URL que apareceu de fato num resultado de web_search desta geração. Inventar uma URL reprova a questão." },
+    conferidoNaFonte: { type: "boolean", description: 'true só se o trecho foi conferido no documento de origem. Obrigatório em tipoUso = "citacao".' },
+  },
+  required: ["tipoUso", "autor", "obra", "referencia", "comoVerificou", "conferidoNaFonte"],
+};
+
+function ferramentaQuestaoPara(recurso: string, exigeFonte = false): any {
   const comVisual = ["imagem", "grafico", "tabela"].includes(recurso);
   return {
     name: "entregar_questao",
@@ -1025,12 +1116,14 @@ function ferramentaQuestaoPara(recurso: string): any {
         gabarito: { type: "string" },
         resolucaoComentada: { type: "string" },
         analiseAlternativas: { type: "object" },
+        fonte: SCHEMA_FONTE,
         visual: visualSchemaPara(recurso),
       },
       required: [
         "area", "disciplina", "tema", "dificuldade", "competencia", "habilidade",
         "objetoConhecimento", "recurso", "textoBase", "comando", "alternativas",
         "gabarito", "resolucaoComentada", "analiseAlternativas",
+        ...(exigeFonte ? ["fonte"] : []),
         ...(comVisual ? ["visual"] : []),
       ],
     },
@@ -1364,8 +1457,10 @@ function lerFerramenta(bruto: string): any | null {
   return null;
 }
 
-async function callClaudeForJSON(system: SistemaPrompt, userMsg: string, enableWebSearch: false | { type: string; name: string; max_uses: number } = false, usos?: any[], ferramenta: any = FERRAMENTA_QUESTAO) {
+async function callClaudeForJSON(system: SistemaPrompt, userMsg: string, enableWebSearch: false | { type: string; name: string; max_uses: number } = false, usos?: any[], ferramenta: any = FERRAMENTA_QUESTAO, buscas?: { url: string; title: string }[]) {
+  const juntaBuscas = (r: { buscas?: { url: string; title: string }[] }) => { if (buscas && r && Array.isArray(r.buscas)) buscas.push(...r.buscas); };
   const primeira = await callClaude(system, userMsg, 8000, enableWebSearch, ferramenta);
+  juntaBuscas(primeira);
   const { text, truncated, usage } = primeira;
   if (usos && usage) usos.push(usage);
   // Caminho normal: a resposta veio como argumento de ferramenta, já válido.
@@ -1382,6 +1477,7 @@ async function callClaudeForJSON(system: SistemaPrompt, userMsg: string, enableW
        continua com uma chamada só. */
     if (truncated) {
       const retry = await callClaude(system, userMsg, 12000, enableWebSearch, ferramenta);
+      juntaBuscas(retry);
       if (usos && retry.usage) usos.push(retry.usage);
       return lerFerramenta(retry.ferramentaJSON) ?? parseJSONLoose(retry.text);
     }
@@ -1391,6 +1487,7 @@ ATENÇÃO — sua resposta anterior não pôde ser lida como JSON. O erro do int
 
 Reenvie a MESMA questão, agora como JSON estritamente válido. Verifique, antes de responder: toda aspa dupla que faça parte de um texto está escapada como \\" ; não há barra invertida solta (nada de LaTeX como \\pi ou \\sqrt — escreva por extenso); não há quebra de linha literal dentro de uma string; não há vírgula sobrando antes de } ou ]. Entregue chamando a ferramenta indicada acima, sem crase e sem texto em volta.`;
     const retry = await callClaude(system, correcao, 8000, enableWebSearch, ferramenta);
+    juntaBuscas(retry);
     if (usos && retry.usage) usos.push(retry.usage);
     return lerFerramenta(retry.ferramentaJSON) ?? parseJSONLoose(retry.text);
   }
@@ -1979,6 +2076,206 @@ function fnv1a(texto: string): string {
   return h.toString(16).padStart(8, "0");
 }
 
+/* ═══════════ v74.8 — VALIDAÇÃO OBRIGATÓRIA DE FONTES (regra do professor) ═══════════
+   Três etapas, como pedido — busca, geração e validação —, e não um aviso de
+   interface. Esta é a terceira. A segunda chamada NÃO repara: a regra 8 manda
+   INTERROMPER a questão afetada, então uma reprovação bloqueia e pronto. */
+
+const LETRAS_ALT_FONTE = ["A", "B", "C", "D", "E"];
+const TIPOS_USO_FONTE = ["citacao", "adaptacao", "parafrase", "proprio"];
+
+/* Normaliza uma URL para comparar com as que a web_search devolveu de fato. */
+function normalizaUrl(u: string): string {
+  return String(u || "").trim().toLowerCase()
+    .replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/[/?#]+$/, "");
+}
+
+/* Conferência determinística — não custa chamada nenhuma. Cobre o que dá para
+   checar por estrutura: campos preenchidos, tipo de uso declarado, citação
+   conferida na origem e URL realmente vinda de uma busca (regras 4 e 7). */
+function conferenciaFontes(d: any, buscas?: { url: string; title: string }[]): { estado: string; motivo: string; tipoUso: string } {
+  const f = d && typeof d === "object" ? d.fonte : null;
+  if (!f || typeof f !== "object") {
+    return { estado: "ausente", motivo: 'a questão veio sem o campo "fonte", que é obrigatório nesta área', tipoUso: "" };
+  }
+  const tipoUso = String(f.tipoUso || "").trim().toLowerCase();
+  if (!TIPOS_USO_FONTE.includes(tipoUso)) {
+    return { estado: "invalido", motivo: `"tipoUso" veio como "${String(f.tipoUso || "")}" — tem de ser citacao, adaptacao, parafrase ou proprio`, tipoUso };
+  }
+  const autor = String(f.autor || "").trim();
+  const obra = String(f.obra || "").trim();
+  const referencia = String(f.referencia || "").trim();
+  const comoVerificou = String(f.comoVerificou || "").trim();
+  if (tipoUso === "proprio") {
+    if (autor || obra) {
+      return { estado: "incoerente", motivo: 'declarou "proprio" mas preencheu autor/obra — texto de autoria própria não se atribui a ninguém', tipoUso };
+    }
+  } else {
+    const faltando: string[] = [];
+    if (!autor) faltando.push("autor");
+    if (!obra) faltando.push("obra");
+    if (!referencia) faltando.push("referencia");
+    if (!comoVerificou) faltando.push("comoVerificou");
+    if (faltando.length) {
+      return { estado: "incompleto", motivo: `faltou preencher: ${faltando.join(", ")}`, tipoUso };
+    }
+  }
+  if (tipoUso === "citacao" && f.conferidoNaFonte !== true) {
+    return { estado: "citacao_nao_conferida", motivo: "é citação literal mas o trecho não foi conferido no documento de origem (regra 5)", tipoUso };
+  }
+  const url = String(f.urlVerificacao || "").trim();
+  if (url) {
+    const alvo = normalizaUrl(url);
+    const reais = (buscas || []).map((b) => normalizaUrl(b.url));
+    const bate = reais.some((r) => r === alvo || r.startsWith(alvo) || alvo.startsWith(r));
+    if (!bate) {
+      return { estado: "url_nao_confirmada", motivo: `a URL declarada (${url.slice(0, 120)}) não apareceu em nenhum resultado real de busca desta geração (regras 4 e 7)`, tipoUso };
+    }
+  }
+  return { estado: "ok", motivo: "", tipoUso };
+}
+
+const FERRAMENTA_AUDITORIA_FONTE = {
+  name: "entregar_auditoria_fonte",
+  description: "Entrega o resultado da VALIDAÇÃO OBRIGATÓRIA de autoria, obra e referências da questão.",
+  input_schema: {
+    type: "object",
+    properties: {
+      autorExiste: { type: "boolean", description: "O autor informado existe de fato? true também quando a questão não atribui nada a ninguém." },
+      obraExiste: { type: "boolean", description: "A obra informada existe de fato? true também quando não há obra atribuída." },
+      obraPertenceAoAutor: { type: "boolean", description: "A obra é realmente desse autor? true também quando não há atribuição." },
+      trechoConferidoNaFonte: { type: "boolean", description: "O trecho usado foi conferido no documento de origem?" },
+      usoIdentificadoCorretamente: { type: "boolean", description: "Citação, adaptação ou paráfrase está identificada corretamente, sem paráfrase disfarçada de citação literal?" },
+      referenciaLocalizavelEConfirmada: { type: "boolean", description: "A referência permite localizar a fonte e contém APENAS dados confirmados?" },
+      inventadoEmOutraParte: { type: "boolean", description: "Há autor, obra ou citação INVENTADOS no enunciado, nas alternativas, nas legendas, no gabarito ou na resolução comentada? Responda true se houver." },
+      aprovado: { type: "boolean", description: "true SOMENTE se os seis itens acima estiverem satisfeitos e inventadoEmOutraParte for false." },
+      motivo: { type: "string", description: "Se aprovado = false, diga em uma frase o que reprovou. Se aprovado = true, deixe vazio." },
+    },
+    required: ["autorExiste", "obraExiste", "obraPertenceAoAutor", "trechoConferidoNaFonte", "usoIdentificadoCorretamente", "referenciaLocalizavelEConfirmada", "inventadoEmOutraParte", "aprovado", "motivo"],
+  },
+};
+
+function buildAuditoriaFontesPrompt(data: any): string {
+  const alts = (data && data.alternativas) || {};
+  const f = (data && data.fonte) || {};
+  const an = (data && data.analiseAlternativas) || {};
+  const legenda = data && data.visual ? String(data.visual.descricao || data.visual.legenda || "") : "";
+  const comentarios = LETRAS_ALT_FONTE
+    .map((L) => `${L}) ${String((an[L] && an[L].comentario) || "")}`)
+    .join("\n");
+  return `VALIDAÇÃO OBRIGATÓRIA DE FONTES — audite a questão abaixo contra a regra do professor, que não admite exceções: é EXPRESSAMENTE PROIBIDO INVENTAR AUTORES, OBRAS, CITAÇÕES OU REFERÊNCIAS.
+
+Responda às seis perguntas da ficha, uma a uma, e só então decida. USE a ferramenta web_search sempre que precisar confirmar a existência de um autor, de uma obra, a autoria ou o conteúdo — a sua memória, isoladamente, NÃO comprova autenticidade (regra 4). Não afirme que verificou algo que não verificou.
+
+A auditoria cobre TODAS as partes: texto-base, enunciado, alternativas, legendas, gabarito e resolução comentada. Distratores podem trazer interpretações erradas, mas NÃO podem usar autores, obras ou citações inventados.
+
+FONTE DECLARADA PELA QUESTÃO
+· tipo de uso: ${String(f.tipoUso || "(não declarado)")}
+· autor: ${String(f.autor || "(vazio)")}
+· obra: ${String(f.obra || "(vazio)")}
+· ano: ${String(f.ano || "(vazio)")}
+· referência: ${String(f.referencia || "(vazio)")}
+· como diz ter verificado: ${String(f.comoVerificou || "(vazio)")}
+· trecho conferido na origem: ${f.conferidoNaFonte === true ? "sim" : "não"}
+
+TEXTO-BASE
+${String(data?.textoBase || "")}
+
+ENUNCIADO (comando)
+${String(data?.comando || "")}
+${legenda ? `\nLEGENDA / RECURSO VISUAL\n${legenda.slice(0, 1200)}\n` : ""}
+ALTERNATIVAS
+A) ${String(alts.A || "")}
+B) ${String(alts.B || "")}
+C) ${String(alts.C || "")}
+D) ${String(alts.D || "")}
+E) ${String(alts.E || "")}
+
+GABARITO: ${String(data?.gabarito || "")}
+
+RESOLUÇÃO COMENTADA
+${String(data?.resolucaoComentada || "").slice(0, 2500)}
+
+COMENTÁRIOS DAS ALTERNATIVAS
+${comentarios.slice(0, 2500)}
+
+Quando o tipo de uso for "proprio", os três primeiros itens devem vir true (não há atribuição a conferir) — mas então confira com rigor redobrado se o texto-base NÃO está atribuindo nada a terceiros e se nenhuma outra parte da questão cita autor ou obra inventados.
+Na dúvida, reprove: "na dúvida, verificar; sem confirmação, não utilizar".`;
+}
+
+/* Roda a validação e, reprovando, MARCA a questão para bloqueio. Não repara:
+   a regra 8 manda interromper a questão afetada e pedir a fonte ao professor. */
+async function garantirFontesReais(
+  data: any, system: SistemaPrompt, usos: any[], restanteMs: number,
+  area: string, buscas: { url: string; title: string }[],
+) {
+  const diag: any = { aplicavel: fontesReaisEstrito(area), chamadas: 0, buscasReais: (buscas || []).length };
+  if (!diag.aplicavel) { diag.estado = "nao_se_aplica"; return diag; }
+
+  const det = conferenciaFontes(data, buscas);
+  diag.determinista = det.estado;
+  diag.tipoUso = det.tipoUso;
+  if (det.estado !== "ok") {
+    diag.estado = "reprovado";
+    diag.motivo = det.motivo;
+    data.fonteNaoVerificada = { motivo: det.motivo, mensagem: MENSAGEM_FONTE_BLOQUEIO, etapa: "conferência estrutural" };
+    console.error(`[fontes] BLOQUEADA na conferência estrutural: ${det.motivo}`);
+    return diag;
+  }
+
+  /* Sem tempo para auditar não é o mesmo que aprovado: "sem confirmação, não
+     utilizar". A questão é bloqueada e o professor regenera. */
+  if (restanteMs < 30_000) {
+    diag.estado = "reprovado";
+    diag.motivo = `não houve tempo para a validação obrigatória (restavam ${Math.round(restanteMs / 1000)} s)`;
+    data.fonteNaoVerificada = { motivo: diag.motivo, mensagem: MENSAGEM_FONTE_BLOQUEIO, etapa: "tempo" };
+    console.error(`[fontes] BLOQUEADA por falta de tempo para validar`);
+    return diag;
+  }
+
+  try {
+    const bruto = await callClaudeForJSON(
+      system, buildAuditoriaFontesPrompt(data), WEB_SEARCH_TOOL, usos, FERRAMENTA_AUDITORIA_FONTE,
+    );
+    diag.chamadas = 1;
+    const a = (bruto && typeof bruto === "object") ? bruto as any : {};
+    diag.ficha = {
+      autorExiste: a.autorExiste === true,
+      obraExiste: a.obraExiste === true,
+      obraPertenceAoAutor: a.obraPertenceAoAutor === true,
+      trechoConferidoNaFonte: a.trechoConferidoNaFonte === true,
+      usoIdentificadoCorretamente: a.usoIdentificadoCorretamente === true,
+      referenciaLocalizavelEConfirmada: a.referenciaLocalizavelEConfirmada === true,
+      inventadoEmOutraParte: a.inventadoEmOutraParte === true,
+    };
+    const seisItensOk = diag.ficha.autorExiste && diag.ficha.obraExiste && diag.ficha.obraPertenceAoAutor
+      && diag.ficha.trechoConferidoNaFonte && diag.ficha.usoIdentificadoCorretamente
+      && diag.ficha.referenciaLocalizavelEConfirmada;
+    // O veredito do auditor não passa por cima da ficha: qualquer item falso reprova.
+    if (a.aprovado === true && seisItensOk && !diag.ficha.inventadoEmOutraParte) {
+      diag.estado = "aprovado";
+      delete data.fonteNaoVerificada;
+      return diag;
+    }
+    const falhos = Object.entries(diag.ficha)
+      .filter(([k, v]) => (k === "inventadoEmOutraParte" ? v === true : v === false))
+      .map(([k]) => k);
+    diag.estado = "reprovado";
+    diag.motivo = String(a.motivo || "").trim() || `itens reprovados na ficha: ${falhos.join(", ") || "veredito negativo do auditor"}`;
+    data.fonteNaoVerificada = { motivo: diag.motivo, mensagem: MENSAGEM_FONTE_BLOQUEIO, etapa: "auditoria", itens: falhos };
+    console.error(`[fontes] BLOQUEADA na auditoria: ${diag.motivo}`);
+    return diag;
+  } catch (e) {
+    diag.estado = "reprovado";
+    diag.motivo = `a validação obrigatória não pôde ser concluída: ${String((e as any)?.message || e).slice(0, 180)}`;
+    data.fonteNaoVerificada = { motivo: diag.motivo, mensagem: MENSAGEM_FONTE_BLOQUEIO, etapa: "erro" };
+    console.error(`[fontes] BLOQUEADA por erro na validação: ${diag.motivo}`);
+    return diag;
+  }
+}
+
+/* ═══════════ FIM DO BLOCO DE VALIDAÇÃO DE FONTES (v74.8) ═══════════ */
+
 function selfTestResponse() {
   const canonico = JSON.stringify(APP_DATA);
   /* O mesmo cuidado vale para o código: um caractere trocado dentro de um
@@ -2004,6 +2301,9 @@ function selfTestResponse() {
     qnLigacaoOrganica.toString(),                      // v74.4: a ligação orgânica entra na impressão digital
     buildOrientacoesProfessor.toString(), limpaOrientacoes.toString(),   // v74.5
     conferenciaGabarito.toString(), letraNaResolucao.toString(), buildConferenciaGabaritoPrompt.toString(),   // v74.6
+    REGRA_FONTES_PROFESSOR, MENSAGEM_FONTE_BLOQUEIO, JSON.stringify(AREAS_FONTES_REAIS_ESTRITO),                 // v74.8
+    fontesReaisEstrito.toString(), conferenciaFontes.toString(), normalizaUrl.toString(),
+    buildAuditoriaFontesPrompt.toString(), garantirFontesReais.toString(), JSON.stringify(SCHEMA_FONTE),
     buildSystemPlanejamento.toString(),
     normalizarNotacaoTexto.toString(), normalizarNotacaoQuimica.toString(), qnConverteIon.toString(),
     JSON.stringify([QN_FORMULAS_COMUNS, QN_FORMULAS_DISCIPLINA, QN_GASES, QN_GASES_SEMPRE, QN_IONS]),
@@ -2395,16 +2695,19 @@ ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferrame
   if (capResponse) return capResponse;
 
   const usos: any[] = [];
+  // v74.8: URLs que a web_search realmente devolveu nesta questão — a conferência
+  // de fontes usa isso para reprovar link inventado (regras 4 e 7 do professor).
+  const buscasWeb: { url: string; title: string }[] = [];
   try {
     const system: SistemaPrompt = [
       { type: "text", text: buildSystemPrompt(area), cache_control: { type: "ephemeral" } },
       { type: "text", text: buildBlocoFixo({ area, disciplina, recurso, competenciaNum, habilidadeCod }), cache_control: { type: "ephemeral" } },
     ];
     const userMsg = buildUserPrompt({ area, disciplina, tema, dificuldade, recurso, competenciaNum, habilidadeCod, instrucoesVisual, gabaritoAlvo, eixoTematico, temasEvitar, recorte, diversidade, orientacoes });
-    const webSearch = precisaFontesReais(disciplina) ? webSearchTool(disciplina) : false;
+    const webSearch = (fontesReaisEstrito(area) || precisaFontesReais(disciplina)) ? webSearchTool(disciplina) : false;
     // v62: a ferramenta de entrega é específica do recurso pedido (com
     // imagem/gráfico/tabela, o campo "visual" é obrigatório e tipado).
-    let data = await callClaudeForJSON(system, userMsg, webSearch, usos, ferramentaQuestaoPara(recurso));
+    let data = await callClaudeForJSON(system, userMsg, webSearch, usos, ferramentaQuestaoPara(recurso, fontesReaisEstrito(area)), buscasWeb);
     // v67: alternativas/análise/competência/habilidade sempre como objeto.
     data = normalizarCamposEstruturados(data);
     // "promptImagem"/"descricao" sempre como string — ver normalizarVisual().
@@ -2491,6 +2794,14 @@ ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferrame
       data, system, usos, LIMITE_FUNCAO_MS - (Date.now() - inicioReq),
     );
 
+    /* v74.8 — VALIDAÇÃO OBRIGATÓRIA DE FONTES. Por último, depois de toda
+       reescrita possível (visual, revisão matemática, coerência do gabarito):
+       o que for auditado é exatamente o que vai ser entregue. Reprovando,
+       a questão sai marcada e o app bloqueia a entrega. */
+    const fontesDiag = await garantirFontesReais(
+      data, system, usos, LIMITE_FUNCAO_MS - (Date.now() - inicioReq), area, buscasWeb,
+    );
+
     const diversidadeDiag = {
       eixoTematico: eixoTematico || null,
       recorte: recorte || null,
@@ -2521,7 +2832,7 @@ ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferrame
     notacaoDiag.residuoFinal = temResiduoNotacao(data, area);
     if (notacaoDiag.residuoFinal) console.warn(`[notação] resíduo ASCII na questão entregue (${disciplina}: "${String(data?.tema || "").slice(0, 60)}") — ` + JSON.stringify(notacaoDiag.notacao?.residuosDepois ?? notacaoDiag));
     else if (notacaoDiag.residuoAntesDoRevisor) console.log(`[notação] resíduo corrigido pelo revisor (${notacaoDiag.notacao?.tentativas ?? "?"} tentativa(s))`);
-    return jsonResponse({ question: corrigirQuebrasLiterais(data), uso, visualDiag, diversidadeDiag, notacaoDiag, gabaritoDiag });
+    return jsonResponse({ question: corrigirQuebrasLiterais(data), uso, visualDiag, diversidadeDiag, notacaoDiag, gabaritoDiag, fontesDiag });
   } catch (err) {
     return jsonResponse({ error: `Erro ao gerar questão: ${String((err as any)?.message || err)}` }, 502);
   }

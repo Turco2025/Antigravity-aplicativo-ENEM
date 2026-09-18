@@ -3842,6 +3842,30 @@ function bloqueiaSeGabaritoInconsistente(doneQuestions){
   return true;
 }
 
+/* v18.17 — TRAVA DE ENTREGA POR FONTE NÃO VERIFICADA.
+   Regra do professor: "Qualquer falha deve bloquear a liberação da questão até
+   sua correção." O backend já marca a questão; aqui nenhuma delas sai em PDF,
+   Word, impressão ou HTML. A mensagem é a literal exigida por ele — não
+   reescrever. Cobre também simulados salvos antes desta versão: eles não têm a
+   marca e portanto passam, exatamente como passavam antes. */
+const MENSAGEM_FONTE_BLOQUEIO = "Não foi possível verificar uma fonte real para o autor ou a obra solicitada. Envie o texto ou uma referência confiável para continuar.";
+
+function bloqueiaSeFonteNaoVerificada(doneQuestions){
+  const ruins = [];
+  (doneQuestions || []).forEach(o => {
+    const d = o.q && o.q.data;
+    if(d && d.fonteNaoVerificada) ruins.push({ n: o.idx + 1, motivo: String(d.fonteNaoVerificada.motivo || "") });
+  });
+  if(!ruins.length) return false;
+  console.error("[fontes] exportação bloqueada:", ruins);
+  const lista = ruins.length === 1
+    ? "a questão " + ruins[0].n
+    : "as questões " + ruins.map(r => r.n).join(", ");
+  toast("Exportação bloqueada em " + lista + ". " + MENSAGEM_FONTE_BLOQUEIO +
+        (ruins[0].motivo ? " (motivo da primeira: " + ruins[0].motivo + ")" : ""), "err");
+  return true;
+}
+
 function updateProgress(){
   const total = state.questions.length;
   const done = state.questions.filter(q => q.status === "done" || q.status === "error").length;
@@ -4003,6 +4027,14 @@ function auditaQuestaoLocal(q){
      as exportações. Antes ele tinha leitura própria (comparava, por conta
      própria, analiseAlternativas[].status com d.gabarito) e podia divergir de
      quem desenha a marcação. Agora há uma fonte só, e ela é esta. */
+  /* v18.17 — FONTE NÃO VERIFICADA. O backend audita autor, obra, trecho e
+     referência (regra do professor, v74.8) e devolve a questão marcada quando
+     qualquer um dos seis itens falha. Aqui a marca vira aviso na tela; a trava
+     de exportação está em bloqueiaSeFonteNaoVerificada(). */
+  if(d.fonteNaoVerificada){
+    aviso(MENSAGEM_FONTE_BLOQUEIO + (d.fonteNaoVerificada.motivo ? " (motivo: " + d.fonteNaoVerificada.motivo + ")" : ""));
+  }
+
   const confAud = conferenciaGabarito(d);
   if(confAud.estado === "divergente") aviso(confAud.motivo + ' A questão não pode ser exportada assim — use "Regenerar".');
   else if(confAud.estado === "indefinido") aviso(confAud.motivo);
@@ -4730,6 +4762,7 @@ async function exportHtmlSnapshot(){
     const doneQuestions = state.questions.map((q, idx) => ({ q, idx })).filter(o => o.q.status === "done");
     if(bloqueiaSeQuimicaInvalida(doneQuestions)) return;
     if(bloqueiaSeGabaritoInconsistente(doneQuestions)) return;
+    if(bloqueiaSeFonteNaoVerificada(doneQuestions)) return;
     const html = enemBuildHtmlComPdf(doneQuestions, professor);
     const blob = new Blob([html], { type: "text/html;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -4835,6 +4868,7 @@ async function printExam(){
     if(!doneQuestions.length) throw new Error("Nenhuma questão para imprimir.");
     if(bloqueiaSeQuimicaInvalida(doneQuestions)) return;
     if(bloqueiaSeGabaritoInconsistente(doneQuestions)) return;
+    if(bloqueiaSeFonteNaoVerificada(doneQuestions)) return;
     const abriu = enemPrintPdf(doneQuestions, professor);
     toast(abriu ? "Documento aberto para impressão no padrão do caderno ENEM."
                 : "Seu navegador bloqueou a janela; o arquivo foi baixado — abra-o e imprima.", abriu ? "ok" : "err");
@@ -7280,6 +7314,7 @@ async function exportPdf(){
     // resolução comentada e comentário de cada alternativa.
     if(bloqueiaSeQuimicaInvalida(doneQuestions)) return;
     if(bloqueiaSeGabaritoInconsistente(doneQuestions)) return;
+    if(bloqueiaSeFonteNaoVerificada(doneQuestions)) return;
     enemExportPdf(doneQuestions, !isAluno);
     toast("PDF exportado com sucesso.", "ok");
     return;
@@ -7619,6 +7654,7 @@ async function exportDocx(){
     // e rodapé espelharem pela paridade, como no caderno oficial.
     if(bloqueiaSeQuimicaInvalida(doneQuestions)) return;
     if(bloqueiaSeGabaritoInconsistente(doneQuestions)) return;
+    if(bloqueiaSeFonteNaoVerificada(doneQuestions)) return;
     const docEnem = new Document({
       evenAndOddHeaderAndFooters: true,
       sections: enemDocxSections(doneQuestions, !isAluno),

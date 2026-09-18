@@ -92,6 +92,64 @@ Expoentes, índices, raízes e sinais chegam ao estudante prontos — x², 2⁴,
    sobrescritas/subscritas (`fontwork/ampliar_carlito.py`). Teste no navegador, sem rede:
    `node tests/verify_math_notation.js`.
 
+## PROIBIDO INVENTAR AUTORES, OBRAS, CITAÇÕES OU REFERÊNCIAS (v18.17 / generate-question v74.8, 17/09/2026)
+
+Regra do professor, implementada **ao pé da letra** e nas três etapas que ele exigiu — busca,
+geração e validação. Não é aviso de interface: uma questão que não passe na validação **não sai**
+em PDF, Word, impressão nem HTML.
+
+**Escopo — por ÁREA, não por disciplina.** O pedido diz "das áreas de Linguagens, Códigos e suas
+Tecnologias e Ciências Humanas e suas Tecnologias". A lista antiga era por disciplina e deixava de
+fora **Práticas Corporais**, que é Linguagens e passava sem regra nenhuma. Agora
+`AREAS_FONTES_REAIS_ESTRITO = ["linguagens", "humanas"]` cobre as duas áreas inteiras, nas gerações
+avulsas e em leva (as duas passam pelo mesmo `buildBlocoFixo`).
+
+**Etapa 1 — instruções dos agentes.** O texto integral das 8 regras, da ficha de validação e da
+regra central entra no bloco de sistema, **sem uma palavra alterada** (`REGRA_FONTES_PROFESSOR`).
+A busca na web passa a ser ligada nas duas áreas inteiras.
+
+**Etapa 2 — geração com registro verificável.** A entrega ganhou o campo obrigatório **`fonte`**:
+`tipoUso` (citacao · adaptacao · parafrase · **proprio**), `autor`, `obra`, `ano`, `referencia`,
+`comoVerificou`, `urlVerificacao` e `conferidoNaFonte`. Antes a fonte era só prosa no fim do
+`textoBase` e **não havia o que validar**. Quando não há fonte real verificável, o caminho correto
+é `"tipoUso":"proprio"` — situação-problema de autoria própria, sem atribuir nada a ninguém —,
+nunca inventar um autor para preencher.
+
+**Etapa 3 — validação obrigatória, com bloqueio.** Duas camadas:
+
+1. **Conferência estrutural** (`conferenciaFontes`), sem custo: campo presente, tipo de uso válido,
+   autor/obra/referência preenchidos, citação literal com `conferidoNaFonte`, e — o ponto das regras
+   4 e 7 — **a URL declarada tem de ter aparecido de fato num resultado de `web_search` desta
+   geração**. Para isso o parser SSE passou a guardar os blocos `web_search_tool_result`: o backend
+   confere a busca em vez de acreditar na palavra do modelo. Link inventado reprova.
+2. **Auditoria** (`garantirFontesReais`), uma chamada com busca na web, respondendo aos **seis itens**
+   da ficha sobre **texto-base, enunciado, alternativas, legendas, gabarito e resolução comentada**.
+   O veredito do auditor **não passa por cima da ficha**: qualquer item falso reprova, mesmo que ele
+   diga "aprovado".
+
+Reprovando, a questão sai marcada com `fonteNaoVerificada` e a mensagem **literal** do professor:
+*"Não foi possível verificar uma fonte real para o autor ou a obra solicitada. Envie o texto ou uma
+referência confiável para continuar."* A validação **não repara** — a regra 8 manda interromper a
+questão afetada. Sem tempo para auditar ou com erro de rede, também **bloqueia**: "sem confirmação,
+não utilizar" vale inclusive contra o próprio aplicativo.
+
+**No app (v18.17):** `bloqueiaSeFonteNaoVerificada()` nas quatro saídas, logo depois da trava de
+gabarito, e a mensagem literal no aviso do card, com o motivo apurado. Simulados arquivados antes
+desta versão não têm a marca e continuam exportáveis, como antes.
+
+**Contradições corrigidas.** O schema dizia que a fonte podia ser "real ou verossímil" — em
+Linguagens e Humanas isso agora reprova a questão. E a instrução que mandava, na dúvida, escrever
+"situação hipotética sem citação" continua valendo **só para Biologia**, que é de outra área e está
+fora do escopo deste pedido.
+
+**Custo.** É uma chamada a mais por questão nessas duas áreas, com o prompt de sistema em cache e
+1–2 buscas: da ordem de **US$ 0,02 a US$ 0,04 por questão** de Linguagens ou Humanas. Nas outras
+áreas, custo zero — a validação nem roda.
+
+**Testes:** `tests/verify_fontes_backend.ts` (**34** verificações, extraindo o bloco do arquivo de
+produção e dublando só a chamada à Anthropic) e `tests/verify_fontes_app.js` (**15**). Os dois leem
+a mensagem e o escopo do próprio código: reescrever o texto do professor faz o teste acusar.
+
 ## O rótulo passa a ser o do INEP: "Práticas Corporais" (v18.16 / generate-question v74.7, 17/09/2026)
 
 O professor apontou que **não existe "Educação Física" no ENEM**. Conferindo as fontes oficiais,
