@@ -92,6 +92,43 @@ Expoentes, índices, raízes e sinais chegam ao estudante prontos — x², 2⁴,
    sobrescritas/subscritas (`fontwork/ampliar_carlito.py`). Teste no navegador, sem rede:
    `node tests/verify_math_notation.js`.
 
+## A fonte origina a questão: regra de pesquisa do professor, ao pé da letra (generate-question v74.12, 18/09/2026)
+
+Depois da leva de 20 questões de Artes, o professor escreveu a regra de pesquisa e validação. Ela
+entrou **literalmente** — `REGRA_PESQUISA_PROFESSOR`, 4.704 caracteres, o texto dele sem resumo — e é
+a carta do agente pesquisador (`SISTEMA_PESQUISA_FONTE`). A v74.10 já invertia a ordem; a v74.12
+acrescenta o que faltava:
+
+**1. Autor pedido exige obra real DELE (item 6).** O prompt do pesquisador agora classifica o
+assunto antes de buscar: é um AUTOR (pessoa)? então a fonte tem de ser obra real desse autor e o
+trecho tem de sair dela — "um texto que apenas imite o estilo dele está proibido". É uma OBRA? um
+MOVIMENTO ou ACONTECIMENTO? um TEMA amplo? Cada caso tem instrução própria. O exemplo Machado de
+Assis vai inteiro no prompt, com as obras reais listadas.
+
+**2. Não achou? Procura outra (item 2).** A regra manda, faltando fonte, "procurar outra obra, outro
+documento ou outra referência real relacionada ao tema" — antes o app desistia na primeira. Agora são
+**duas tentativas**, e a segunda leva o aviso de que a primeira falhou, com ordem de trocar de obra,
+de documento ou de instituição e de não baixar o nível da exigência. Achando na primeira, a segunda
+não é gasta.
+
+**3. Os dois formatos de referência do item 5** ("AUTOR. Título da obra. Editora ou instituição,
+ano." e "INSTITUIÇÃO. Título do conteúdo ou documento. Ano, quando disponível.") vão no prompt.
+
+**4. A ficha de validação final passa de 6 para 10 perguntas.** Entram: a fonte existe? · a
+instituição citada existe? · se houve paráfrase, ela está fiel? · alguma informação foi inventada? ·
+alguma frase foi atribuída indevidamente? · e a decisiva: **a questão poderia ser comprovada por meio
+da fonte indicada?** Essa última é a que teria pego o mural do Kobra — fonte real, autor real, mas o
+texto-base afirmando o que a fonte não sustenta. Qualquer item falso reprova, mesmo que o auditor
+diga "aprovado".
+
+**Custo.** O prompt do pesquisador tem ~1.473 tokens e fica em cache: US$ 0,0003 por leitura,
+US$ 0,004 de gravação por leva. O que pesa são as buscas (~US$ 0,02), e a segunda tentativa só é
+gasta quando a primeira falha.
+
+**Testes:** `verify_fontes_backend.ts` foi de 74 para **91 verificações**. A seção J confere o texto
+do professor palavra por palavra — lista de fontes prioritárias, lista de proibições, sequência dos
+seis passos, exemplo Machado — e prova as duas tentativas contando chamadas.
+
 ## Auditoria das 20 questões reais contra as três referências (v18.18 / generate-question v74.11, 18/09/2026)
 
 As 20 questões de Artes da leva de 18/09 foram medidas, uma a uma, contra a Matriz, o Guia do Inep e

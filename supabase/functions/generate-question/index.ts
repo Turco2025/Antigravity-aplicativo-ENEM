@@ -605,24 +605,81 @@ const FERRAMENTA_DOSSIE_FONTE = {
   },
 };
 
-const SISTEMA_PESQUISA_FONTE = `Você é um pesquisador de fontes para questões do ENEM. Sua ÚNICA tarefa agora é PESQUISAR — não escreva questão nenhuma.
+/* v74.12 — REGRA DE PESQUISA DO PROFESSOR, AO PÉ DA LETRA (18/09/2026).
+   Escrita depois da leva de 20 questões de Artes. Vira a carta do pesquisador:
+   é o texto dele, não um resumo meu. */
+const REGRA_PESQUISA_PROFESSOR = `REGRA OBRIGATÓRIA — PESQUISA E VALIDAÇÃO DA FONTE ANTES DA GERAÇÃO DA QUESTÃO
 
-Encontre UMA fonte real, verificável e adequada ao ensino médio sobre o assunto pedido, e extraia dela o material que servirá de base. Priorize acervos e órgãos oficiais, museus, enciclopédias reconhecidas, universidades, periódicos e agências de notícias.
+Nenhuma questão poderá ser gerada antes que exista uma fonte real, confiável e verificável que sirva de base para sua elaboração.
 
-REGRAS QUE NÃO ADMITEM EXCEÇÃO:
-· USE a ferramenta web_search. Sua memória, isoladamente, não comprova nada.
-· Só declare uma URL que tenha aparecido de fato num resultado de busca desta conversa.
-· Autoria institucional é legítima e é o padrão da ABNT em acervo e órgão público: se a página não tem autor assinado, preencha "instituicao" e deixe "autor" vazio. NUNCA invente nome de pessoa.
-· Preencha "ano" só se a página exibir a data. Campo não confirmado fica VAZIO.
+1. PESQUISA OBRIGATÓRIA ANTES DE GERAR A QUESTÃO
+Sempre que for indicado um autor, uma obra, um livro, um poema, um conto, um romance, um artigo, um movimento artístico ou literário, um acontecimento histórico, um conceito ou um tema específico, o sistema deverá primeiro pesquisar e validar informações reais sobre esse conteúdo.
+A pesquisa poderá utilizar o conhecimento disponível no próprio modelo, mas, sempre que houver qualquer possibilidade de dúvida, imprecisão ou necessidade de confirmação, deverá ser realizada consulta a fontes externas confiáveis.
+Devem ser priorizadas fontes como: universidades; bibliotecas públicas ou universitárias; bibliotecas digitais; instituições governamentais; museus; institutos de pesquisa; fundações culturais; artigos acadêmicos; periódicos científicos; revistas reconhecidas; livros didáticos ou acadêmicos; editoras reconhecidas; acervos oficiais; páginas institucionais relacionadas ao autor, obra ou tema.
+
+2. É PROIBIDO INVENTAR REFERÊNCIAS
+É terminantemente proibido: inventar autores; inventar obras; inventar livros; inventar poemas; inventar contos; inventar artigos; inventar trechos atribuídos a autores reais; atribuir uma frase a um autor sem confirmação; inventar datas de publicação; inventar editoras; inventar referências bibliográficas; inventar instituições; criar fontes fictícias; utilizar uma referência que não tenha sido previamente confirmada.
+Caso não seja encontrada uma fonte confiável sobre o conteúdo solicitado, a questão não deverá ser gerada com informações inventadas. Nesse caso, deve-se procurar outra obra, outro documento ou outra referência real relacionada ao tema.
+
+3. A FONTE DEVE SER ENCONTRADA ANTES DA QUESTÃO
+A ordem obrigatória de execução é:
+1. Identificar o autor ou tema solicitado.
+2. Pesquisar fontes confiáveis.
+3. Confirmar que a obra, documento ou informação realmente existe.
+4. Selecionar uma fonte adequada.
+5. Extrair dela o conteúdo que servirá como base para a questão.
+6. Somente depois disso elaborar a questão.
+Jamais inverter essa sequência. Não é permitido criar primeiro uma questão e depois procurar uma referência apenas para justificar o conteúdo produzido. A fonte deve originar a questão, e não o contrário.
+
+4. UTILIZAÇÃO DE TRECHOS
+Depois de localizada uma fonte confiável, poderão ser utilizados: um trecho original da obra; um fragmento do documento; uma passagem; dados; informações; uma adaptação; uma síntese; uma paráfrase.
+Quando houver paráfrase ou adaptação, o conteúdo deverá permanecer fiel ao sentido original da fonte. Não deverá ser apresentada como citação literal uma frase que tenha sido criada, resumida ou parafraseada pelo sistema.
+
+5. IDENTIFICAÇÃO DA FONTE
+Toda questão baseada em fonte externa deverá apresentar uma referência adequada. Sempre que possível, informar:
+AUTOR. Título da obra. Editora ou instituição, ano.
+Para conteúdos obtidos em páginas institucionais:
+INSTITUIÇÃO. Título do conteúdo ou documento. Ano, quando disponível.
+A referência utilizada deverá corresponder exatamente à fonte que serviu de base para a elaboração da questão.
+
+6. EXEMPLO — MACHADO DE ASSIS
+Se for solicitada uma questão envolvendo Machado de Assis, não deverá ser criado um texto fictício que simplesmente pareça ter sido escrito por Machado de Assis. O procedimento correto é pesquisar e confirmar obras reais do autor (Memórias Póstumas de Brás Cubas, Dom Casmurro, Quincas Borba, O Alienista, Esaú e Jacó, Memorial de Aires, contos e crônicas efetivamente publicados) e então: selecionar uma obra real; localizar uma edição ou fonte confiável; identificar um trecho verdadeiro ou uma informação presente nessa obra; utilizar o trecho original ou produzir uma paráfrase fiel; informar a referência utilizada; somente então construir o comando e as alternativas.
+
+7. PRINCÍPIO FUNDAMENTAL
+PESQUISAR → VALIDAR → SELECIONAR A FONTE → EXTRAIR OU PARAFRASEAR → REFERENCIAR → GERAR A QUESTÃO → REVISAR
+Nunca: GERAR A QUESTÃO → INVENTAR UM TEXTO → ATRIBUIR A UM AUTOR → CRIAR UMA REFERÊNCIA
+
+REGRA ABSOLUTA
+Não existe questão válida sem uma base documental confiável quando o conteúdo depender de autor, obra, documento, acontecimento histórico, manifestação artística, informação factual ou referência externa. A fonte não deve ser acrescentada apenas como elemento decorativo depois que a questão estiver pronta. A questão deve nascer da fonte pesquisada e validada. Se não houver fonte confiável, não invente. Pesquise novamente e utilize outra referência real.`;
+
+const SISTEMA_PESQUISA_FONTE = `Você é o PESQUISADOR de fontes. Sua ÚNICA tarefa agora é a etapa 2 da sequência do professor — pesquisar e validar. NÃO escreva questão nenhuma: quem escreve é outro agente, depois, em cima do que você trouxer.
+
+${REGRA_PESQUISA_PROFESSOR}
+
+COMO ISSO SE APLICA A VOCÊ, AGORA:
+· USE a ferramenta web_search. Seu conhecimento serve para orientar a busca, mas não substitui a confirmação: qualquer dúvida sobre existência, autoria, título, data ou conteúdo exige consulta externa.
+· Só declare uma URL que tenha aparecido de fato num resultado de busca desta conversa. O backend confere.
+· Autoria institucional é legítima e é o padrão da ABNT em acervo e órgão público: sem autor assinado, preencha "instituicao" e deixe "autor" vazio. NUNCA invente nome de pessoa.
+· "ano" só se a página exibir a data. Campo não confirmado fica VAZIO — inventar data de publicação é proibido pelo item 2.
 · Em "trecho", só entra o que está na fonte. Não complete, não embeleze, não deduza.
-· Não achando fonte adequada, devolva "encontrou": false. Isso é uma resposta aceitável — inventar não é.`;
+· Não achando fonte adequada, devolva "encontrou": false. Você será chamado de novo para procurar OUTRA obra ou documento real sobre o mesmo tema, como manda o item 2 — desistir é melhor que inventar, mas procurar de novo é melhor que desistir.`;
 
-function buildPesquisaFontePrompt(o: { area: string; disciplina: string; tema: string; eixoTematico?: string; recorte?: string }): string {
+/* Quando o professor nomeia um autor/obra/movimento/acontecimento, o item 6 da
+   regra manda achar obra REAL dele — nunca um texto que "pareça" dele. */
+function buildPesquisaFontePrompt(o: { area: string; disciplina: string; tema: string; eixoTematico?: string; recorte?: string; tentativaAnterior?: string }): string {
   const assunto = (o.tema || "").trim() || (o.recorte || "").trim() || (o.eixoTematico || "").trim() || o.disciplina;
+  const retry = String(o.tentativaAnterior || "").trim();
   return `ÁREA: ${o.area} · DISCIPLINA: ${o.disciplina}
-ASSUNTO A PESQUISAR: ${assunto}${o.eixoTematico && o.eixoTematico !== assunto ? `\nOBJETO DE CONHECIMENTO (Matriz do ENEM): ${o.eixoTematico}` : ""}${o.recorte && o.recorte !== assunto ? `\nRECORTE PEDIDO: ${o.recorte.slice(0, 300)}` : ""}
+ASSUNTO PEDIDO PELO PROFESSOR: ${assunto}${o.eixoTematico && o.eixoTematico !== assunto ? `\nOBJETO DE CONHECIMENTO (Matriz do ENEM): ${o.eixoTematico}` : ""}${o.recorte && o.recorte !== assunto ? `\nRECORTE PEDIDO: ${o.recorte.slice(0, 300)}` : ""}
+${retry ? `\n⚠️ SEGUNDA TENTATIVA. A primeira não deu fonte utilizável (${retry.slice(0, 200)}). O item 2 da regra manda, nesse caso, "procurar outra obra, outro documento ou outra referência real relacionada ao tema" — então procure em OUTRO lugar: troque a obra, troque o documento, troque a instituição. Não repita a busca anterior e não baixe o nível da exigência.\n` : ""}
+ANTES DE BUSCAR, identifique o que o assunto acima nomeia:
+· um AUTOR (pessoa)? Então a fonte TEM de ser uma obra real DESSE autor, e o trecho tem de sair dela. Um texto que apenas imite o estilo dele está proibido pelo item 6.
+· uma OBRA, livro, poema, conto, romance ou artigo? Confirme que existe, de quem é, e extraia dela.
+· um MOVIMENTO artístico/literário, um ACONTECIMENTO histórico ou um CONCEITO? A fonte é um documento, verbete de acervo, artigo acadêmico ou página institucional que trate dele.
+· um TEMA amplo, sem autor nem obra nomeados? Escolha você uma fonte real adequada ao ensino médio.
 
-Pesquise e devolva, pela ferramenta "entregar_dossie_fonte", UMA fonte real sobre esse assunto e o trecho ou os fatos que dela se aproveitam para um texto-base de questão do ENEM.`;
+Cumpra a sequência: pesquisar → validar que existe → selecionar → extrair. Devolva pela ferramenta "entregar_dossie_fonte" a fonte encontrada e o trecho ou os fatos que dela se aproveitam.
+Na referência, use o formato do item 5: "AUTOR. Título da obra. Editora ou instituição, ano." — ou, em página institucional, "INSTITUIÇÃO. Título do conteúdo ou documento. Ano, quando disponível."`;
 }
 
 function buildDossieFonte(d: any): string {
@@ -652,21 +709,31 @@ async function pesquisarFonteReal(
   usos: any[], buscas: { url: string; title: string }[],
 ): Promise<any | null> {
   if (!fontesReaisEstrito(o.area)) return null;
-  try {
-    const sistema: SistemaPrompt = [{ type: "text", text: SISTEMA_PESQUISA_FONTE, cache_control: { type: "ephemeral" } }];
-    const d = await callClaudeForJSON(
-      sistema, buildPesquisaFontePrompt(o), WEB_SEARCH_TOOL, usos, FERRAMENTA_DOSSIE_FONTE, buscas,
-    );
-    if (d && typeof d === "object" && (d as any).encontrou === true) {
-      console.log(`[pesquisa] fonte encontrada: ${String((d as any).referencia || "").slice(0, 120)}`);
-      return d;
+  const sistema: SistemaPrompt = [{ type: "text", text: SISTEMA_PESQUISA_FONTE, cache_control: { type: "ephemeral" } }];
+  /* Item 2 da regra: não achando fonte, "deve-se procurar outra obra, outro
+     documento ou outra referência real relacionada ao tema". Duas tentativas —
+     desistir na primeira seria desobedecer; insistir para sempre custaria caro. */
+  let motivoAnterior = "";
+  for (let tentativa = 1; tentativa <= 2; tentativa++) {
+    try {
+      const d = await callClaudeForJSON(
+        sistema, buildPesquisaFontePrompt({ ...o, tentativaAnterior: motivoAnterior }),
+        WEB_SEARCH_TOOL, usos, FERRAMENTA_DOSSIE_FONTE, buscas,
+      );
+      const bom = d && typeof d === "object" && (d as any).encontrou === true && String((d as any).trecho || "").trim();
+      if (bom) {
+        console.log(`[pesquisa] fonte encontrada na tentativa ${tentativa}: ${String((d as any).referencia || "").slice(0, 120)}`);
+        return d;
+      }
+      motivoAnterior = "a busca anterior não devolveu fonte utilizável";
+      console.warn(`[pesquisa] tentativa ${tentativa} sem fonte utilizável`);
+    } catch (e) {
+      motivoAnterior = String((e as any)?.message || e).slice(0, 160);
+      console.error(`[pesquisa] tentativa ${tentativa} falhou: ${motivoAnterior}`);
     }
-    console.warn("[pesquisa] nenhuma fonte real encontrada para o assunto — a questão segue sem dossiê");
-    return null;
-  } catch (e) {
-    console.error(`[pesquisa] falhou (a geração continua): ${String((e as any)?.message || e).slice(0, 160)}`);
-    return null;
   }
+  console.warn("[pesquisa] duas tentativas sem fonte — a questão segue sem dossiê e a validação do fim decide");
+  return null;
 }
 
 function buildUserPrompt(opts: {
@@ -2318,11 +2385,20 @@ const FERRAMENTA_AUDITORIA_FONTE = {
       trechoConferidoNaFonte: { type: "boolean", description: "O trecho usado foi conferido no documento de origem?" },
       usoIdentificadoCorretamente: { type: "boolean", description: "Citação, adaptação ou paráfrase está identificada corretamente, sem paráfrase disfarçada de citação literal?" },
       referenciaLocalizavelEConfirmada: { type: "boolean", description: "A referência permite localizar a fonte e contém APENAS dados confirmados?" },
+      fonteExiste: { type: "boolean", description: "A fonte (edição, página, documento, artigo) existe de fato e é localizável?" },
+      instituicaoExiste: { type: "boolean", description: "A instituição citada existe de fato? true também quando nenhuma é citada." },
+      parafraseFielAFonte: { type: "boolean", description: "Havendo paráfrase ou adaptação, ela é fiel ao sentido original? true quando não há paráfrase." },
+      nadaFoiInventado: { type: "boolean", description: "NENHUMA informação da questão foi inventada — nem data, nem editora, nem instituição, nem dado factual?" },
+      nenhumaFraseAtribuidaIndevidamente: { type: "boolean", description: "Nenhuma frase foi atribuída a um autor sem confirmação?" },
+      comprovavelPelaFonte: { type: "boolean", description: "DECISIVO: o que a questão afirma poderia ser COMPROVADO abrindo a fonte indicada? Se o texto-base diz algo que a fonte não sustenta, responda false." },
       inventadoEmOutraParte: { type: "boolean", description: "Há autor, obra ou citação INVENTADOS no enunciado, nas alternativas, nas legendas, no gabarito ou na resolução comentada? Responda true se houver." },
       aprovado: { type: "boolean", description: "true SOMENTE se os seis itens acima estiverem satisfeitos e inventadoEmOutraParte for false." },
       motivo: { type: "string", description: "Se aprovado = false, diga em uma frase o que reprovou. Se aprovado = true, deixe vazio." },
     },
-    required: ["autorExiste", "obraExiste", "obraPertenceAoAutor", "trechoConferidoNaFonte", "usoIdentificadoCorretamente", "referenciaLocalizavelEConfirmada", "inventadoEmOutraParte", "aprovado", "motivo"],
+    required: ["autorExiste", "obraExiste", "obraPertenceAoAutor", "fonteExiste", "instituicaoExiste",
+               "trechoConferidoNaFonte", "parafraseFielAFonte", "usoIdentificadoCorretamente",
+               "referenciaLocalizavelEConfirmada", "nadaFoiInventado", "nenhumaFraseAtribuidaIndevidamente",
+               "comprovavelPelaFonte", "inventadoEmOutraParte", "aprovado", "motivo"],
   },
 };
 
@@ -2336,7 +2412,8 @@ function buildAuditoriaFontesPrompt(data: any): string {
     .join("\n");
   return `VALIDAÇÃO OBRIGATÓRIA DE FONTES — audite a questão abaixo contra a regra do professor, que não admite exceções: é EXPRESSAMENTE PROIBIDO INVENTAR AUTORES, OBRAS, CITAÇÕES OU REFERÊNCIAS.
 
-Responda às seis perguntas da ficha, uma a uma, e só então decida. USE a ferramenta web_search sempre que precisar confirmar a existência de um autor, de uma obra, a autoria ou o conteúdo — a sua memória, isoladamente, NÃO comprova autenticidade (regra 4). Não afirme que verificou algo que não verificou.
+Responda às DEZ perguntas da ficha de validação final do professor, uma a uma, e só então decida:
+O autor existe? · A obra existe? · A fonte existe? · A instituição citada existe? · O trecho pertence realmente à obra indicada? · Se houve paráfrase, ela está fiel à fonte? · A referência bibliográfica corresponde ao material consultado? · Alguma informação foi inventada? · Alguma frase foi atribuída indevidamente a um autor? · A questão poderia ser comprovada por meio da fonte indicada? USE a ferramenta web_search sempre que precisar confirmar a existência de um autor, de uma obra, a autoria ou o conteúdo — a sua memória, isoladamente, NÃO comprova autenticidade (regra 4). Não afirme que verificou algo que não verificou.
 
 A auditoria cobre TODAS as partes: texto-base, enunciado, alternativas, legendas, gabarito e resolução comentada. Distratores podem trazer interpretações erradas, mas NÃO podem usar autores, obras ou citações inventados.
 
@@ -2376,7 +2453,7 @@ COMO JULGAR CADA ITEM, para não reprovar o que é correto:
 · "trechoConferidoNaFonte": em "citacao", exige leitura das palavras literais na origem. Em "parafrase"/"adaptacao", basta que os FATOS usados estejam confirmados na fonte — paráfrase fiel de fato verificado NÃO é invenção. Reprove aqui quando o texto-base afirmar algo que a fonte não sustenta.
 · O que você DEVE reprovar sem hesitar: conteúdo inventado atribuído a obra, autor ou curadoria reais; data, edição ou local não confirmados; e qualquer afirmação do texto-base que a fonte não sustente.
 
-Quando o tipo de uso for "proprio", os três primeiros itens devem vir true (não há atribuição a conferir) — mas então confira com rigor redobrado se o texto-base NÃO está atribuindo nada a terceiros e se nenhuma outra parte da questão cita autor ou obra inventados.
+Quando o tipo de uso for "proprio", os itens de autoria devem vir true (não há atribuição a conferir) — mas então confira com rigor redobrado se o texto-base NÃO está atribuindo nada a terceiros e se nenhuma outra parte da questão cita autor ou obra inventados.
 Na dúvida, reprove: "na dúvida, verificar; sem confirmação, não utilizar".`;
 }
 
@@ -2416,20 +2493,19 @@ async function garantirFontesReais(
     );
     diag.chamadas = 1;
     const a = (bruto && typeof bruto === "object") ? bruto as any : {};
-    diag.ficha = {
-      autorExiste: a.autorExiste === true,
-      obraExiste: a.obraExiste === true,
-      obraPertenceAoAutor: a.obraPertenceAoAutor === true,
-      trechoConferidoNaFonte: a.trechoConferidoNaFonte === true,
-      usoIdentificadoCorretamente: a.usoIdentificadoCorretamente === true,
-      referenciaLocalizavelEConfirmada: a.referenciaLocalizavelEConfirmada === true,
-      inventadoEmOutraParte: a.inventadoEmOutraParte === true,
-    };
-    const seisItensOk = diag.ficha.autorExiste && diag.ficha.obraExiste && diag.ficha.obraPertenceAoAutor
-      && diag.ficha.trechoConferidoNaFonte && diag.ficha.usoIdentificadoCorretamente
-      && diag.ficha.referenciaLocalizavelEConfirmada;
+    /* v74.12 — a ficha do professor tem DEZ perguntas. "comprovavelPelaFonte" é
+       a que teria pego o mural do Kobra: a fonte existe, o autor existe, mas o
+       texto-base afirma algo que a fonte não sustenta. */
+    const POSITIVOS = ["autorExiste", "obraExiste", "obraPertenceAoAutor", "fonteExiste", "instituicaoExiste",
+                       "trechoConferidoNaFonte", "parafraseFielAFonte", "usoIdentificadoCorretamente",
+                       "referenciaLocalizavelEConfirmada", "nadaFoiInventado",
+                       "nenhumaFraseAtribuidaIndevidamente", "comprovavelPelaFonte"];
+    diag.ficha = {} as any;
+    for (const k of POSITIVOS) diag.ficha[k] = (a as any)[k] === true;
+    diag.ficha.inventadoEmOutraParte = a.inventadoEmOutraParte === true;
+    const todosOsItensOk = POSITIVOS.every((k) => diag.ficha[k] === true);
     // O veredito do auditor não passa por cima da ficha: qualquer item falso reprova.
-    if (a.aprovado === true && seisItensOk && !diag.ficha.inventadoEmOutraParte) {
+    if (a.aprovado === true && todosOsItensOk && !diag.ficha.inventadoEmOutraParte) {
       diag.estado = "aprovado";
       delete data.fonteNaoVerificada;
       return diag;
@@ -2508,6 +2584,7 @@ function selfTestResponse() {
     buildOrientacoesProfessor.toString(), limpaOrientacoes.toString(),   // v74.5
     conferenciaGabarito.toString(), letraNaResolucao.toString(), buildConferenciaGabaritoPrompt.toString(),   // v74.6
     REGRA_FONTES_PROFESSOR, MENSAGEM_FONTE_BLOQUEIO, JSON.stringify(AREAS_FONTES_REAIS_ESTRITO),                 // v74.8
+    REGRA_PESQUISA_PROFESSOR,                                                                                     // v74.12
     fontesReaisEstrito.toString(), conferenciaFontes.toString(), normalizaUrl.toString(),
     SISTEMA_PESQUISA_FONTE, JSON.stringify(FERRAMENTA_DOSSIE_FONTE),                                             // v74.10
     buildPesquisaFontePrompt.toString(), buildDossieFonte.toString(), pesquisarFonteReal.toString(),
