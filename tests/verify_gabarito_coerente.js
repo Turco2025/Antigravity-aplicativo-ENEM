@@ -284,7 +284,10 @@ function ok(c, msg, extra){ if(c){ total++; console.log('PASS ' + msg); } else {
   ok(G.nA === 0, 'G2 quando a letra entregue diverge do plano, quem se ajusta é o PLANO — e ele continua perfeito: sem letra repetida em sequência e com as 5 letras por bloco (400 sorteios)', G.casosA.join(' | '));
   ok(G.nB === 0, 'G3 com uma questão já disparada, o alvo dela não é mexido e todo o resto que ainda dá para escolher continua sem repetição evitável (400 sorteios)', G.casosB.join(' | '));
 
-  /* ---------- (H) entrega e exportação bloqueadas ---------- */
+  /* ---------- (H) entrega: a conferência AVISA, não bloqueia (v18.22) ----------
+     Decisão do professor: nenhuma exportação pode ser interrompida. A conferência
+     de coerência do gabarito continua rodando e continua avisando — o que saiu
+     foi a interrupção. */
   const H = await p.evaluate(() => {
     const done = d => ({ q: { data: d, status: "done" }, idx: 0 });
     const boa = window.__questao("C");
@@ -297,7 +300,7 @@ function ok(c, msg, extra){ if(c){ total++; console.log('PASS ' + msg); } else {
       vazio: bloqueiaSeGabaritoInconsistente([]),
     };
   });
-  ok(H.bloqueiaRuim === true, 'H1 exportação BLOQUEADA quando alguma questão está inconsistente');
+  ok(H.bloqueiaRuim === false, 'H1 v18.22: questão inconsistente NÃO bloqueia mais a exportação — só avisa');
   ok(H.liberaBoa === false, 'H2 exportação liberada quando todas estão coerentes');
   ok(H.liberaAntigo === false, 'H3 simulado antigo (sem "status" na análise) continua exportável — a correção não quebra o que já existe');
   ok(H.vazio === false, 'H4 lista vazia não bloqueia');

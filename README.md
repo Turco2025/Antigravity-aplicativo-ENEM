@@ -92,6 +92,38 @@ Expoentes, índices, raízes e sinais chegam ao estudante prontos — x², 2⁴,
    sobrescritas/subscritas (`fontwork/ampliar_carlito.py`). Teste no navegador, sem rede:
    `node tests/verify_math_notation.js`.
 
+## Nenhuma exportação é bloqueada (app v18.22, 18/09/2026)
+
+Decisão do professor: **gerou, está liberado.** PDF, Word, HTML e impressão saem sempre, mesmo com
+observação pendente. A decisão de regenerar ou exportar assim mesmo é dele, não do aplicativo.
+
+Até aqui, três conferências interrompiam a exportação: gabarito inconsistente (v18.9), objeto de
+conhecimento fora do recorte da disciplina (v18.18) e fonte não verificada (v18.17 — que nasceu da
+regra dele: "Qualquer falha deve bloquear a liberação da questão até sua correção"). Uma quarta, a
+de notação química, já era só aviso desde antes. **Agora as quatro avisam e nenhuma bloqueia.**
+
+**O que continua igual.** As auditorias rodam exatamente como rodavam; o backend continua marcando a
+questão (`fonteNaoVerificada`, `objetoForaDoRecorte`) e continua bloqueando **na geração** quando a
+regra do professor manda — o que mudou é só a porta de saída. O aviso continua no cartão de cada
+questão, com a mensagem literal dele (`MENSAGEM_FONTE_BLOQUEIO`), e ao exportar aparece um aviso que
+nomeia as questões com observação e diz que o arquivo saiu.
+
+**Como foi feito, e por quê assim.** As quatro funções mantêm o nome e a posição nos quatro caminhos
+de exportação; o que mudou é que passaram a devolver sempre `false`, com a mensagem indo por
+`avisaObservacoesDaExportacao`. Nenhum caminho de exportação foi tocado — a alteração é de uma linha
+lógica em cada conferência, não de quatro fluxos. As varreduras ficaram dentro de `try/catch`:
+auditar não pode, em hipótese alguma, impedir a exportação.
+
+**O que NÃO foi removido, e é diferente de bloqueio por qualidade:** a espera pelas imagens ainda em
+geração (`.visual-image-loading`). Exportar com o spinner na tela produziria um PDF com buraco no
+lugar da figura — é arquivo incompleto, não julgamento sobre a questão. Some sozinha quando a imagem
+termina ou falha.
+
+Teste: `verify_fontes_app.js` — 19 verificações; as seções B e C bis provam que a questão marcada
+**não** bloqueia, que o aviso mantém a mensagem literal e não se apresenta como erro, que com as
+quatro marcas ligadas ao mesmo tempo nenhuma conferência bloqueia, e que nenhuma delas tem sequer um
+`return true` no corpo. `verify_gabarito_coerente.js` H1 passou a exigir o contrário do que exigia.
+
 ## Acervos de prioridade obrigatória em Português, Literatura e Artes (generate-question v74.16, 18/09/2026)
 
 Decisão do professor: nessas três disciplinas, o pesquisador deve procurar **primeiro** em cinco

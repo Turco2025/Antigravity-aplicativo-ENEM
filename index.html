@@ -4711,27 +4711,42 @@ function bloqueiaSeQuimicaInvalida(doneQuestions){
   return false;
 }
 
-/* v18.9 — TRAVA DE ENTREGA. Nenhuma questão em que o gabarito e a análise das
-   alternativas apontem letras diferentes sai em PDF, Word, impressão ou HTML: o
-   caderno do professor marcaria uma alternativa e a folha de respostas do
-   aluno, outra. Diferente da auditoria de notação — que só registra no console
-   —, esta bloqueia de verdade, nomeia as questões e manda regenerar. Cobre
-   também simulados salvos antes desta versão, que nunca passaram pela trava da
-   geração. */
+/* v18.22 — NENHUMA EXPORTAÇÃO É BLOQUEADA, por decisão do professor (18/09/2026).
+   Gerou, está liberado: PDF, Word, HTML e impressão saem sempre, mesmo com
+   observação pendente. As auditorias continuam rodando e continuam aparecendo
+   — no cartão de cada questão, no console e num aviso ao exportar —, mas o
+   aviso é AVISO: informa e deixa passar. A decisão de regenerar ou exportar
+   assim mesmo é do professor, não do aplicativo.
+
+   As quatro funções abaixo mantêm o nome e a posição nos quatro caminhos de
+   exportação (PDF, DOCX, HTML, impressão) de propósito: assim a mudança é uma
+   só — elas passaram a devolver sempre false — e nenhum caminho de exportação
+   foi mexido. Antes desta versão, gabarito inconsistente, objeto fora do
+   recorte e fonte não verificada interrompiam a exportação. */
+
+/* Aviso único, não bloqueante, com o que a auditoria encontrou. */
+function avisaObservacoesDaExportacao(rotulo, ruins, textoExtra){
+  if(!ruins || !ruins.length) return false;
+  console.warn(`[${rotulo}] observações (exportação NÃO bloqueada):`, ruins);
+  const lista = ruins.length === 1
+    ? "a questão " + ruins[0].n
+    : "as questões " + ruins.map(r => r.n).join(", ");
+  toast("Exportado. Observação em " + lista + ": " + textoExtra +
+        (ruins[0].motivo ? " (" + ruins[0].motivo + ")" : "") +
+        ' Se quiser corrigir, use "Regenerar" e exporte de novo.', "info");
+  return false;   // NUNCA bloqueia
+}
+
 function bloqueiaSeGabaritoInconsistente(doneQuestions){
   const ruins = [];
-  (doneQuestions || []).forEach(o => {
-    const conf = conferenciaGabarito(o.q && o.q.data);
-    if(conf.estado !== "ok") ruins.push({ n: o.idx + 1, motivo: conf.motivo });
-  });
-  if(!ruins.length) return false;
-  console.error("[gabarito] exportação bloqueada:", ruins);
-  const lista = ruins.length === 1
-    ? "a questão " + ruins[0].n + " está"
-    : "as questões " + ruins.map(r => r.n).join(", ") + " estão";
-  toast("Exportação bloqueada: " + lista + " com o gabarito inconsistente. " + ruins[0].motivo +
-        ' Use "Regenerar" antes de exportar — assim o caderno do professor e a folha de respostas do aluno não saem se contradizendo.', "err");
-  return true;
+  try{
+    (doneQuestions || []).forEach(o => {
+      const conf = conferenciaGabarito(o.q && o.q.data);
+      if(conf.estado !== "ok") ruins.push({ n: o.idx + 1, motivo: conf.motivo });
+    });
+  }catch(e){ /* auditar nunca pode impedir a exportação */ }
+  return avisaObservacoesDaExportacao("gabarito", ruins,
+    "o gabarito e a análise das alternativas apontam letras diferentes.");
 }
 
 /* v18.17 — TRAVA DE ENTREGA POR FONTE NÃO VERIFICADA.
@@ -4749,16 +4764,14 @@ const MENSAGEM_FONTE_BLOQUEIO = "Não foi possível verificar uma fonte real par
    ou HTML. Simulado antigo não tem a marca e continua exportável. */
 function bloqueiaSeObjetoForaDoRecorte(doneQuestions){
   const ruins = [];
-  (doneQuestions || []).forEach(o => {
-    const d = o.q && o.q.data;
-    if(d && d.objetoForaDoRecorte) ruins.push({ n: o.idx + 1, motivo: String(d.objetoForaDoRecorte.motivo || "") });
-  });
-  if(!ruins.length) return false;
-  console.error("[objeto] exportação bloqueada:", ruins);
-  const lista = ruins.length === 1 ? "a questão " + ruins[0].n : "as questões " + ruins.map(r => r.n).join(", ");
-  toast("Exportação bloqueada em " + lista + ": o objeto de conhecimento está fora do recorte da disciplina escolhida. " +
-        ruins[0].motivo + ' Use "Regenerar".', "err");
-  return true;
+  try{
+    (doneQuestions || []).forEach(o => {
+      const d = o.q && o.q.data;
+      if(d && d.objetoForaDoRecorte) ruins.push({ n: o.idx + 1, motivo: String(d.objetoForaDoRecorte.motivo || "") });
+    });
+  }catch(e){ /* auditar nunca pode impedir a exportação */ }
+  return avisaObservacoesDaExportacao("objeto", ruins,
+    "o objeto de conhecimento declarado está fora do recorte da disciplina escolhida.");
 }
 
 /* Faixas reais medidas nas provas do ENEM 2015-2025 (mesmos números do backend,
@@ -4784,18 +4797,16 @@ const CALIBRACAO_APP = {
 
 function bloqueiaSeFonteNaoVerificada(doneQuestions){
   const ruins = [];
-  (doneQuestions || []).forEach(o => {
-    const d = o.q && o.q.data;
-    if(d && d.fonteNaoVerificada) ruins.push({ n: o.idx + 1, motivo: String(d.fonteNaoVerificada.motivo || "") });
-  });
-  if(!ruins.length) return false;
-  console.error("[fontes] exportação bloqueada:", ruins);
-  const lista = ruins.length === 1
-    ? "a questão " + ruins[0].n
-    : "as questões " + ruins.map(r => r.n).join(", ");
-  toast("Exportação bloqueada em " + lista + ". " + MENSAGEM_FONTE_BLOQUEIO +
-        (ruins[0].motivo ? " (motivo da primeira: " + ruins[0].motivo + ")" : ""), "err");
-  return true;
+  try{
+    (doneQuestions || []).forEach(o => {
+      const d = o.q && o.q.data;
+      if(d && d.fonteNaoVerificada) ruins.push({ n: o.idx + 1, motivo: String(d.fonteNaoVerificada.motivo || "") });
+    });
+  }catch(e){ /* auditar nunca pode impedir a exportação */ }
+  /* A mensagem literal do professor continua no aplicativo e continua no cartão
+     da questão (MENSAGEM_FONTE_BLOQUEIO); o que mudou é que ela informa em vez
+     de interromper. */
+  return avisaObservacoesDaExportacao("fontes", ruins, MENSAGEM_FONTE_BLOQUEIO);
 }
 
 function updateProgress(){

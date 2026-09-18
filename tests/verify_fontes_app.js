@@ -31,9 +31,13 @@ function ok(c, msg, extra){ if(c){ total++; console.log('PASS ' + msg); } else {
   const msgApp = await p.evaluate(() => typeof MENSAGEM_FONTE_BLOQUEIO === 'string' ? MENSAGEM_FONTE_BLOQUEIO : null);
   ok(msgApp === MSG, 'A1 o app usa EXATAMENTE a mensagem que o professor escreveu', JSON.stringify(msgApp));
   ok(await p.evaluate(() => typeof bloqueiaSeFonteNaoVerificada === 'function'),
-     'A2 a trava de entrega existe no app');
+     'A2 a conferência de fonte existe no app');
 
-  /* ---------- (B) a trava bloqueia, e só quando deve ---------- */
+  /* ---------- (B) v18.22: a conferência AVISA e NUNCA bloqueia ----------
+     Decisão do professor (18/09/2026): gerou, está liberado. Nenhuma exportação
+     — PDF, DOCX, HTML ou impressão — pode ser interrompida por observação da
+     auditoria. O aviso continua, com a mensagem literal dele; o que saiu foi a
+     interrupção. */
   const monta = (comMarca) => p.evaluate((m) => {
     const q = {
       status: 'done',
@@ -67,9 +71,13 @@ function ok(c, msg, extra){ if(c){ total++; console.log('PASS ' + msg); } else {
   ok(r1.r === false && !r1.ultimo, 'B1 questão sem a marca do backend NÃO é bloqueada', JSON.stringify(r1));
 
   const r2 = await bloqueou(marcada);
-  ok(r2.r === true, 'B2 questão marcada pelo backend É bloqueada', JSON.stringify(r2.r));
-  ok(r2.ultimo && r2.ultimo.tipo === 'err' && r2.ultimo.t.includes(MSG),
-     'B3 o aviso de bloqueio traz a mensagem literal do professor', JSON.stringify(r2.ultimo && r2.ultimo.t));
+  ok(r2.r === false, 'B2 questão marcada pelo backend NÃO bloqueia a exportação', JSON.stringify(r2.r));
+  ok(r2.ultimo && r2.ultimo.t.includes(MSG),
+     'B3 mesmo assim o aviso traz a mensagem literal do professor', JSON.stringify(r2.ultimo && r2.ultimo.t));
+  ok(r2.ultimo && r2.ultimo.tipo !== 'err',
+     'B3b o aviso não se apresenta como erro — a exportação deu certo', JSON.stringify(r2.ultimo && r2.ultimo.tipo));
+  ok(r2.ultimo && r2.ultimo.t.includes('Exportado'),
+     'B3c o aviso diz que o arquivo saiu', JSON.stringify(r2.ultimo && r2.ultimo.t));
   ok(r2.ultimo && r2.ultimo.t.includes('questão 1'),
      'B4 o aviso nomeia a questão a corrigir', JSON.stringify(r2.ultimo && r2.ultimo.t));
 
@@ -80,8 +88,8 @@ function ok(c, msg, extra){ if(c){ total++; console.log('PASS ' + msg); } else {
     return [{ q: mk(true), idx: 0 }, { q: mk(false), idx: 1 }, { q: mk(true), idx: 2 }];
   }, MSG);
   const r3 = await bloqueou(duas);
-  ok(r3.r === true && r3.ultimo.t.includes('questões 1, 3'),
-     'B5 com várias, o aviso lista todas as bloqueadas e ignora a boa', JSON.stringify(r3.ultimo && r3.ultimo.t));
+  ok(r3.r === false && r3.ultimo.t.includes('questões 1, 3'),
+     'B5 com várias, o aviso lista todas as marcadas, ignora a boa e mesmo assim não bloqueia', JSON.stringify(r3.ultimo && r3.ultimo.t));
 
   /* ---------- (C) as quatro exportações passam pela trava ---------- */
   const fontes = await p.evaluate(() => {
@@ -89,12 +97,41 @@ function ok(c, msg, extra){ if(c){ total++; console.log('PASS ' + msg); } else {
     // só os pontos de CHAMADA — a definição da função também casaria sem o "if(".
     return (txt.match(/if\(bloqueiaSeFonteNaoVerificada\(doneQuestions\)\)/g) || []).length;
   });
-  ok(fontes === 4, 'C1 as QUATRO saídas (PDF, Word, impressão e HTML) chamam a trava', String(fontes));
+  ok(fontes === 4, 'C1 as QUATRO saídas (PDF, Word, impressão e HTML) chamam a conferência', String(fontes));
   const pares = await p.evaluate(() => {
     const txt = Array.from(document.querySelectorAll('script')).map(s => s.textContent).join('\n');
     return (txt.match(/bloqueiaSeGabaritoInconsistente\(doneQuestions\)\)\s*return;\s*\n\s*if\(bloqueiaSeFonteNaoVerificada/g) || []).length;
   });
-  ok(pares === 4, 'C2 a trava de fonte vem logo depois da de gabarito, nas quatro', String(pares));
+  ok(pares === 4, 'C2 a conferência de fonte vem logo depois da de gabarito, nas quatro', String(pares));
+
+  /* ---------- (C bis) v18.22: NENHUMA das quatro pode interromper ---------- */
+  const nenhumaBloqueia = await p.evaluate(() => {
+    const nomes = ['bloqueiaSeQuimicaInvalida', 'bloqueiaSeGabaritoInconsistente',
+                   'bloqueiaSeFonteNaoVerificada', 'bloqueiaSeObjetoForaDoRecorte'];
+    const lista = [{ q: { status: 'done', data: {
+      alternativas: { A:'a',B:'b',C:'c',D:'d',E:'e' },
+      analiseAlternativas: { A:{status:'incorreta'},B:{status:'incorreta'},C:{status:'incorreta'},D:{status:'incorreta'},E:{status:'incorreta'} },
+      gabarito: 'B',
+      fonteNaoVerificada: { motivo: 'm', mensagem: 'x' },
+      objetoForaDoRecorte: { motivo: 'm', estado: 'fora' },
+    } }, idx: 0 }];
+    const toastOriginal = window.toast; window.toast = () => {};
+    const r = nomes.map(n => ({ n, v: window[n](lista) }));
+    window.toast = toastOriginal;
+    return r;
+  });
+  ok(nenhumaBloqueia.every(x => x.v === false),
+     'C3 com TODAS as marcas ligadas ao mesmo tempo, nenhuma das quatro conferências bloqueia',
+     JSON.stringify(nenhumaBloqueia));
+  const semReturnTrue = await p.evaluate(() => {
+    const nomes = ['bloqueiaSeQuimicaInvalida', 'bloqueiaSeGabaritoInconsistente',
+                   'bloqueiaSeFonteNaoVerificada', 'bloqueiaSeObjetoForaDoRecorte',
+                   'avisaObservacoesDaExportacao'];
+    return nomes.filter(n => /return\s+true/.test(String(window[n])));
+  });
+  ok(semReturnTrue.length === 0,
+     'C4 nenhuma das funções de conferência tem sequer um "return true" no corpo',
+     JSON.stringify(semReturnTrue));
 
   /* ---------- (D) o aviso aparece no card da questão ---------- */
   const aud = await p.evaluate((m) => {
