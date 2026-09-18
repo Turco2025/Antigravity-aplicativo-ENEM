@@ -92,6 +92,40 @@ Expoentes, índices, raízes e sinais chegam ao estudante prontos — x², 2⁴,
    sobrescritas/subscritas (`fontwork/ampliar_carlito.py`). Teste no navegador, sem rede:
    `node tests/verify_math_notation.js`.
 
+## Acervos de prioridade obrigatória em Português, Literatura e Artes (generate-question v74.16, 18/09/2026)
+
+Decisão do professor: nessas três disciplinas, o pesquisador deve procurar **primeiro** em cinco
+acervos que ele mesmo validou, **nesta ordem**:
+
+1. Biblioteca Nacional Digital — `https://bndigital.bn.gov.br/`
+2. Hemeroteca Digital Brasileira — `https://bndigital.bn.gov.br/hemeroteca-digital/`
+3. Brasiliana Guita e José Mindlin, BBM Digital (USP) — `https://search.bbm.usp.br/pt-br/projetos-digitais-da-bbm/bbm-digital/`
+4. Busca Integrada USP — `https://www.buscaintegrada.usp.br/`
+5. Portal Domínio Público (MEC) — `http://www.dominiopublico.gov.br/`
+
+**É prioridade, não exclusividade.** O bloco manda restringir a busca ao domínio do acervo
+(`site:bndigital.bn.gov.br <autor> <obra>`), passar ao seguinte só quando o anterior não tiver o
+material, e — esgotada a lista inteira — procurar nas demais fontes que o item 1 da regra autoriza.
+Fechar a porta seria pior: temas de arte contemporânea (Adriana Varejão, Vik Muniz, Kobra) não estão
+nesses acervos, e o gate de fontes bloquearia a questão inteira.
+
+**Nada foi afrouxado.** O que vier dos acervos passa pelas mesmas exigências de autoria, ano,
+referência e trecho conferido, e a trava da URL continua inteira: só entra em `url` um endereço que
+apareceu **de fato** num resultado de busca da mesma conversa. O bloco diz isso com todas as letras
+("NÃO monte endereço de acervo por dedução"), porque a raiz de um acervo copiada da lista é
+exatamente o tipo de link que o modelo tenderia a inventar.
+
+**Detalhes de implementação.** Os endereços foram gravados **sem** o `?utm_source=chatgpt.com` com
+que chegaram — não faz parte do endereço do acervo e acabaria dentro do campo `referencia` das
+questões. O bloco vai na **mensagem** do pesquisador, não no prompt de sistema: depende da
+disciplina, e no sistema fragmentaria o cache por questão; na mensagem custa ~180 tokens. Na segunda
+tentativa (item 2 da regra), o prompt manda procurar **fora** dos acervos se eles já foram varridos.
+As demais disciplinas não recebem o bloco.
+
+Selftest: `economiaBuscas.v7416_acervosPrioritarios` (a ordem exata do professor, os endereços sem
+rastreador, as três disciplinas e só elas, a busca por domínio na ordem e a trava da URL intacta).
+Teste: `verify_fontes_backend.ts` seção K — 11 verificações; o arquivo vai a **87**.
+
 ## Cache, e só cache: as três primeiras medidas do teto de US$ 0,09 (generate-question v74.15 / app v18.21, 18/09/2026)
 
 Medição de produção, 7 dias, por área: **Linguagens US$ 0,1814 por questão · Natureza US$ 0,0601 ·

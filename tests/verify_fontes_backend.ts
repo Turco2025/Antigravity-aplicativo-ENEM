@@ -69,11 +69,17 @@ const mBA = fonte.match(/const BUSCA_AUDITORIA = \{ \.\.\.WEB_SEARCH_TOOL, max_u
 if (!mMsg || !mAreas) { console.error("FALHA: não achei MENSAGEM_FONTE_BLOQUEIO / AREAS_FONTES_REAIS_ESTRITO"); Deno.exit(1); }
 if (!mWS || !mBP || !mBR || !mBA) { console.error("FALHA: não achei os tetos de busca (WEB_SEARCH_TOOL / BUSCA_*)"); Deno.exit(1); }
 
+const mAcervos = fonte.match(/const ACERVOS_PRIORITARIOS: \{ nome: string; url: string \}\[\] = (\[[^;]*?\]);/s);
+const mDisc = fonte.match(/const DISCIPLINAS_COM_ACERVO_PRIORITARIO = (\[[^\]]*\]);/);
+if (!mAcervos || !mDisc) { console.error("FALHA: não achei ACERVOS_PRIORITARIOS / DISCIPLINAS_COM_ACERVO_PRIORITARIO"); Deno.exit(1); }
+
 const modulo = `type SistemaPrompt = any;
 // o texto integral da regra do professor, lido do arquivo de producao
 const REGRA_FONTES_PROFESSOR = ${JSON.stringify(recortaConstTemplate("REGRA_FONTES_PROFESSOR"))};
 // v74.15: o TTL do cache e decidido fora do bloco; aqui basta um duble
 function cacheControlAtual() { return { type: "ephemeral" }; }
+const ACERVOS_PRIORITARIOS: { nome: string; url: string }[] = ${mAcervos[1]};
+const DISCIPLINAS_COM_ACERVO_PRIORITARIO = ${mDisc[1]};
 const WEB_SEARCH_TOOL = { type: "web_search_20250305", name: "web_search", max_uses: ${mWS[1]} };
 const BUSCA_PESQUISADOR = { ...WEB_SEARCH_TOOL, max_uses: ${mBP[1]} };
 const BUSCA_PESQUISADOR_RETRY = { ...WEB_SEARCH_TOOL, max_uses: ${mBR[1]} };
@@ -97,9 +103,12 @@ async function callClaudeForJSON(_s: any, userMsg: string, w: any, usos: any[], 
   return __stub.resposta;
 }
 ` + fonte.slice(i, j) + `
+` + recorta("temAcervoPrioritario") + `
+` + recorta("buildAcervosPrioritarios") + `
 ` + recorta("buscaDaGeracao") + `
 ` + recorta("buildDossieFonte") + `
 export { SISTEMA_AUDITORIA_FONTES, REGRA_FONTES_PROFESSOR };
+export { ACERVOS_PRIORITARIOS, DISCIPLINAS_COM_ACERVO_PRIORITARIO, temAcervoPrioritario, buildAcervosPrioritarios };
 export { conferenciaFontes, conferenciaDossie, tokensDeFonte, normalizaUrl, buildAuditoriaFontesPrompt,
          garantirFontesReais, FERRAMENTA_AUDITORIA_FONTE, MENSAGEM_FONTE_BLOQUEIO, fontesReaisEstrito,
          buscaDaGeracao, buildDossieFonte,
@@ -112,7 +121,9 @@ const M: any = await import("file://" + caminho);
 const { conferenciaFontes, conferenciaDossie, normalizaUrl, buildAuditoriaFontesPrompt, garantirFontesReais,
         FERRAMENTA_AUDITORIA_FONTE, MENSAGEM_FONTE_BLOQUEIO, fontesReaisEstrito, buscaDaGeracao,
         buildDossieFonte, WEB_SEARCH_TOOL, BUSCA_PESQUISADOR, BUSCA_PESQUISADOR_RETRY, BUSCA_AUDITORIA,
-        SISTEMA_AUDITORIA_FONTES, REGRA_FONTES_PROFESSOR, __stub } = M;
+        SISTEMA_AUDITORIA_FONTES, REGRA_FONTES_PROFESSOR, ACERVOS_PRIORITARIOS,
+        DISCIPLINAS_COM_ACERVO_PRIORITARIO, temAcervoPrioritario, buildAcervosPrioritarios,
+        __stub } = M;
 
 let ok = 0, bad = 0;
 const t = (n: string, c: boolean, extra = "") => { if (c) { ok++; console.log("PASS " + n); } else { bad++; console.log("FAIL " + n + (extra ? "\n     " + extra : "")); } };
@@ -423,6 +434,54 @@ t("J8 o sistema da geração NÃO chega à auditoria",
   JSON.stringify(__stub.sistema || "").includes("VALIDADOR DE FONTES")
   && !JSON.stringify(__stub.sistema || "").includes("<<<SISTEMA DA GERACAO>>>"),
   JSON.stringify(__stub.sistema || "").slice(0, 120));
+
+/* ---------- K. v74.16 — acervos de prioridade obrigatória ----------
+   Cinco acervos indicados pelo professor, a serem consultados nesta ordem em
+   Língua Portuguesa, Literatura e Artes. Prioridade, não exclusividade. */
+const ORDEM_DO_PROFESSOR = [
+  "https://bndigital.bn.gov.br/",
+  "https://bndigital.bn.gov.br/hemeroteca-digital/",
+  "https://search.bbm.usp.br/pt-br/projetos-digitais-da-bbm/bbm-digital/",
+  "https://www.buscaintegrada.usp.br/",
+  "http://www.dominiopublico.gov.br/",
+];
+t("K1 os cinco acervos estão na ORDEM que o professor mandou",
+  ACERVOS_PRIORITARIOS.map((a: any) => a.url).join("|") === ORDEM_DO_PROFESSOR.join("|"),
+  JSON.stringify(ACERVOS_PRIORITARIOS.map((a: any) => a.url)));
+t("K2 os endereços estão sem o rastreador utm_source com que chegaram",
+  ACERVOS_PRIORITARIOS.every((a: any) => !a.url.includes("utm_source") && !a.url.includes("?")));
+t("K3 cada acervo tem nome, para a referência sair identificada",
+  ACERVOS_PRIORITARIOS.every((a: any) => typeof a.nome === "string" && a.nome.length > 5));
+t("K4 vale nas três disciplinas que o professor nomeou",
+  JSON.stringify(DISCIPLINAS_COM_ACERVO_PRIORITARIO) === JSON.stringify(["Língua Portuguesa", "Literatura", "Artes"])
+  && ["Língua Portuguesa", "Literatura", "Artes"].every((d) => temAcervoPrioritario(d)));
+t("K5 NÃO vale nas demais disciplinas",
+  ["História", "Geografia", "Filosofia", "Sociologia", "Biologia", "Química", "Física", "Matemática",
+   "Práticas Corporais", "Língua Estrangeira (Inglês/Espanhol)"]
+  .every((d) => !temAcervoPrioritario(d) && buildAcervosPrioritarios(d) === ""));
+t("K6 o bloco manda começar por eles, na ordem, e só passar ao seguinte quando o anterior não tiver",
+  (() => { const b = buildAcervosPrioritarios("Literatura");
+    return b.includes("ACERVOS DE PRIORIDADE OBRIGATÓRIA")
+      && b.includes("Consulte-os PRIMEIRO, NESTA ORDEM")
+      && b.includes("Só passe ao acervo seguinte quando o anterior não tiver o material")
+      && ORDEM_DO_PROFESSOR.every((u, i) => b.indexOf(u) > -1 && (i === 0 || b.indexOf(u) > b.indexOf(ORDEM_DO_PROFESSOR[i - 1])));
+  })());
+t("K7 é PRIORIDADE, não exclusividade: esgotada a lista, valem as fontes do item 1 da regra",
+  buildAcervosPrioritarios("Artes").includes("Esgotada a lista inteira")
+  && buildAcervosPrioritarios("Artes").includes("universidades, bibliotecas, museus"));
+t("K8 a prioridade não afrouxa autoria, ano, referência nem trecho conferido",
+  buildAcervosPrioritarios("Artes").includes("A prioridade NÃO afrouxa nada"));
+t("K9 a trava da URL continua inteira — nada de link deduzido",
+  buildAcervosPrioritarios("Artes").includes("tenha aparecido DE FATO num resultado de busca desta conversa")
+  && buildAcervosPrioritarios("Artes").includes("NÃO monte endereço de acervo por dedução"));
+/* K10/K11 leem o ARQUIVO DE PRODUÇÃO: buildPesquisaFontePrompt tem template
+   literals aninhados que o recortador deste teste não isola com segurança.
+   O comportamento em execução está provado no selftest (economiaBuscas
+   .v7416_acervosPrioritarios.noPromptDoPesquisador). */
+t("K10 buildPesquisaFontePrompt injeta o bloco pela disciplina da questão",
+  fonte.includes("${buildAcervosPrioritarios(o.disciplina)}"));
+t("K11 a segunda tentativa manda sair dos acervos quando eles já foram varridos",
+  fonte.includes("Se você já varreu os acervos de prioridade e eles não tinham o material, procure AGORA fora deles"));
 
 console.log(`\n${ok} verificações passaram, ${bad} falharam.`);
 if (bad) Deno.exit(1);
