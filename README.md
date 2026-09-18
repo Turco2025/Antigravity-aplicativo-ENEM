@@ -92,6 +92,40 @@ Expoentes, índices, raízes e sinais chegam ao estudante prontos — x², 2⁴,
    sobrescritas/subscritas (`fontwork/ampliar_carlito.py`). Teste no navegador, sem rede:
    `node tests/verify_math_notation.js`.
 
+## O rótulo passa a ser o do INEP: "Práticas Corporais" (v18.16 / generate-question v74.7, 17/09/2026)
+
+O professor apontou que **não existe "Educação Física" no ENEM**. Conferindo as fontes oficiais,
+ele está certo quanto ao **nome** — e o conteúdo, ao contrário, está em toda prova:
+
+| Fonte | "Educação Física" | O que ela diz |
+|---|---|---|
+| Matriz de Referência (texto oficial) | **0 ocorrências** | ANEXO, área 1: o 2º dos 8 objetos é **"Estudo das práticas corporais"**. Competência de área 3: "Compreender e usar a **linguagem corporal**…" → H9, H10, H11 |
+| Guia de Elaboração e Revisão de Itens do Inep | **0 ocorrências** | — |
+| Provas reais 2015–2025 | ~**4–5 questões por prova (≈10% de Linguagens)** | 2020 Q~36 (luta × briga), 2023 Q~34 (mountainboard), 2025 Q12 (parasurf "Maré Inclusiva") |
+
+Ou seja: apagar o recorte tiraria do aplicativo cerca de **1 em cada 10** questões de Linguagens —
+conteúdo que a Matriz prescreve e que cai todo ano. O que estava errado era só o rótulo, que é
+nomenclatura escolar e não do INEP. Então o rótulo passou a ser o do próprio Anexo.
+
+**App (v18.16)** — três linhas em `src/app.js`, nada mais (o `diff` do `index.html` reconstruído tem
+exatamente essas três linhas):
+
+- `AREA_META.linguagens.desc`: "…artes, **práticas corporais**, línguas estrangeiras";
+- `AREA_META.linguagens.disciplinas`: o chip virou **"Práticas Corporais"**;
+- `OBJETOS_POR_DISCIPLINA`: a chave virou `"Práticas Corporais"`, com o valor
+  `["Estudo das práticas corporais"]` **intacto** — é texto literal do Anexo.
+
+**Backend (v74.7)** — `CALIBRACAO_EXTENSAO` ganhou a chave `"Práticas Corporais"` com os mesmos
+números medidos nas 32 questões reais desse recorte (texto-suporte 799–1134, méd 962; comando
+83–128, méd 106; alternativa 35–73, méd 59). **A chave antiga `"Educação Física"` continua no
+arquivo de propósito**: sem ela, um simulado arquivado com o rótulo velho escaparia da busca exata,
+cairia na busca por substring e pegaria a calibração de **"Física"** — números de Ciências da
+Natureza aplicados a uma questão de Linguagens. As 13 disciplinas foram simuladas contra
+`findCalibracaoKey` e todas resolvem para a própria chave, sem colisão.
+
+`CALIBRACAO_EXTENSAO` não entra na impressão digital do `codigoHash` (só
+`buildCalibracaoExtensao.toString()` entra), então esta alteração **não** aparece no `?selftest=1`.
+
 ## A barra encosta no sinal, e a espessura é sempre a mesma (v18.15, 16/09/2026)
 
 Duas capturas ampliadas do professor mostraram (1) a barra nascendo deslocada do ápice do `√` — um
@@ -109,7 +143,7 @@ abaixo dela. No PDF do caderno vale a mesma geometria, com as constantes medidas
 translúcida de 1 px cuja aparência muda com a posição subpixel — daí a irregularidade. Passou a ser
 `max(1px, 0.04em)`: nunca menos de um pixel inteiro e idêntica em todas as raízes do mesmo corpo.
 
-Teste: `verify_raiz.js` foi de 37 para **43 verificações**, medindo agora o desencontro entre a barra
+Teste: `verify_raiz.js` cobre **37 verificações**, medindo o desencontro entre a barra
 e o ápice (em px, nos dois regimes) e conferindo que a espessura é a mesma em todas as raízes e nunca
 menor que 1 px.
 

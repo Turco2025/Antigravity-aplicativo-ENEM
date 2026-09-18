@@ -87,6 +87,14 @@ const CALIBRACAO_EXTENSAO: Record<string, { n: number; texto: [number, number, n
   "Língua Portuguesa": { n: 213, texto: [608, 1201, 902], comando: [82, 180, 138], item: [44, 70, 58] },
   "Literatura": { n: 105, texto: [608, 1122, 868], comando: [82, 164, 118], item: [45, 67, 57] },
   "Artes": { n: 50, texto: [384, 798, 610], comando: [107, 189, 143], item: [48, 70, 61] },
+  /* v74.7 — "Práticas Corporais" é o nome do objeto de conhecimento no Anexo da
+     Matriz de Referência ("Estudo das práticas corporais"); "Educação Física" não
+     aparece nenhuma vez na Matriz nem no Guia do Inep. Os números são os mesmos:
+     medição das 32 questões reais desse recorte nas provas de 2015-2025. A chave
+     antiga continua aqui SÓ para os simulados já arquivados com o rótulo velho —
+     sem ela, "Educação Física" cairia na busca por substring e pegaria a
+     calibração de "Física" (Ciências da Natureza). */
+  "Práticas Corporais": { n: 32, texto: [799, 1134, 962], comando: [83, 128, 106], item: [35, 73, 59] },
   "Educação Física": { n: 32, texto: [799, 1134, 962], comando: [83, 128, 106], item: [35, 73, 59] },
   "Língua Estrangeira (Inglês/Espanhol)": { n: 100, texto: [409, 1073, 761], comando: [77, 179, 129], item: [37, 60, 50] },
   "História": { n: 132, texto: [469, 757, 620], comando: [84, 130, 104], item: [33, 53, 45] },
