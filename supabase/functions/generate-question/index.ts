@@ -260,18 +260,35 @@ function buildObjetosConhecimento(area: string): string {
   return `\n\n📚 OBJETOS DE CONHECIMENTO OFICIAIS DESTA ÁREA (Anexo da Matriz de Referência do ENEM) — a questão DEVE declarar exatamente UM deles, no campo "objetoConhecimento", escolhido por ser o recorte de conteúdo que ela efetivamente mobiliza (não por afinidade temática de superfície). Copie literalmente, no campo "objetoConhecimento", um dos títulos da lista abaixo — sem abreviar, parafrasear ou combinar dois deles. É PROIBIDO declarar um objeto de conhecimento que não esteja nesta lista:\n${itens}`;
 }
 
-/* v71 — NOTAÇÃO EM TODAS AS ÁREAS, por decisão do professor (13/09/2026).
-   Até a v70 o bloco químico só entrava em Ciências da Natureza e Matemática
-   não recebia regra NENHUMA de notação — resultado: Q0, 2^4, 10^9, "4,6 x
-   10^9" em 6 de 20 questões. Agora os dois blocos (química e matemática)
-   entram em todas as áreas: Geografia escreve CO₂ e km², Física escreve v₀ e
-   m/s², Matemática escreve 10⁻³ e Q₀. Custo: ~2 mil tokens a mais no prompt
-   do sistema, que fica em cache — na ordem de US$ 0,0005 por questão. */
-function blocoNotacao() {
-  return NOTACAO_QUIMICA + "\n" + NOTACAO_MATEMATICA;
+/* v71 — NOTAÇÃO MATEMÁTICA EM TODAS AS ÁREAS, por decisão do professor
+   (13/09/2026). Até a v70 Matemática não recebia regra NENHUMA de notação —
+   resultado: Q0, 2^4, 10^9, "4,6 x 10^9" em 6 de 20 questões. O bloco
+   matemático (expoente, índice, unidade, ordem de grandeza) vale em qualquer
+   área: Geografia escreve km², Física escreve v₀ e m/s², Matemática escreve
+   10⁻³ e Q₀.
+
+   v74.14 — O BLOCO QUÍMICO SAI DE LINGUAGENS E HUMANAS (18/09/2026, decisão do
+   professor). Ele ensina a escrever fórmula, índice e carga de íon (CO₂, NO₃⁻,
+   SO₄²⁻, ligação orgânica) — 4.294 caracteres, ≈1.200 tokens que iam no prompt
+   do sistema de TODA questão, inclusive as de Artes, Literatura, História e
+   Filosofia, que não escrevem fórmula nenhuma. Como a gravação de cache é
+   cobrada em cada uma das três chamadas da questão, eram ≈1.200 × 3 tokens por
+   questão pagos à toa.
+
+   O caso que justificava manter — Geografia escrevendo CO₂, CH₄, SO₂ em clima e
+   emissões — continua coberto, e não pelo prompt: normalizarNotacaoQuimica roda
+   em TODA questão, de qualquer área, e converte CO2 → CO₂ deterministicamente
+   (QN_FORMULAS_COMUNS vale para todas as disciplinas). Ou seja: a rede de
+   segurança é a mesma; o que saiu foi a instrução redundante. */
+const AREAS_COM_NOTACAO_QUIMICA = ["natureza", "matematica"];
+function precisaNotacaoQuimica(area: string): boolean {
+  return AREAS_COM_NOTACAO_QUIMICA.includes(String(area || "").trim().toLowerCase());
+}
+function blocoNotacao(area: string) {
+  return (precisaNotacaoQuimica(area) ? NOTACAO_QUIMICA + "\n" : "") + NOTACAO_MATEMATICA;
 }
 function buildSystemPrompt(area: string) {
-  return APP_DATA.universalModel + "\n\n" + APP_DATA.areaContext[area] + buildObjetosConhecimento(area) + blocoNotacao();
+  return APP_DATA.universalModel + "\n\n" + APP_DATA.areaContext[area] + buildObjetosConhecimento(area) + blocoNotacao(area);
 }
 
 /* v69 — PROMPT DE SISTEMA ENXUTO PARA REFAZER SÓ O RECURSO VISUAL.
@@ -284,7 +301,7 @@ function buildSystemPrompt(area: string) {
    notação química (rótulos podem ter fórmulas). O protocolo de imagem
    continua indo na mensagem (buildVisualRedoPrompt). */
 function buildSystemVisual(area: string) {
-  const notacao = "\n\n" + blocoNotacao();   // v71: todas as áreas (rótulos podem ter fórmulas e expoentes)
+  const notacao = "\n\n" + blocoNotacao(area);   // v71/v74.14: notação matemática sempre; a química só onde há fórmula (rótulo de gráfico/tabela)
   return `Você é um elaborador de itens do ENEM (Inep), especialista em recursos visuais de questões: sua tarefa nesta chamada é produzir SOMENTE a especificação do recurso visual (imagem, gráfico ou tabela) de uma questão já escrita, seguindo à risca o protocolo e o formato indicados na mensagem do usuário. Não reescreva, não corrija e não comente a questão.\n\nÁrea: ${AREA_LABELS[area]}.\n\n${APP_DATA.areaContext[area]}${notacao}`;
 }
 
@@ -2738,6 +2755,7 @@ function selfTestResponse() {
     buildAuditoriaFontesPrompt.toString(), garantirFontesReais.toString(), JSON.stringify(SCHEMA_FONTE),
     conferenciaDossie.toString(), tokensDeFonte.toString(), JSON.stringify([...PALAVRAS_VAZIAS_FONTE]),            // v74.13
     buscaDaGeracao.toString(),
+    blocoNotacao.toString(), precisaNotacaoQuimica.toString(), JSON.stringify(AREAS_COM_NOTACAO_QUIMICA),   // v74.14
     JSON.stringify([WEB_SEARCH_TOOL, BUSCA_PESQUISADOR, BUSCA_PESQUISADOR_RETRY, BUSCA_AUDITORIA]),
     buildSystemPlanejamento.toString(),
     normalizarNotacaoTexto.toString(), normalizarNotacaoQuimica.toString(), qnConverteIon.toString(),
@@ -2770,6 +2788,39 @@ function selfTestResponse() {
     recursoBiologiaCinematografico: /National Geographic/.test(instrucoesImagem("imagem", "Biologia")),
     buscaBiologiaMaxUses: webSearchTool("Biologia").max_uses,
     temNotacaoQuimica: typeof NOTACAO_QUIMICA === "string" && NOTACAO_QUIMICA.length > 0,
+    /* v74.14 — O BLOCO QUÍMICO SÓ ONDE HÁ FÓRMULA. Prova, no endpoint de
+       produção, que Linguagens e Humanas não carregam mais os ~1.200 tokens de
+       notação química no prompt do sistema, que Natureza e Matemática seguem
+       carregando, que a notação MATEMÁTICA continua em todas as áreas, e que a
+       rede determinística (a que de fato conserta CO2 → CO₂) continua valendo
+       em qualquer disciplina — inclusive Geografia. */
+    notacaoQuimicaPorArea: (() => {
+      const temQuimica = (a: string) => buildSystemPrompt(a).includes(NOTACAO_QUIMICA);
+      const temMatematica = (a: string) => buildSystemPrompt(a).includes(NOTACAO_MATEMATICA);
+      const AREAS = ["linguagens", "humanas", "natureza", "matematica"];
+      return {
+        chars: NOTACAO_QUIMICA.length,
+        areasComQuimica: AREAS_COM_NOTACAO_QUIMICA,
+        foraDeLinguagensEHumanas: !temQuimica("linguagens") && !temQuimica("humanas"),
+        segueEmNaturezaEMatematica: temQuimica("natureza") && temQuimica("matematica"),
+        matematicaEmTodasAsAreas: AREAS.every(temMatematica),
+        // o prompt do recurso visual segue a mesma regra
+        visualSegueAMesmaRegra: !buildSystemVisual("humanas").includes(NOTACAO_QUIMICA)
+          && buildSystemVisual("natureza").includes(NOTACAO_QUIMICA)
+          && AREAS.every((a) => buildSystemVisual(a).includes(NOTACAO_MATEMATICA)),
+        // e a rede determinística continua consertando fórmula em Humanas
+        redeDeterministicaSegueEmHumanas:
+          normalizarNotacaoQuimica({ textoBase: "A concentração de CO2 e de CH4 subiu." }, "humanas", "Geografia").textoBase
+            === "A concentração de CO₂ e de CH₄ subiu."
+          && normalizarNotacaoQuimica({ textoBase: "O SO2 das termelétricas." }, "humanas", "Geografia").textoBase
+            === "O SO₂ das termelétricas."
+          && normalizarNotacaoQuimica({ textoBase: "O CaCO3 do calcário." }, "linguagens", "Artes").textoBase
+            === "O CaCO₃ do calcário.",
+        // quanto saiu do prompt do sistema, por área
+        charsLinguagens: buildSystemPrompt("linguagens").length,
+        charsNatureza: buildSystemPrompt("natureza").length,
+      };
+    })(),
     temGabaritoAlvo: typeof buildGabaritoAlvo === "function",
     temNormalizarCamposEstruturados: typeof normalizarCamposEstruturados === "function",
     temNormalizarNotacaoQuimica: typeof normalizarNotacaoQuimica === "function",

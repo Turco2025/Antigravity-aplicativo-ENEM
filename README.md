@@ -92,6 +92,35 @@ Expoentes, índices, raízes e sinais chegam ao estudante prontos — x², 2⁴,
    sobrescritas/subscritas (`fontwork/ampliar_carlito.py`). Teste no navegador, sem rede:
    `node tests/verify_math_notation.js`.
 
+## A notação química sai de Linguagens e Humanas (generate-question v74.14, 18/09/2026)
+
+Decisão do professor: questões de Linguagens e de Humanas não precisam da notação química. Ela está
+certa — `NOTACAO_QUIMICA` ensina a escrever fórmula, índice e carga de íon (CO₂, NO₃⁻, SO₄²⁻, a
+ligação orgânica que a v74.4 consertou) —, mas nada disso é escrito numa questão de Artes, de
+Literatura, de História ou de Filosofia. São **4.294 caracteres, ≈1.227 tokens**, que iam no prompt
+do sistema de **toda** questão.
+
+O bloco passa a entrar só em Ciências da Natureza e em Matemática (`AREAS_COM_NOTACAO_QUIMICA`). A
+notação **matemática** não foi tocada: continua em todas as áreas, porque foi ela que acabou com
+`Q0`, `2^4` e `4,6 x 10^9` na v71, e Geografia escreve km² como Física escreve m/s².
+
+**O caso que justificava manter, e por que ele continua coberto.** Geografia fala de clima e
+emissões e escreve CO₂, CH₄, SO₂. Quem converte `CO2` → `CO₂` não é o prompt: é
+`normalizarNotacaoQuimica`, código determinístico que roda em **toda** questão, de **qualquer** área
+(`QN_FORMULAS_COMUNS` vale para todas as disciplinas, e fora de Natureza a tabela é só de fórmulas
+neutras — sem íons, sem gases, de modo que "sangue O+" e "B-" continuam intactos). A rede de
+segurança é exatamente a mesma de antes; o que saiu foi a instrução redundante que a duplicava.
+
+**Quanto vale.** O prompt de sistema de Linguagens cai de 31.376 para 27.084 caracteres. Duas das
+três chamadas de cada questão carregam esse prompt (geração e auditoria), e a gravação de cache é
+cobrada em cada uma: **US$ 0,0005 a US$ 0,0061 por questão**, conforme o cache esteja quente ou frio.
+Não é a alavanca grande — é a correção de uma coisa que estava errada e que, de quebra, custava.
+
+Selftest: `notacaoQuimicaPorArea` (onde entra, onde não entra, o visual seguindo a mesma regra, e a
+rede determinística consertando CO₂ em Geografia).
+Teste: `deno run -A tests/verify_notacao_por_area.ts supabase/functions/generate-question/index.ts` —
+20 verificações, seções A–E.
+
 ## O custo por questão dentro dos R$ 0,50: só o pesquisador busca (generate-question v74.13 / app v18.20, 18/09/2026)
 
 O professor fixou um teto: **uma questão não pode passar de R$ 0,50**. A leva de 18/09 (20 questões
