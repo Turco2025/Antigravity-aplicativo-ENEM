@@ -124,6 +124,56 @@ Teste: `verify_fontes_app.js` — 19 verificações; as seções B e C bis prova
 quatro marcas ligadas ao mesmo tempo nenhuma conferência bloqueia, e que nenhuma delas tem sequer um
 `return true` no corpo. `verify_gabarito_coerente.js` H1 passou a exigir o contrário do que exigia.
 
+## Os acervos deixaram de ser pedido e viraram trava (generate-question v74.18, 19/09/2026)
+
+A v74.16 pôs os cinco acervos do professor no prompt do pesquisador. A leva de 18/09 mostrou que
+prompt não basta: das 10 questões de Artes, só **2** tiraram a fonte dos acervos
+(`bndigital.bn.gov.br`). As outras saíram de `mam.rio`, `mac.usp.br`, `itaucultural.org.br`,
+`museubispodorosario.com`, `museudaimigracao.org.br`, `revistaea.org`, `catedral.org.br` — e uma
+delas de **`bia-senday.blogspot.com`**, um blog pessoal, com a referência declarando
+"CORREIO PAULISTANO, 29 jan. 1922". Jornal de 1922 é exatamente o que a Hemeroteca Digital tem.
+
+**1. Uma busca, dentro dos acervos.** Com o teto de UMA busca (v74.17), percorrer um acervo por vez
+era impossível. A regra agora é uma consulta só que cobre os cinco:
+`(site:bndigital.bn.gov.br OR site:bbm.usp.br OR site:buscaintegrada.usp.br OR site:dominiopublico.gov.br)`,
+com a ordem do professor valendo na escolha do resultado. Os cinco acervos cabem em quatro domínios
+porque a Hemeroteca vive dentro da BNDigital.
+
+**2. Trava de domínio no backend, e ela distingue dois casos.** Nas três disciplinas nomeadas pelo
+professor, `ehDominioDeAcervo()` confere o host de `urlVerificacao` (aceita subdomínio —
+`search.bbm.usp.br` conta —, recusa domínio parecido como `bndigital.bn.gov.br.exemplo.com`):
+
+- a fonte veio de fora **e os acervos apareceram nos resultados** → aceita, marcada com
+  `foraDoAcervo.motivo = "os acervos de prioridade foram consultados e não tinham o material"`.
+  Isso é o item 1 da regra funcionando.
+- a fonte veio de fora **e nenhum resultado veio dos acervos** → o modelo não olhou para eles. A
+  pesquisa é refeita restrita aos acervos (`exigirAcervo`), com a primeira resposta guardada de
+  reserva. Se a busca restrita não achar nada, a reserva volta, marcada.
+
+A separação é o que impede a obrigatoriedade de virar uma segunda chamada em toda questão — só paga
+quem desobedeceu.
+
+**3. O bloco dos acervos chega às três etapas que podem buscar.** Antes ele só ia ao pesquisador. A
+auditoria sem dossiê e a geração sem dossiê também buscam, e agora recebem a mesma lista — e só
+nesse caso, para não gastar ~180 tokens numa etapa que não vai buscar.
+
+**4. O domínio da fonte entra no log.** `question_generation_log` ganhou `fonte_dominio` e
+`fonte_no_acervo` (migração `v7418_fonte_dominio_no_log`, com índice em `fonte_dominio`). Medir o
+cumprimento da regra deixou de exigir abrir os simulados questão por questão:
+
+```sql
+select fonte_no_acervo, count(*), array_agg(distinct fonte_dominio)
+from question_generation_log
+where disciplina in ('Língua Portuguesa','Literatura','Artes') and id > 1117
+group by 1;
+```
+
+Testes: `verify_fontes_backend.ts` foi para **99** verificações, com a seção L nova cobrindo os
+quatro domínios, a consulta combinada, o reconhecimento de subdomínio, a recusa do blog e do domínio
+parecido, a separação "não tinham" × "nem olhou", a reserva e as três etapas. No `?selftest=1`:
+`v7418_dominiosDosAcervos`, `v7418_reconheceODominio`, `v7418_acervosNasTresEtapasQueBuscam`,
+`v7418_pedeAConsultaCombinada` e `v7418_travaNoPesquisador`.
+
 ## Custo: o cache voltou a ser cache (generate-question v74.17, 19/09/2026)
 
 A leva de 18/09 (10 questões de Artes, ids 1108–1117 em `question_generation_log`) saiu a

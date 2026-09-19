@@ -27,7 +27,14 @@ function recorta(nome: string): string {
   const marca = `\nfunction ${nome}(`;
   const a = fonte.indexOf(marca);
   if (a < 0) { console.error(`FALHA: não achei a função ${nome} em ${alvo}`); Deno.exit(1); }
-  let k = fonte.indexOf("{", a), nivel = 0, dentroStr = "", escapou = false;
+  /* v74.18: a assinatura pode trazer chaves (ex.: `{ url: string; title: string }[]`),
+     então primeiro fecha os parênteses dela e só depois procura o corpo. */
+  let par = fonte.indexOf("(", a), np = 0, q = par;
+  for (; q < fonte.length; q++) {
+    if (fonte[q] === "(") np++;
+    else if (fonte[q] === ")") { np--; if (np === 0) break; }
+  }
+  let k = fonte.indexOf("{", q), nivel = 0, dentroStr = "", escapou = false;
   for (let p = k; p < fonte.length; p++) {
     const c = fonte[p];
     if (dentroStr) {
@@ -69,7 +76,7 @@ const mBA = fonte.match(/const BUSCA_AUDITORIA = \{ \.\.\.WEB_SEARCH_TOOL, max_u
 if (!mMsg || !mAreas) { console.error("FALHA: não achei MENSAGEM_FONTE_BLOQUEIO / AREAS_FONTES_REAIS_ESTRITO"); Deno.exit(1); }
 if (!mWS || !mBP || !mBR || !mBA) { console.error("FALHA: não achei os tetos de busca (WEB_SEARCH_TOOL / BUSCA_*)"); Deno.exit(1); }
 
-const mAcervos = fonte.match(/const ACERVOS_PRIORITARIOS: \{ nome: string; url: string \}\[\] = (\[[^;]*?\]);/s);
+const mAcervos = fonte.match(/const ACERVOS_PRIORITARIOS: \{ nome: string; url: string; dominio: string \}\[\] = (\[[^;]*?\]);/s);
 const mDisc = fonte.match(/const DISCIPLINAS_COM_ACERVO_PRIORITARIO = (\[[^\]]*\]);/);
 if (!mAcervos || !mDisc) { console.error("FALHA: não achei ACERVOS_PRIORITARIOS / DISCIPLINAS_COM_ACERVO_PRIORITARIO"); Deno.exit(1); }
 
@@ -78,7 +85,8 @@ const modulo = `type SistemaPrompt = any;
 const REGRA_FONTES_PROFESSOR = ${JSON.stringify(recortaConstTemplate("REGRA_FONTES_PROFESSOR"))};
 // v74.15: o TTL do cache e decidido fora do bloco; aqui basta um duble
 function cacheControlAtual() { return { type: "ephemeral" }; }
-const ACERVOS_PRIORITARIOS: { nome: string; url: string }[] = ${mAcervos[1]};
+const ACERVOS_PRIORITARIOS: { nome: string; url: string; dominio: string }[] = ${mAcervos[1]};
+const DOMINIOS_ACERVO_PRIORITARIO: string[] = Array.from(new Set(ACERVOS_PRIORITARIOS.map((a) => a.dominio)));
 const DISCIPLINAS_COM_ACERVO_PRIORITARIO = ${mDisc[1]};
 const WEB_SEARCH_TOOL = { type: "web_search_20250305", name: "web_search", max_uses: ${mWS[1]} };
 const BUSCA_PESQUISADOR = { ...WEB_SEARCH_TOOL, max_uses: ${mBP[1]} };
@@ -104,11 +112,16 @@ async function callClaudeForJSON(_s: any, userMsg: string, w: any, usos: any[], 
 }
 ` + fonte.slice(i, j) + `
 ` + recorta("temAcervoPrioritario") + `
+` + recorta("hostDaUrl") + `
+` + recorta("ehDominioDeAcervo") + `
+` + recorta("acervoFoiConsultado") + `
+` + recorta("consultaCombinadaAcervos") + `
 ` + recorta("buildAcervosPrioritarios") + `
 ` + recorta("buscaDaGeracao") + `
 ` + recorta("buildDossieFonte") + `
 export { SISTEMA_AUDITORIA_FONTES, REGRA_FONTES_PROFESSOR };
 export { ACERVOS_PRIORITARIOS, DISCIPLINAS_COM_ACERVO_PRIORITARIO, temAcervoPrioritario, buildAcervosPrioritarios };
+export { DOMINIOS_ACERVO_PRIORITARIO, hostDaUrl, ehDominioDeAcervo, acervoFoiConsultado, consultaCombinadaAcervos };
 export { conferenciaFontes, conferenciaDossie, tokensDeFonte, normalizaUrl, buildAuditoriaFontesPrompt,
          garantirFontesReais, FERRAMENTA_AUDITORIA_FONTE, MENSAGEM_FONTE_BLOQUEIO, fontesReaisEstrito,
          buscaDaGeracao, buildDossieFonte,
@@ -123,6 +136,8 @@ const { conferenciaFontes, conferenciaDossie, normalizaUrl, buildAuditoriaFontes
         buildDossieFonte, WEB_SEARCH_TOOL, BUSCA_PESQUISADOR, BUSCA_PESQUISADOR_RETRY, BUSCA_AUDITORIA,
         SISTEMA_AUDITORIA_FONTES, REGRA_FONTES_PROFESSOR, ACERVOS_PRIORITARIOS,
         DISCIPLINAS_COM_ACERVO_PRIORITARIO, temAcervoPrioritario, buildAcervosPrioritarios,
+        DOMINIOS_ACERVO_PRIORITARIO, hostDaUrl, ehDominioDeAcervo, acervoFoiConsultado,
+        consultaCombinadaAcervos,
         __stub } = M;
 
 let ok = 0, bad = 0;
@@ -464,15 +479,20 @@ t("K5 NÃO vale nas demais disciplinas",
   ["História", "Geografia", "Filosofia", "Sociologia", "Biologia", "Química", "Física", "Matemática",
    "Práticas Corporais", "Língua Estrangeira (Inglês/Espanhol)"]
   .every((d) => !temAcervoPrioritario(d) && buildAcervosPrioritarios(d) === ""));
-t("K6 o bloco manda começar por eles, na ordem, e só passar ao seguinte quando o anterior não tiver",
+/* v74.18: com teto de UMA busca, a regra deixou de ser "um acervo por vez" e
+   passou a ser uma consulta única cobrindo os cinco, com a ordem do professor
+   valendo na escolha do resultado. */
+t("K6 o bloco manda buscar dentro dos acervos já na primeira busca, respeitando a ordem",
   (() => { const b = buildAcervosPrioritarios("Literatura");
     return b.includes("ACERVOS DE PRIORIDADE OBRIGATÓRIA")
       && b.includes("Consulte-os PRIMEIRO, NESTA ORDEM")
-      && b.includes("Só passe ao acervo seguinte quando o anterior não tiver o material")
+      && b.includes("A sua PRIMEIRA busca")
+      && b.includes(consultaCombinadaAcervos())
+      && b.includes("prefira sempre o acervo que vier ANTES na lista")
       && ORDEM_DO_PROFESSOR.every((u, i) => b.indexOf(u) > -1 && (i === 0 || b.indexOf(u) > b.indexOf(ORDEM_DO_PROFESSOR[i - 1])));
   })());
-t("K7 é PRIORIDADE, não exclusividade: esgotada a lista, valem as fontes do item 1 da regra",
-  buildAcervosPrioritarios("Artes").includes("Esgotada a lista inteira")
+t("K7 é PRIORIDADE, não exclusividade: não achando neles, valem as fontes do item 1 da regra",
+  buildAcervosPrioritarios("Artes").includes("Só procure FORA dos acervos quando essa busca não devolver material utilizável")
   && buildAcervosPrioritarios("Artes").includes("universidades, bibliotecas, museus"));
 t("K8 a prioridade não afrouxa autoria, ano, referência nem trecho conferido",
   buildAcervosPrioritarios("Artes").includes("A prioridade NÃO afrouxa nada"));
@@ -487,6 +507,58 @@ t("K10 buildPesquisaFontePrompt injeta o bloco pela disciplina da questão",
   fonte.includes("${buildAcervosPrioritarios(o.disciplina)}"));
 t("K11 a segunda tentativa manda sair dos acervos quando eles já foram varridos",
   fonte.includes("Se você já varreu os acervos de prioridade e eles não tinham o material, procure AGORA fora deles"));
+
+/* ---------- L. v74.18 — a trava de domínio ---------- */
+t("L1 os cinco acervos cabem em quatro domínios (a Hemeroteca vive dentro da BNDigital)",
+  DOMINIOS_ACERVO_PRIORITARIO.length === 4
+  && ACERVOS_PRIORITARIOS.every((a: any) => DOMINIOS_ACERVO_PRIORITARIO.includes(a.dominio)),
+  JSON.stringify(DOMINIOS_ACERVO_PRIORITARIO));
+t("L2 a consulta combinada cobre os quatro domínios, na ordem do professor",
+  consultaCombinadaAcervos() === "(site:bndigital.bn.gov.br OR site:bbm.usp.br OR site:buscaintegrada.usp.br OR site:dominiopublico.gov.br)",
+  consultaCombinadaAcervos());
+t("L3 hostDaUrl devolve só o host, sem protocolo, sem www, sem caminho e sem query",
+  hostDaUrl("http://www.dominiopublico.gov.br/pesquisa/Detalhe.do?co_obra=1") === "dominiopublico.gov.br"
+  && hostDaUrl("https://search.bbm.usp.br/pt-br/x") === "search.bbm.usp.br"
+  && hostDaUrl("") === "");
+t("L4 reconhece as URLs dos acervos, inclusive em subdomínio",
+  ["https://bndigital.bn.gov.br/dossies/rede-da-memoria-virtual-brasileira/artes/o-modernismo/",
+   "https://bndigital.bn.gov.br/hemeroteca-digital/",
+   "https://search.bbm.usp.br/pt-br/projetos-digitais-da-bbm/bbm-digital/",
+   "https://www.buscaintegrada.usp.br/primo_library/x",
+   "http://www.dominiopublico.gov.br/"].every((u) => ehDominioDeAcervo(u)));
+t("L5 recusa o que ficou de fora — inclusive o blog e o domínio parecido da leva de 18/09",
+  ["https://bia-senday.blogspot.com/2014/04/semana-de-arte-moderna-de-1922_7151.html",
+   "https://enciclopedia.itaucultural.org.br/pessoas/2945-antonio-poteiro",
+   "https://mam.rio/programacao/x",
+   "http://www.mac.usp.br/mac/templates/projetos/educativo/paranoia.html",
+   "https://museudaimigracao.org.br/x",
+   "https://revistaea.org/pf.php?idartigo=2879",
+   "https://catedral.org.br/guia/o-templo",
+   "https://bndigital.bn.gov.br.exemplo.com/x",
+   "https://naobndigital.bn.gov.br/x",
+   ""].every((u) => !ehDominioDeAcervo(u)));
+t("L6 sabe dizer se a busca chegou a passar pelos acervos",
+  acervoFoiConsultado([{ url: "https://x.org/a", title: "" }, { url: "https://bndigital.bn.gov.br/y", title: "" }])
+  && !acervoFoiConsultado([{ url: "https://x.org/a", title: "" }, { url: "https://mam.rio/b", title: "" }])
+  && !acervoFoiConsultado([]) && !acervoFoiConsultado(undefined as any));
+t("L7 o bloco avisa que o backend confere o domínio",
+  buildAcervosPrioritarios("Artes").includes("O BACKEND CONFERE O DOMÍNIO DA FONTE"));
+t("L8 a trava está no pesquisador, e separa 'não tinham' de 'nem olhou'",
+  fonte.includes("const exigeAcervo = temAcervoPrioritario(o.disciplina);")
+  && fonte.includes("if (tentativa === 1 && !acervoFoiConsultado(buscas))")
+  && fonte.includes("os acervos de prioridade foram consultados e não tinham o material"));
+t("L9 a fonte de reserva volta marcada quando a busca restrita não acha nada",
+  fonte.includes("if (reserva) {") && fonte.includes("volta a fonte de reserva, fora dos acervos"));
+t("L10 a geração recebe o bloco só quando vai buscar (sem dossiê)",
+  fonte.includes("const acervosDaGeracao = buildDossieFonte(opts.dossie) ? \"\" : buildAcervosPrioritarios(opts.disciplina);")
+  && fonte.includes("${acervosDaGeracao}"));
+t("L11 a auditoria recebe o bloco só quando vai buscar (sem dossiê)",
+  buildAuditoriaFontesPrompt({ fonte: {}, disciplina: "Artes" }).includes("ACERVOS DE PRIORIDADE OBRIGATÓRIA")
+  && !buildAuditoriaFontesPrompt({ fonte: {}, disciplina: "Artes" }, doss).includes("ACERVOS DE PRIORIDADE OBRIGATÓRIA")
+  && !buildAuditoriaFontesPrompt({ fonte: {}, disciplina: "História" }).includes("ACERVOS DE PRIORIDADE OBRIGATÓRIA"));
+t("L12 o log passa a registrar o domínio e se ele é de acervo",
+  fonte.includes("linha.fonte_dominio = host.slice(0, 120);")
+  && fonte.includes("linha.fonte_no_acervo = ehDominioDeAcervo("));
 
 console.log(`\n${ok} verificações passaram, ${bad} falharam.`);
 if (bad) Deno.exit(1);

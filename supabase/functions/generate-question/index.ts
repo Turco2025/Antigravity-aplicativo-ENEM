@@ -696,13 +696,42 @@ COMO ISSO SE APLICA A VOCÊ, AGORA:
    Os endereços estão SEM o parâmetro de rastreamento "?utm_source=..." com que
    chegaram: ele não faz parte do endereço do acervo e acabaria dentro do campo
    "referencia" das questões. */
-const ACERVOS_PRIORITARIOS: { nome: string; url: string }[] = [
-  { nome: "Biblioteca Nacional Digital", url: "https://bndigital.bn.gov.br/" },
-  { nome: "Hemeroteca Digital Brasileira (Biblioteca Nacional)", url: "https://bndigital.bn.gov.br/hemeroteca-digital/" },
-  { nome: "Brasiliana Guita e José Mindlin — BBM Digital (USP)", url: "https://search.bbm.usp.br/pt-br/projetos-digitais-da-bbm/bbm-digital/" },
-  { nome: "Busca Integrada USP", url: "https://www.buscaintegrada.usp.br/" },
-  { nome: "Portal Domínio Público (MEC)", url: "http://www.dominiopublico.gov.br/" },
+const ACERVOS_PRIORITARIOS: { nome: string; url: string; dominio: string }[] = [
+  { nome: "Biblioteca Nacional Digital", url: "https://bndigital.bn.gov.br/", dominio: "bndigital.bn.gov.br" },
+  { nome: "Hemeroteca Digital Brasileira (Biblioteca Nacional)", url: "https://bndigital.bn.gov.br/hemeroteca-digital/", dominio: "bndigital.bn.gov.br" },
+  { nome: "Brasiliana Guita e José Mindlin — BBM Digital (USP)", url: "https://search.bbm.usp.br/pt-br/projetos-digitais-da-bbm/bbm-digital/", dominio: "bbm.usp.br" },
+  { nome: "Busca Integrada USP", url: "https://www.buscaintegrada.usp.br/", dominio: "buscaintegrada.usp.br" },
+  { nome: "Portal Domínio Público (MEC)", url: "http://www.dominiopublico.gov.br/", dominio: "dominiopublico.gov.br" },
 ];
+/* v74.18 — os acervos deixam de ser só texto de prompt e viram verificação.
+   Na leva de 18/09 (10 questões de Artes) apenas 2 fontes saíram dos acervos;
+   uma delas era um blog no Blogspot apresentado como "Correio Paulistano,
+   1922" — jornal de 1922 é exatamente o que a Hemeroteca Digital tem. Prompt
+   é pedido; o que obriga é conferir o domínio depois. */
+const DOMINIOS_ACERVO_PRIORITARIO: string[] = Array.from(new Set(ACERVOS_PRIORITARIOS.map((a) => a.dominio)));
+/* Host de uma URL, sem protocolo, sem "www." e sem caminho. Reaproveita a
+   mesma normalização que a conferência de URL já usa (normalizaUrl). */
+function hostDaUrl(u: string): string {
+  const s = normalizaUrl(u);
+  return s.split("/")[0].split("?")[0].split("#")[0];
+}
+/* A URL pertence a um dos cinco acervos do professor? Aceita subdomínio
+   (search.bbm.usp.br conta como bbm.usp.br), nunca um domínio parecido. */
+function ehDominioDeAcervo(u: string): boolean {
+  const h = hostDaUrl(u);
+  if (!h) return false;
+  return DOMINIOS_ACERVO_PRIORITARIO.some((d) => h === d || h.endsWith("." + d));
+}
+/* A busca desta questão chegou a passar pelos acervos? Serve para separar
+   "os acervos não tinham o material" de "o modelo nem olhou para eles". */
+function acervoFoiConsultado(buscas?: { url: string; title: string }[]): boolean {
+  return Array.isArray(buscas) && buscas.some((b) => ehDominioDeAcervo(b && b.url));
+}
+/* A consulta única que cobre os cinco acervos de uma vez — com teto de UMA
+   busca (v74.17), percorrer um acervo por vez seria impossível. */
+function consultaCombinadaAcervos(): string {
+  return "(" + DOMINIOS_ACERVO_PRIORITARIO.map((d) => `site:${d}`).join(" OR ") + ")";
+}
 const DISCIPLINAS_COM_ACERVO_PRIORITARIO = ["Língua Portuguesa", "Literatura", "Artes"];
 function temAcervoPrioritario(disciplina: string): boolean {
   return DISCIPLINAS_COM_ACERVO_PRIORITARIO.includes(String(disciplina || "").trim());
@@ -715,10 +744,11 @@ function buildAcervosPrioritarios(disciplina: string): string {
 O professor indicou estes acervos como fontes reais e já validadas por ele. Consulte-os PRIMEIRO, NESTA ORDEM, antes de procurar em qualquer outro lugar:
 ${lista}
 
-COMO USAR:
-· Comece a busca restringindo ao domínio do acervo — por exemplo: site:bndigital.bn.gov.br <autor> <obra>.
-· Só passe ao acervo seguinte quando o anterior não tiver o material procurado.
-· Esgotada a lista inteira, aí sim procure nas demais fontes confiáveis que o item 1 da regra autoriza (universidades, bibliotecas, museus, institutos de pesquisa, fundações culturais, órgãos públicos, periódicos científicos, editoras reconhecidas, acervos oficiais).
+COMO USAR — REGRA DE BUSCA, OBRIGATÓRIA:
+· A sua PRIMEIRA busca — que normalmente é a única — tem de ser feita DENTRO destes acervos, numa consulta só, exatamente neste formato: ${consultaCombinadaAcervos()} <autor> <obra ou documento>.
+· Entre os resultados, prefira sempre o acervo que vier ANTES na lista acima: a numeração é a ordem definida pelo professor.
+· Só procure FORA dos acervos quando essa busca não devolver material utilizável — e, nesse caso, escreva em "comoVerificou" que os acervos foram consultados e não tinham o material. Aí valem as demais fontes confiáveis do item 1 da regra (universidades, bibliotecas, museus, institutos de pesquisa, fundações culturais, órgãos públicos, periódicos científicos, editoras reconhecidas, acervos oficiais).
+· O BACKEND CONFERE O DOMÍNIO DA FONTE. Se a busca não tiver sequer passado pelos acervos, a pesquisa é refeita restrita a eles — e a questão fica marcada. Blog, site pessoal ou agregador no lugar de um acervo é o erro que esta regra existe para impedir.
 · A prioridade NÃO afrouxa nada: o que vier destes acervos passa pelas mesmas exigências de autoria, ano, referência e trecho conferido.
 · A regra da URL continua valendo integralmente: só declare em "url" um endereço que tenha aparecido DE FATO num resultado de busca desta conversa. NÃO monte endereço de acervo por dedução, nem copie a raiz da lista acima como se fosse a página da obra — o backend confere e reprova.
 `;
@@ -726,13 +756,13 @@ COMO USAR:
 
 /* Quando o professor nomeia um autor/obra/movimento/acontecimento, o item 6 da
    regra manda achar obra REAL dele — nunca um texto que "pareça" dele. */
-function buildPesquisaFontePrompt(o: { area: string; disciplina: string; tema: string; eixoTematico?: string; recorte?: string; tentativaAnterior?: string }): string {
+function buildPesquisaFontePrompt(o: { area: string; disciplina: string; tema: string; eixoTematico?: string; recorte?: string; tentativaAnterior?: string; exigirAcervo?: boolean }): string {
   const assunto = (o.tema || "").trim() || (o.recorte || "").trim() || (o.eixoTematico || "").trim() || o.disciplina;
   const retry = String(o.tentativaAnterior || "").trim();
   return `ÁREA: ${o.area} · DISCIPLINA: ${o.disciplina}
 ASSUNTO PEDIDO PELO PROFESSOR: ${assunto}${o.eixoTematico && o.eixoTematico !== assunto ? `\nOBJETO DE CONHECIMENTO (Matriz do ENEM): ${o.eixoTematico}` : ""}${o.recorte && o.recorte !== assunto ? `\nRECORTE PEDIDO: ${o.recorte.slice(0, 300)}` : ""}
 ${buildAcervosPrioritarios(o.disciplina)}
-${retry ? `\n⚠️ SEGUNDA TENTATIVA. A primeira não deu fonte utilizável (${retry.slice(0, 200)}). O item 2 da regra manda, nesse caso, "procurar outra obra, outro documento ou outra referência real relacionada ao tema" — então procure em OUTRO lugar: troque a obra, troque o documento, troque a instituição. Se você já varreu os acervos de prioridade e eles não tinham o material, procure AGORA fora deles, nas demais fontes confiáveis do item 1. Não repita a busca anterior e não baixe o nível da exigência.\n` : ""}
+${o.exigirAcervo ? `\n🚫 A BUSCA ANTERIOR NÃO PASSOU PELOS ACERVOS DO PROFESSOR — nenhum resultado veio deles. Refaça agora, e desta vez a consulta tem de ser exatamente no formato ${consultaCombinadaAcervos()} seguido do autor, da obra ou do documento. NÃO busque fora dos acervos nesta tentativa.\n` : ""}${retry && !o.exigirAcervo ? `\n⚠️ SEGUNDA TENTATIVA. A primeira não deu fonte utilizável (${retry.slice(0, 200)}). O item 2 da regra manda, nesse caso, "procurar outra obra, outro documento ou outra referência real relacionada ao tema" — então procure em OUTRO lugar: troque a obra, troque o documento, troque a instituição. Se você já varreu os acervos de prioridade e eles não tinham o material, procure AGORA fora deles, nas demais fontes confiáveis do item 1. Não repita a busca anterior e não baixe o nível da exigência.\n` : ""}
 ANTES DE BUSCAR, identifique o que o assunto acima nomeia:
 · um AUTOR (pessoa)? Então a fonte TEM de ser uma obra real DESSE autor, e o trecho tem de sair dela. Um texto que apenas imite o estilo dele está proibido pelo item 6.
 · uma OBRA, livro, poema, conto, romance ou artigo? Confirme que existe, de quem é, e extraia dela.
@@ -777,15 +807,46 @@ async function pesquisarFonteReal(
      documento ou outra referência real relacionada ao tema". Duas tentativas —
      desistir na primeira seria desobedecer; insistir para sempre custaria caro. */
   let motivoAnterior = "";
+  /* v74.18 — TRAVA DOS ACERVOS. Nas três disciplinas que o professor nomeou, a
+     fonte tem de sair dos cinco acervos dele. A trava separa dois casos, porque
+     só um deles merece pagar outra chamada:
+       · os acervos APARECERAM nos resultados e não tinham o material → aceita a
+         fonte de fora, marcada com o motivo. Isso é o item 1 da regra.
+       · os acervos NÃO apareceram em resultado nenhum → o modelo não olhou para
+         eles. Aí sim a pesquisa é refeita, restrita aos acervos, e a primeira
+         resposta fica só de reserva.
+     Assim a obrigatoriedade não vira uma segunda chamada em toda questão. */
+  const exigeAcervo = temAcervoPrioritario(o.disciplina);
+  let exigirAcervoAgora = false;
+  let reserva: any = null;
   for (let tentativa = 1; tentativa <= 2; tentativa++) {
     try {
       const d = await callClaudeForJSON(
-        sistema, buildPesquisaFontePrompt({ ...o, tentativaAnterior: motivoAnterior }),
+        sistema, buildPesquisaFontePrompt({ ...o, tentativaAnterior: motivoAnterior, exigirAcervo: exigirAcervoAgora }),
         tentativa === 1 ? BUSCA_PESQUISADOR : BUSCA_PESQUISADOR_RETRY, usos, FERRAMENTA_DOSSIE_FONTE, buscas,
         `pesquisa/tentativa-${tentativa}`,
       );
       const bom = d && typeof d === "object" && (d as any).encontrou === true && String((d as any).trecho || "").trim();
       if (bom) {
+        const url = String((d as any).urlVerificacao || "");
+        if (exigeAcervo && !ehDominioDeAcervo(url)) {
+          if (tentativa === 1 && !acervoFoiConsultado(buscas)) {
+            reserva = d;
+            exigirAcervoAgora = true;
+            motivoAnterior = "a busca não passou pelos acervos de prioridade obrigatória";
+            console.warn(`[acervos] fonte fora dos acervos e sem nenhum resultado vindo deles (${hostDaUrl(url) || "sem url"}) — refazendo a pesquisa restrita`);
+            continue;
+          }
+          (d as any).foraDoAcervo = {
+            dominio: hostDaUrl(url),
+            motivo: acervoFoiConsultado(buscas)
+              ? "os acervos de prioridade foram consultados e não tinham o material"
+              : "a busca restrita aos acervos não devolveu material utilizável",
+          };
+          console.warn(`[acervos] aceita fora dos acervos: ${hostDaUrl(url) || "sem url"} — ${(d as any).foraDoAcervo.motivo}`);
+        } else if (exigeAcervo) {
+          console.log(`[acervos] fonte veio do acervo ${hostDaUrl(url)}`);
+        }
         console.log(`[pesquisa] fonte encontrada na tentativa ${tentativa}: ${String((d as any).referencia || "").slice(0, 120)}`);
         return d;
       }
@@ -795,6 +856,16 @@ async function pesquisarFonteReal(
       motivoAnterior = String((e as any)?.message || e).slice(0, 160);
       console.error(`[pesquisa] tentativa ${tentativa} falhou: ${motivoAnterior}`);
     }
+  }
+  /* A busca restrita não achou nada: a primeira resposta volta a valer, marcada
+     — perder uma fonte real por causa do domínio seria pior do que registrá-la. */
+  if (reserva) {
+    (reserva as any).foraDoAcervo = {
+      dominio: hostDaUrl(String((reserva as any).urlVerificacao || "")),
+      motivo: "a busca restrita aos acervos não devolveu material utilizável",
+    };
+    console.warn(`[acervos] volta a fonte de reserva, fora dos acervos: ${(reserva as any).foraDoAcervo.dominio || "sem url"}`);
+    return reserva;
   }
   console.warn("[pesquisa] duas tentativas sem fonte — a questão segue sem dossiê e a validação do fim decide");
   return null;
@@ -816,6 +887,10 @@ function buildUserPrompt(opts: {
      recurso pedido. Só o lugar mudou: mensagem do usuário, que não é cacheada. */
   const matriz = `\n\n${buildMatrizInstrucoes(opts.area, opts.competenciaNum, opts.habilidadeCod)}`;
   const instrucoesDoRecurso = `\n\n${instrucoesImagem(opts.recurso, opts.disciplina)}`;
+  /* v74.18 — sem dossiê é a geração que busca (ver buscaDaGeracao), e até aqui
+     ela buscava sem a lista dos acervos do professor. Com dossiê não entra:
+     seriam ~180 tokens por questão para uma etapa que nem vai buscar. */
+  const acervosDaGeracao = buildDossieFonte(opts.dossie) ? "" : buildAcervosPrioritarios(opts.disciplina);
   return `${buildDossieFonte(opts.dossie)}Elabore UMA questão inédita, original, no padrão ENEM, com os seguintes parâmetros definidos pelo professor:
 
 Área do conhecimento: ${AREA_LABELS[opts.area]}
@@ -826,7 +901,7 @@ Recurso visual pedido: ${opts.recurso}
 
 Siga integralmente as INSTRUÇÕES FIXAS DESTA CONFIGURAÇÃO que estão no prompt do sistema (recorte da disciplina, regra de fontes, calibração de extensão, regra das cinco alternativas e formato de entrega) E as instruções do recurso visual e da Matriz de Referência que vêm mais abaixo nesta mesma mensagem — todas fazem parte deste pedido, com o mesmo peso.
 ${buildDiversidadeTematica(opts.eixoTematico || "", opts.temasEvitar || [], opts.tema, opts.recorte || "", opts.diversidade || {})}${opts.instrucoesVisual ? `\nInstrução adicional do professor especificamente para o recurso visual (siga-a com prioridade, desde que compatível com as instruções do recurso visual no prompt do sistema e com a ANCORAGEM DE ASSUNTO logo abaixo): ${opts.instrucoesVisual}\n` : ""}
-${buildAncoragemVisual(opts.area, opts.disciplina, opts.tema, opts.recurso)}${instrucoesDoRecurso}${matriz}
+${buildAncoragemVisual(opts.area, opts.disciplina, opts.tema, opts.recurso)}${acervosDaGeracao}${instrucoesDoRecurso}${matriz}
 ${buildGabaritoAlvo(opts.gabaritoAlvo || null)}${buildOrientacoesProfessor(opts.orientacoes || "")}
 Entregue a questão chamando a ferramenta "entregar_questao", no formato descrito no prompt do sistema.`;
 }
@@ -1950,9 +2025,16 @@ async function checkDailyCap(): Promise<Response | null> {
   return null;
 }
 
-async function logGeneration(area: string, disciplina: string, tema: string, extra?: { recurso?: string; uso?: ReturnType<typeof resumoUso> }) {
+async function logGeneration(area: string, disciplina: string, tema: string, extra?: { recurso?: string; uso?: ReturnType<typeof resumoUso>; fonteUrl?: string }) {
   try {
     const linha: Record<string, unknown> = { area, disciplina, tema: tema.slice(0, 200) };
+    /* v74.18 — de onde saiu a fonte. Sem isto, medir o cumprimento da regra dos
+       acervos exigia abrir os simulados questão por questão. */
+    const host = hostDaUrl(String(extra?.fonteUrl || ""));
+    if (host) {
+      linha.fonte_dominio = host.slice(0, 120);
+      linha.fonte_no_acervo = ehDominioDeAcervo(String(extra?.fonteUrl || ""));
+    }
     // v63: consumo real da questão (tokens, buscas na web, custo estimado).
     if (extra?.recurso) linha.recurso = extra.recurso;
     if (extra?.uso) {
@@ -2690,7 +2772,7 @@ COMO USAR O DOSSIÊ:
 Responda às DEZ perguntas da ficha de validação final do professor, uma a uma, e só então decida:
 O autor existe? · A obra existe? · A fonte existe? · A instituição citada existe? · O trecho pertence realmente à obra indicada? · Se houve paráfrase, ela está fiel à fonte? · A referência bibliográfica corresponde ao material consultado? · Alguma informação foi inventada? · Alguma frase foi atribuída indevidamente a um autor? · A questão poderia ser comprovada por meio da fonte indicada? ${temDossie
     ? "VOCÊ TEM, LOGO ABAIXO, O DOSSIÊ DA PESQUISA QUE ORIGINOU ESTA QUESTÃO: a fonte já foi pesquisada, aberta e validada numa etapa anterior, com busca real na web. A sua tarefa agora é a etapa 7 da regra (REVISAR), não uma segunda pesquisa: confira a questão CONTRA esse dossiê. Por isso a busca está desligada nesta chamada — e não precisa dela: o que o dossiê não sustentar, você reprova."
-    : "USE a ferramenta web_search sempre que precisar confirmar a existência de um autor, de uma obra, a autoria ou o conteúdo — a sua memória, isoladamente, NÃO comprova autenticidade (regra 4)."} Não afirme que verificou algo que não verificou.${blocoDossie}
+    : "USE a ferramenta web_search sempre que precisar confirmar a existência de um autor, de uma obra, a autoria ou o conteúdo — a sua memória, isoladamente, NÃO comprova autenticidade (regra 4)."} Não afirme que verificou algo que não verificou.${temDossie ? "" : buildAcervosPrioritarios(String((data && data.disciplina) || ""))}${blocoDossie}
 
 A auditoria cobre TODAS as partes: texto-base, enunciado, alternativas, legendas, gabarito e resolução comentada. Distratores podem trazer interpretações erradas, mas NÃO podem usar autores, obras ou citações inventados.
 
@@ -2964,6 +3046,8 @@ function selfTestResponse() {
     blocoNotacao.toString(), precisaNotacaoQuimica.toString(), JSON.stringify(AREAS_COM_NOTACAO_QUIMICA),   // v74.14
     SISTEMA_AUDITORIA_FONTES, escolheCacheControl.toString(), aquecerCacheResponse.toString(), registraUso.toString(),   // v74.15
     precoCacheEscrito.toString(), JSON.stringify(PRECO_USD_POR_M), buildUserPrompt.toString(),   // v74.17
+    JSON.stringify(DOMINIOS_ACERVO_PRIORITARIO), ehDominioDeAcervo.toString(), acervoFoiConsultado.toString(),   // v74.18
+    consultaCombinadaAcervos.toString(), pesquisarFonteReal.toString(), logGeneration.toString(),
     JSON.stringify(ACERVOS_PRIORITARIOS), JSON.stringify(DISCIPLINAS_COM_ACERVO_PRIORITARIO), buildAcervosPrioritarios.toString(),   // v74.16
     JSON.stringify([WEB_SEARCH_TOOL, BUSCA_PESQUISADOR, BUSCA_PESQUISADOR_RETRY, BUSCA_AUDITORIA]),
     buildSystemPlanejamento.toString(),
@@ -3337,6 +3421,77 @@ function selfTestResponse() {
         v7415_marcaPassoExiste: typeof aquecerCacheResponse === "function"
           && aquecerCacheResponse.toString().includes("CACHE_1H")
           && aquecerCacheResponse.toString().includes("16"),
+        /* v74.18 — A TRAVA DOS ACERVOS. Prova, no endpoint de produção, que os
+           cinco domínios do professor estão fechados, que a consulta combinada
+           é montada a partir deles, que o reconhecimento de domínio aceita
+           subdomínio e recusa domínio parecido, e que o bloco dos acervos chega
+           às três etapas que podem buscar. */
+        v7418_dominiosDosAcervos: {
+          dominios: DOMINIOS_ACERVO_PRIORITARIO,
+          consulta: consultaCombinadaAcervos(),
+          quatroDominios: DOMINIOS_ACERVO_PRIORITARIO.length === 4,
+          cobreOsCincoAcervos: ACERVOS_PRIORITARIOS.every((a) => DOMINIOS_ACERVO_PRIORITARIO.includes(a.dominio)),
+          aOrdemDaConsultaSegueALista:
+            consultaCombinadaAcervos() === "(site:bndigital.bn.gov.br OR site:bbm.usp.br OR site:buscaintegrada.usp.br OR site:dominiopublico.gov.br)",
+        },
+        v7418_reconheceODominio: (() => {
+          const dentro = [
+            "https://bndigital.bn.gov.br/dossies/rede-da-memoria-virtual-brasileira/artes/o-modernismo/",
+            "https://bndigital.bn.gov.br/hemeroteca-digital/",
+            "https://search.bbm.usp.br/pt-br/projetos-digitais-da-bbm/bbm-digital/",
+            "https://www.buscaintegrada.usp.br/primo_library/x",
+            "http://www.dominiopublico.gov.br/pesquisa/DetalheObraForm.do?select_action=&co_obra=1",
+          ].every((u) => ehDominioDeAcervo(u));
+          const fora = [
+            "https://bia-senday.blogspot.com/2014/04/semana-de-arte-moderna-de-1922_7151.html",
+            "https://enciclopedia.itaucultural.org.br/pessoas/2945-antonio-poteiro",
+            "https://mam.rio/programacao/x",
+            "http://www.mac.usp.br/mac/templates/projetos/educativo/paranoia.html",
+            "https://bndigital.bn.gov.br.exemplo.com/x",
+            "https://naobndigital.bn.gov.br/x",
+            "",
+          ].every((u) => !ehDominioDeAcervo(u));
+          const consultou = acervoFoiConsultado([{ url: "https://x.org/a", title: "" }, { url: "https://bndigital.bn.gov.br/y", title: "" }])
+            && !acervoFoiConsultado([{ url: "https://x.org/a", title: "" }])
+            && !acervoFoiConsultado([]) && !acervoFoiConsultado(undefined);
+          return dentro && fora && consultou;
+        })(),
+        v7418_acervosNasTresEtapasQueBuscam: (() => {
+          const bloco = buildAcervosPrioritarios("Artes");
+          const pesquisa = buildPesquisaFontePrompt({ area: "linguagens", disciplina: "Artes", tema: "Tarsila do Amaral" });
+          const semDossie = buildUserPrompt({ area: "linguagens", disciplina: "Artes", tema: "Tarsila do Amaral", dificuldade: "Médio", recurso: "nenhum", competenciaNum: null, habilidadeCod: null });
+          const comDossie = buildUserPrompt({ area: "linguagens", disciplina: "Artes", tema: "Tarsila do Amaral", dificuldade: "Médio", recurso: "nenhum", competenciaNum: null, habilidadeCod: null, dossie: doss });
+          const auditoriaSem = buildAuditoriaFontesPrompt({ fonte: {}, disciplina: "Artes" });
+          const auditoriaCom = buildAuditoriaFontesPrompt({ fonte: {}, disciplina: "Artes" }, doss);
+          const foraDasTres = buildUserPrompt({ area: "humanas", disciplina: "História", tema: "t", dificuldade: "Médio", recurso: "nenhum", competenciaNum: null, habilidadeCod: null });
+          return bloco.length > 400
+            && pesquisa.includes(bloco)
+            && semDossie.includes(bloco) && !comDossie.includes(bloco)
+            && auditoriaSem.includes(bloco) && !auditoriaCom.includes(bloco)
+            && !foraDasTres.includes("ACERVOS DE PRIORIDADE OBRIGATÓRIA");
+        })(),
+        v7418_pedeAConsultaCombinada: (() => {
+          const bloco = buildAcervosPrioritarios("Literatura");
+          const forcado = buildPesquisaFontePrompt({ area: "linguagens", disciplina: "Literatura", tema: "Machado de Assis", tentativaAnterior: "x", exigirAcervo: true });
+          const normal = buildPesquisaFontePrompt({ area: "linguagens", disciplina: "Literatura", tema: "Machado de Assis", tentativaAnterior: "x" });
+          return bloco.includes(consultaCombinadaAcervos())
+            && bloco.includes("PRIMEIRA busca")
+            && bloco.includes("O BACKEND CONFERE O DOMÍNIO DA FONTE")
+            && forcado.includes("NÃO PASSOU PELOS ACERVOS DO PROFESSOR")
+            && forcado.includes(consultaCombinadaAcervos())
+            && !forcado.includes("SEGUNDA TENTATIVA")
+            && normal.includes("SEGUNDA TENTATIVA")
+            && !normal.includes("NÃO PASSOU PELOS ACERVOS");
+        })(),
+        v7418_travaNoPesquisador: (() => {
+          const f = pesquisarFonteReal.toString();
+          return f.includes("temAcervoPrioritario(o.disciplina)")
+            && f.includes("!ehDominioDeAcervo(url)")
+            && f.includes("!acervoFoiConsultado(buscas)")
+            && f.includes("exigirAcervoAgora = true")
+            && f.includes("foraDoAcervo")
+            && logGeneration.toString().includes("fonte_no_acervo");
+        })(),
         /* v74.17 — O BLOCO CACHEADO VOLTOU A SER FIXO. Prova, no endpoint de
            produção, que buildBlocoFixo não muda mais com o recurso visual nem
            com a competência/habilidade, que o texto do recurso e o da Matriz
@@ -3402,10 +3557,13 @@ function selfTestResponse() {
             // chega ao prompt do pesquisador
             noPromptDoPesquisador: buildPesquisaFontePrompt({ area: "linguagens", disciplina: "Literatura", tema: "Machado de Assis" }).includes("bndigital.bn.gov.br")
               && !buildPesquisaFontePrompt({ area: "humanas", disciplina: "História", tema: "Canudos" }).includes("bndigital.bn.gov.br"),
-            // manda buscar por domínio, na ordem, e não afrouxa a regra da URL
-            mandaBuscarPorDominioNaOrdem: pt.includes("site:bndigital.bn.gov.br")
-              && pt.includes("Só passe ao acervo seguinte quando o anterior não tiver o material")
-              && pt.includes("Esgotada a lista inteira"),
+            /* v74.18: com teto de UMA busca (v74.17), percorrer um acervo por vez
+               virou impossível — a regra agora é uma consulta só cobrindo os cinco,
+               com a ordem do professor valendo na escolha do resultado. */
+            mandaBuscarPorDominioNaOrdem: pt.includes(consultaCombinadaAcervos())
+              && pt.includes("A sua PRIMEIRA busca")
+              && pt.includes("prefira sempre o acervo que vier ANTES na lista")
+              && pt.includes("Só procure FORA dos acervos quando essa busca não devolver material utilizável"),
             mantemARegraDaUrl: pt.includes("tenha aparecido DE FATO num resultado de busca desta conversa")
               && pt.includes("NÃO monte endereço de acervo por dedução"),
           };
@@ -3737,7 +3895,10 @@ ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferrame
     // v63: o registro vai por último, com TODAS as chamadas desta questão
     // (rascunho, refazer visual, retentativas) já somadas em "usos".
     const uso = resumoUso(usos);
-    await logGeneration(area, disciplina, tema, { recurso, uso });
+    await logGeneration(area, disciplina, tema, {
+      recurso, uso,
+      fonteUrl: data && typeof data === "object" && data.fonte ? String(data.fonte.urlVerificacao || "") : "",
+    });
     // v70/v71: redes de segurança da notação — química (lista fechada de
     // fórmulas; em todas as áreas desde a v71) e depois matemática (expoentes,
     // índices, × e ·). Por último, depois de tudo o que pode ter reescrito a
