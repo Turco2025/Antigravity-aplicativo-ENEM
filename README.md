@@ -124,6 +124,73 @@ Teste: `verify_fontes_app.js` — 19 verificações; as seções B e C bis prova
 quatro marcas ligadas ao mesmo tempo nenhuma conferência bloqueia, e que nenhuma delas tem sequer um
 `return true` no corpo. `verify_gabarito_coerente.js` H1 passou a exigir o contrário do que exigia.
 
+## Extensão no padrão do ENEM (generate-question v74.19 · app v18.23, 19/09/2026)
+
+Medição feita nos **PDFs oficiais do INEP, 2015–2025** (cadernos Azul), com `tests/medir_provas_reais.py`:
+1.700 alternativas, 326 questões completas, 314 com gabarito. O extrator foi validado antes — 0% de
+alternativas cortadas e nenhum viés entre as questões que parseiam e as que não parseiam.
+
+| Área | alternativa p25 / média / p75 | média das cinco p50 / p75 / p90 |
+|---|---|---|
+| Linguagens | 43 / **56** / 67 | 54 / 67 / 88 |
+| Humanas | 28 / **38** / 46 | 33 / 47 / 68 |
+| Natureza | 8 / **27** / 42 | 18 / 43 / 60 |
+| Matemática | 3 / **10** / 10 | 5 / 11 / 18 |
+
+Contra o que o app vinha gerando (medido nos simulados de setembro): **Artes 104 · História 116 ·
+Biologia 125 · Sociologia 128** — todas acima do p95 das provas reais.
+
+### O que estava causando
+
+**1. O alvo de tamanho estava ancorado na alternativa correta.** O item 4 da `REGRA DAS CINCO
+ALTERNATIVAS` mandava "fixe UMA extensão-alvo para as cinco — a que a alternativa correta precisa
+para ficar completa e sem sobra". A correta é a que precisa de mais texto; as outras quatro eram
+escritas naquela medida. A `CALIBRAÇÃO DE EXTENSÃO`, com os números certos, ficava 20 mil caracteres
+antes no mesmo prompt e não vinculava nada — instrução concreta ganha de tabela distante.
+
+**2. A dificuldade estava sendo escrita como volume.** Fácil → difícil, na mesma disciplina:
+alternativa de 93 para 117 em Artes e de 113 para 144 em Biologia (+26%), e o texto-base junto. É o
+que o Guia do Inep proíbe: a dificuldade vem da complexidade cognitiva, não do tamanho.
+
+**O que NÃO era causa** (verificado e descartado): recurso visual (Artes com imagem 104 × sem imagem
+103); salto de versão (a subida é gradual, inclusive em Matemática, de 6 para 18 caracteres); e
+"verbosidade global" — a correlação entre alternativa e texto-base fica entre 0,27 e 0,46, e entre
+alternativa e resolução entre 0,41 e 0,49. Fosse um botão único, seria perto de 1. A alternativa
+infla por conta própria.
+
+### O que mudou
+
+- **Item 4 reancorado**: a extensão-alvo é a da calibração; a alternativa correta *cabe* nela e não a
+  define; não cabendo, troca-se o **recorte**, não o tamanho.
+- **Item 5 novo — A DIFICULDADE NÃO É TAMANHO**: os três níveis usam a mesma extensão; a dificuldade
+  está nas etapas de raciocínio e na proximidade do distrator. (Os itens antigos 5 e 6 viraram 6 e 7.)
+- **Teto no schema da ferramenta** (`tetosDaDisciplina` + `ferramentaQuestaoPara(..., disciplina)`):
+  `maxLength` em cada alternativa (p75 da disciplina, piso de 45 para alternativa numérica), no
+  texto-base e no comando, com o alvo na `description`.
+- **`buildAlvoExtensao`** põe os três números na **mensagem do usuário**, logo antes da ordem de
+  entregar — ~60 tokens, na hora em que a questão é escrita.
+
+### E os dois avisos do aplicativo, que estavam errados
+
+| Aviso | era | dispara em provas REAIS | virou |
+|---|---|---|---|
+| extensões desiguais | maior > 1,30 × menor | **37,3%** | maior > **1,50** × menor (p90 real 1,47) |
+| mais longa que o padrão | média > p75 | 20% | média > **p75 × 1,3** (≈ p90 real) |
+| a correta é a mais longa | — | **0,3%** | intacta |
+
+O limiar de 1,30 reprovava mais de um terço das questões oficiais do ENEM — e as questões que este
+app gera já são **mais uniformes que as reais** (p90 de 1,30 em História a 1,36 em Artes, contra 1,47
+do exame). Era alarme, não defeito.
+
+Testes: `deno run -A tests/verify_extensao_v7419.ts supabase/functions/generate-question/index.ts` —
+27 verificações. `verify_paridade_alternativas.js` foi para 14, com os casos sintéticos refeitos pelo
+limiar medido (1,32 passou a ser "normal no ENEM, não aponta nada") e o R2 provando que nenhuma das
+20 questões reais do fixture merece a observação. No `?selftest=1`: `v7419_alvoVemDaCalibracao`,
+`v7419_dificuldadeNaoEhTamanho`, `v7419_tetosPorDisciplina`, `v7419_tetoNoSchema` e
+`v7419_alvoNaMensagemDoUsuario`.
+
+Custo: nenhuma chamada nova; ~60 tokens de entrada por questão.
+
 ## Os acervos deixaram de ser pedido e viraram trava (generate-question v74.18, 19/09/2026)
 
 A v74.16 pôs os cinco acervos do professor no prompt do pesquisador. A leva de 18/09 mostrou que

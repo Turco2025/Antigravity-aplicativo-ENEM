@@ -525,9 +525,10 @@ function buildRegraAlternativas(): string {
 1. PARIDADE (alternativas de TEXTO). As cinco têm de ter o MESMO grau de elaboração: mesma extensão aproximada, mesmo nível de detalhe técnico e a mesma quantidade de justificativa embutida. A mais longa não deve passar de cerca de 1,25 vez a mais curta. Nenhuma pode ser a única com uma explicação extra, uma ressalva ou um segundo período.
 2. O GABARITO NÃO PODE SE DENUNCIAR. A alternativa correta nunca é a mais completa, a mais qualificada nem a mais bem redigida do conjunto. Em alternativas de TEXTO ela também nunca se destaca por tamanho: não pode passar de 25% nem de 25 caracteres acima da segunda mais longa. (Em alternativas NUMÉRICAS o tamanho do número é irrelevante — ali manda a ordem crescente do item 3, e os valores não se mexem por causa de tamanho.) Um candidato que não domine a habilidade tem de errar por não dominá-la — jamais por escolher a alternativa visivelmente mais trabalhada.
 3. ORDEM LÓGICA. Alternativas NUMÉRICAS vão sempre em ordem crescente de valor — essa ordem manda, e os valores de cada distrator (que carregam o erro de raciocínio específico dele) nunca podem ser alterados para acertar tamanho de texto. As de TEXTO vão da mais curta para a mais longa; cumprida a paridade do item 1, a diferença entre vizinhas é de poucos caracteres e não sinaliza nada.
-4. COMO ESCREVER PARA CUMPRIR OS TRÊS (alternativas de TEXTO). Decida o tamanho ANTES: fixe UMA extensão-alvo para as cinco — a que a alternativa correta precisa para ficar completa e sem sobra — e escreva todas nessa mesma medida, cada uma com o seu erro de raciocínio próprio. Se uma delas estiver ficando maior que as outras, ENCURTE-A — nunca alongue as demais para alcançá-la, e nunca deixe uma sozinha maior. (Esta regra é sobre as cinco serem IGUAIS entre si; o tamanho absoluto continua sendo o da CALIBRAÇÃO DE EXTENSÃO acima, com a tolerância que ela mesma admite.)
-5. FORMA IGUAL PARA AS CINCO (é o que garante o item 1 na hora de escrever, alternativas de TEXTO). Cada alternativa é UMA única oração, sem segundo período. Proibido em qualquer uma delas: oração explicativa emendada no fim, puxada por "já que", "uma vez que", "algo que", "de modo que" ou travessão; e um segundo argumento somado ao primeiro. E não acrescente à alternativa CORRETA nenhum reforço final do tipo "o que garante…", "algo que os demais não fazem" ou "de forma duradoura" para deixá-la mais convincente que os distratores: é exatamente assim que o gabarito se denuncia.
-6. COERÊNCIA DA RESPOSTA — conferida antes da entrega. A alternativa a que a sua resolução chega, a letra do campo "gabarito", a alternativa com "status":"correta" em "analiseAlternativas" (exatamente UMA das cinco) e a alternativa citada no fecho da resolução comentada têm de ser A MESMA. Releia a resolução antes de responder e confira as quatro contra ela: se a conta levar a outra letra, é a LETRA que muda, nunca a conta — e as outras quatro alternativas ficam "incorreta". Questão em que essas marcações discordam é devolvida para conferência de conteúdo e não chega ao professor.`;
+4. COMO ESCREVER PARA CUMPRIR OS TRÊS (alternativas de TEXTO). Decida o tamanho ANTES — e o tamanho NÃO é você que escolhe: é o da CALIBRAÇÃO DE EXTENSÃO acima, medida caractere a caractere nas provas reais do ENEM. Fixe como extensão-alvo das cinco a MÉDIA que a calibração dá para esta disciplina e escreva todas nessa medida, cada uma com o seu erro de raciocínio próprio. A alternativa CORRETA cabe nessa medida — ela NÃO define o tamanho das outras. Se a correta só ficar defensável acima do teto da calibração, o problema não é o tamanho: é o RECORTE. Escolha outro recorte do mesmo objeto de conhecimento, um que caiba. Se uma alternativa estiver ficando maior que as demais, ENCURTE-A — nunca alongue as outras para alcançá-la, e nunca deixe uma sozinha maior.
+5. A DIFICULDADE NÃO É TAMANHO. Fácil, médio e difícil usam a MESMA extensão de alternativa e de texto-base: a da calibração. A dificuldade vem do número de etapas de raciocínio exigidas e da proximidade do distrator em relação à resposta certa — nunca do volume de texto. Medição das questões já geradas por este app: a alternativa de nível "difícil" saiu 26% maior que a de nível "fácil" na mesma disciplina (Artes 93 → 117; Biologia 113 → 144). É exatamente o que o Guia do Inep proíbe: o candidato tem três minutos por item, e o item difícil não pode ser o item longo.
+6. FORMA IGUAL PARA AS CINCO (é o que garante os itens 1 e 4 na hora de escrever, alternativas de TEXTO). Cada alternativa é UMA única oração, sem segundo período. Proibido em qualquer uma delas: oração explicativa emendada no fim, puxada por "já que", "uma vez que", "algo que", "de modo que" ou travessão; e um segundo argumento somado ao primeiro. E não acrescente à alternativa CORRETA nenhum reforço final do tipo "o que garante…", "algo que os demais não fazem" ou "de forma duradoura" para deixá-la mais convincente que os distratores: é exatamente assim que o gabarito se denuncia.
+7. COERÊNCIA DA RESPOSTA — conferida antes da entrega. A alternativa a que a sua resolução chega, a letra do campo "gabarito", a alternativa com "status":"correta" em "analiseAlternativas" (exatamente UMA das cinco) e a alternativa citada no fecho da resolução comentada têm de ser A MESMA. Releia a resolução antes de responder e confira as quatro contra ela: se a conta levar a outra letra, é a LETRA que muda, nunca a conta — e as outras quatro alternativas ficam "incorreta". Questão em que essas marcações discordam é devolvida para conferência de conteúdo e não chega ao professor.`;
 }
 
 /* v74.17 — O BLOCO CACHEADO VOLTOU A SER FIXO (19/09/2026).
@@ -871,6 +872,19 @@ async function pesquisarFonteReal(
   return null;
 }
 
+/* v74.19 — O ALVO REPETIDO ONDE A QUESTÃO É ESCRITA.
+   A calibração vive no prompt de sistema, a 42 mil caracteres do momento de
+   redigir, e era ignorada. Esta linha custa ~60 tokens e chega junto com o
+   pedido. Traz também o lembrete de que o nível de dificuldade não mexe no
+   tamanho — medição das questões geradas: "difícil" saiu 26% maior que "fácil". */
+function buildAlvoExtensao(disciplina: string, dificuldade: string): string {
+  const t = tetosDaDisciplina(disciplina);
+  if (!t) return "";
+  return `
+📏 EXTENSÃO DESTA QUESTÃO (medida nas provas reais do ENEM em ${disciplina}): cada alternativa ~${t.alvoItem} caracteres, teto ${t.item} · texto-base ~${t.alvoTexto}, teto ${t.texto} · comando ~${t.alvoComando}, teto ${t.comando}. CONTE antes de entregar. O nível "${String(dificuldade || "").trim() || "pedido"}" NÃO altera nenhum destes números: a dificuldade está nas etapas de raciocínio e na proximidade do distrator, nunca no volume de texto.
+`;
+}
+
 function buildUserPrompt(opts: {
   area: string; disciplina: string; tema: string; dificuldade: string;
   recurso: string; competenciaNum: number | null; habilidadeCod: string | null;
@@ -902,7 +916,7 @@ Recurso visual pedido: ${opts.recurso}
 Siga integralmente as INSTRUÇÕES FIXAS DESTA CONFIGURAÇÃO que estão no prompt do sistema (recorte da disciplina, regra de fontes, calibração de extensão, regra das cinco alternativas e formato de entrega) E as instruções do recurso visual e da Matriz de Referência que vêm mais abaixo nesta mesma mensagem — todas fazem parte deste pedido, com o mesmo peso.
 ${buildDiversidadeTematica(opts.eixoTematico || "", opts.temasEvitar || [], opts.tema, opts.recorte || "", opts.diversidade || {})}${opts.instrucoesVisual ? `\nInstrução adicional do professor especificamente para o recurso visual (siga-a com prioridade, desde que compatível com as instruções do recurso visual no prompt do sistema e com a ANCORAGEM DE ASSUNTO logo abaixo): ${opts.instrucoesVisual}\n` : ""}
 ${buildAncoragemVisual(opts.area, opts.disciplina, opts.tema, opts.recurso)}${acervosDaGeracao}${instrucoesDoRecurso}${matriz}
-${buildGabaritoAlvo(opts.gabaritoAlvo || null)}${buildOrientacoesProfessor(opts.orientacoes || "")}
+${buildGabaritoAlvo(opts.gabaritoAlvo || null)}${buildOrientacoesProfessor(opts.orientacoes || "")}${buildAlvoExtensao(opts.disciplina, opts.dificuldade)}
 Entregue a questão chamando a ferramenta "entregar_questao", no formato descrito no prompt do sistema.`;
 }
 
@@ -1522,8 +1536,32 @@ const SCHEMA_FONTE = {
   required: ["tipoUso", "autor", "instituicao", "obra", "referencia", "comoVerificou", "conferidoNaFonte"],
 };
 
-function ferramentaQuestaoPara(recurso: string, exigeFonte = false): any {
+/* v74.19 — O TETO DE EXTENSÃO VAI NO SCHEMA, NÃO SÓ NA PROSA.
+   Medição das questões geradas (135 de Artes, 113 de Biologia): alternativa
+   com 104 e 125 caracteres contra 61 e 34 das provas reais; texto-base 950
+   contra 610. A calibração já estava no prompt, com os números certos, e era
+   ignorada — porque o item 4 da regra das alternativas mandava dimensionar
+   pela necessidade da alternativa correta, e instrução concreta ganha de
+   tabela distante. Corrigido o item 4, o teto entra também aqui: limite
+   declarado em schema é respeitado muito mais que limite pedido em texto.
+   O piso de 45 caracteres protege alternativa numérica e expressão, onde o
+   p75 real é baixo demais para servir de teto. */
+function tetosDaDisciplina(disciplina: string) {
+  const key = findCalibracaoKey(disciplina);
+  if (!key) return null;
+  const c = CALIBRACAO_EXTENSAO[key];
+  return {
+    item: Math.max(c.item[1], 45), alvoItem: c.item[2],
+    texto: c.texto[1], alvoTexto: c.texto[2],
+    comando: c.comando[1], alvoComando: c.comando[2],
+  };
+}
+function ferramentaQuestaoPara(recurso: string, exigeFonte = false, disciplina = ""): any {
   const comVisual = ["imagem", "grafico", "tabela"].includes(recurso);
+  const t = tetosDaDisciplina(disciplina);
+  const alt = (L: string) => t
+    ? { type: "string", maxLength: t.item, description: `Alternativa ${L}: UMA oração. Alvo ~${t.alvoItem} caracteres, teto ${t.item} — medida das provas reais do ENEM nesta disciplina. O nível de dificuldade não altera este número.` }
+    : { type: "string" };
   return {
     name: "entregar_questao",
     description: "Entrega a questão pronta. Use SEMPRE esta ferramenta para devolver a questão — nunca escreva o JSON no texto da resposta.",
@@ -1538,12 +1576,16 @@ function ferramentaQuestaoPara(recurso: string, exigeFonte = false): any {
         habilidade: { type: "object" },
         objetoConhecimento: { type: "string" },
         recurso: comVisual ? { type: "string", enum: [recurso] } : { type: "string" },
-        textoBase: { type: "string" },
-        comando: { type: "string" },
+        textoBase: t
+          ? { type: "string", maxLength: t.texto, description: `Texto-suporte. Alvo ~${t.alvoTexto} caracteres, teto ${t.texto} — medida das provas reais do ENEM nesta disciplina. Apresenta a situação e para: contexto histórico, biografia e juízo de valor sobram.` }
+          : { type: "string" },
+        comando: t
+          ? { type: "string", maxLength: t.comando, description: `Comando. Alvo ~${t.alvoComando} caracteres, teto ${t.comando}.` }
+          : { type: "string" },
         alternativas: {
           type: "object",
           description: 'OBJETO com as chaves "A", "B", "C", "D" e "E", cada valor uma string com o texto da alternativa — nunca uma string contendo JSON.',
-          properties: { A: { type: "string" }, B: { type: "string" }, C: { type: "string" }, D: { type: "string" }, E: { type: "string" } },
+          properties: { A: alt("A"), B: alt("B"), C: alt("C"), D: alt("D"), E: alt("E") },
           required: ["A", "B", "C", "D", "E"],
         },
         gabarito: { type: "string" },
@@ -2998,7 +3040,7 @@ async function aquecerCacheResponse(url: URL) {
     { type: "text", text: buildSystemPrompt(area), cache_control: CACHE_1H },
     { type: "text", text: buildBlocoFixo({ area, disciplina }), cache_control: CACHE_1H },
   ];
-  await tentar("geracao", sistemaGeracao, ferramentaQuestaoPara(recurso, fontesReaisEstrito(area)));
+  await tentar("geracao", sistemaGeracao, ferramentaQuestaoPara(recurso, fontesReaisEstrito(area), disciplina));
   if (fontesReaisEstrito(area)) {
     await tentar("pesquisa", [{ type: "text", text: SISTEMA_PESQUISA_FONTE, cache_control: CACHE_1H }], FERRAMENTA_DOSSIE_FONTE);
     await tentar("auditoria", [{ type: "text", text: SISTEMA_AUDITORIA_FONTES, cache_control: CACHE_1H }], FERRAMENTA_AUDITORIA_FONTE);
@@ -3048,6 +3090,8 @@ function selfTestResponse() {
     precoCacheEscrito.toString(), JSON.stringify(PRECO_USD_POR_M), buildUserPrompt.toString(),   // v74.17
     JSON.stringify(DOMINIOS_ACERVO_PRIORITARIO), ehDominioDeAcervo.toString(), acervoFoiConsultado.toString(),   // v74.18
     consultaCombinadaAcervos.toString(), pesquisarFonteReal.toString(), logGeneration.toString(),
+    buildRegraAlternativas.toString(), tetosDaDisciplina.toString(), buildAlvoExtensao.toString(),   // v74.19
+    JSON.stringify(ferramentaQuestaoPara("nenhum", false, "Artes")),
     JSON.stringify(ACERVOS_PRIORITARIOS), JSON.stringify(DISCIPLINAS_COM_ACERVO_PRIORITARIO), buildAcervosPrioritarios.toString(),   // v74.16
     JSON.stringify([WEB_SEARCH_TOOL, BUSCA_PESQUISADOR, BUSCA_PESQUISADOR_RETRY, BUSCA_AUDITORIA]),
     buildSystemPlanejamento.toString(),
@@ -3421,6 +3465,52 @@ function selfTestResponse() {
         v7415_marcaPassoExiste: typeof aquecerCacheResponse === "function"
           && aquecerCacheResponse.toString().includes("CACHE_1H")
           && aquecerCacheResponse.toString().includes("16"),
+        /* v74.19 — EXTENSÃO NO PADRÃO DO ENEM. Prova que o alvo de tamanho
+           deixou de ser a necessidade da alternativa correta e passou a ser a
+           calibração medida nas provas reais, que a dificuldade está declarada
+           como independente do tamanho, e que o teto viaja também no schema da
+           ferramenta e na mensagem do usuário. */
+        v7419_alvoVemDaCalibracao: (() => {
+          const r = buildRegraAlternativas();
+          return r.includes("o tamanho NÃO é você que escolhe: é o da CALIBRAÇÃO DE EXTENSÃO acima")
+            && r.includes("A alternativa CORRETA cabe nessa medida — ela NÃO define o tamanho das outras")
+            && r.includes("o problema não é o tamanho: é o RECORTE")
+            && !r.includes("a que a alternativa correta precisa para ficar completa e sem sobra")
+            && r.includes("ENCURTE-A");
+        })(),
+        v7419_dificuldadeNaoEhTamanho: (() => {
+          const r = buildRegraAlternativas();
+          return r.includes("5. A DIFICULDADE NÃO É TAMANHO")
+            && r.includes("MESMA extensão de alternativa e de texto-base")
+            && r.includes("nunca do volume de texto")
+            && r.includes("6. FORMA IGUAL PARA AS CINCO")
+            && r.includes("7. COERÊNCIA DA RESPOSTA");
+        })(),
+        v7419_tetosPorDisciplina: (() => {
+          const a = tetosDaDisciplina("Artes");
+          const m = tetosDaDisciplina("Matemática");
+          return !!a && a.item === 70 && a.alvoItem === 61 && a.texto === 798 && a.comando === 189
+            && !!m && m.item === 45 && m.alvoItem === 9
+            && tetosDaDisciplina("") === null && tetosDaDisciplina("Disciplina Inexistente") === null;
+        })(),
+        v7419_tetoNoSchema: (() => {
+          const f = ferramentaQuestaoPara("nenhum", false, "Artes").input_schema.properties;
+          const sem = ferramentaQuestaoPara("nenhum", false, "").input_schema.properties;
+          const alts = f.alternativas.properties;
+          return ["A", "B", "C", "D", "E"].every((L) => alts[L].maxLength === 70 && String(alts[L].description).includes("~61"))
+            && f.textoBase.maxLength === 798 && f.comando.maxLength === 189
+            && String(alts.A.description).includes("dificuldade não altera")
+            && sem.textoBase.maxLength === undefined && sem.alternativas.properties.A.maxLength === undefined;
+        })(),
+        v7419_alvoNaMensagemDoUsuario: (() => {
+          const u = buildUserPrompt({ area: "linguagens", disciplina: "Artes", tema: "Tarsila do Amaral", dificuldade: "Difícil", recurso: "nenhum", competenciaNum: null, habilidadeCod: null });
+          const fora = buildUserPrompt({ area: "linguagens", disciplina: "Disciplina Inexistente", tema: "t", dificuldade: "Médio", recurso: "nenhum", competenciaNum: null, habilidadeCod: null });
+          return u.includes("EXTENSÃO DESTA QUESTÃO")
+            && u.includes("cada alternativa ~61 caracteres, teto 70")
+            && u.includes('O nível "Difícil" NÃO altera nenhum destes números')
+            && u.indexOf("EXTENSÃO DESTA QUESTÃO") < u.indexOf("Entregue a questão chamando a ferramenta")
+            && !fora.includes("EXTENSÃO DESTA QUESTÃO");
+        })(),
         /* v74.18 — A TRAVA DOS ACERVOS. Prova, no endpoint de produção, que os
            cinco domínios do professor estão fechados, que a consulta combinada
            é montada a partir deles, que o reconhecimento de domínio aceita
@@ -3778,7 +3868,7 @@ ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferrame
     const webSearch = buscaDaGeracao(dossie, area, disciplina);
     // v62: a ferramenta de entrega é específica do recurso pedido (com
     // imagem/gráfico/tabela, o campo "visual" é obrigatório e tipado).
-    let data = await callClaudeForJSON(system, userMsg, webSearch, usos, ferramentaQuestaoPara(recurso, fontesReaisEstrito(area)), buscasWeb, "geracao");
+    let data = await callClaudeForJSON(system, userMsg, webSearch, usos, ferramentaQuestaoPara(recurso, fontesReaisEstrito(area), disciplina), buscasWeb, "geracao");
     // v67: alternativas/análise/competência/habilidade sempre como objeto.
     data = normalizarCamposEstruturados(data);
     // "promptImagem"/"descricao" sempre como string — ver normalizarVisual().

@@ -4992,7 +4992,17 @@ function auditaQuestaoLocal(q){
     const fora = [];
     if(tb > cal.texto[1]) fora.push("texto-base com " + tb + " caracteres (faixa real: " + cal.texto[0] + "–" + cal.texto[1] + ", média " + cal.texto[2] + ")");
     if(cm > cal.comando[1]) fora.push("comando com " + cm + " (faixa " + cal.comando[0] + "–" + cal.comando[1] + ")");
-    if(im > cal.item[1]) fora.push("alternativas com " + im + " em média (faixa " + cal.item[0] + "–" + cal.item[1] + ", média " + cal.item[2] + ")");
+    /* v18.23 — O AVISO PASSOU A SER O p90 REAL, NÃO O p75.
+       Medição das provas oficiais 2015-2025 (326 questões completas, 1.700
+       alternativas, extraídas dos PDFs do INEP): a média das cinco fica acima
+       do p75 em 20% das questões REAIS — um p75 deixa 25% acima por definição,
+       então o aviso estava reprovando uma em cada cinco questões do próprio
+       ENEM. O p90 medido da média é ~1,3 vez o p75 (Linguagens 88/67,
+       Humanas 68/47, Natureza 60/43), e é esse o teto agora: o aviso passa a
+       significar "mais longa que 90% das questões reais". Texto-base e comando
+       seguem no p75 — não medi o p90 deles e não mexo no que não medi. */
+    const tetoItem = Math.round(cal.item[1] * 1.3);
+    if(im > tetoItem) fora.push("alternativas com " + im + " em média (faixa real " + cal.item[0] + "–" + cal.item[1] + ", média " + cal.item[2] + "; o aviso sai acima de " + tetoItem + ")");
     if(fora.length) info("Mais longa que o padrão real do ENEM em " + d.disciplina + ": " + fora.join("; ") +
                          ". Medido em provas de 2015 a 2025 — o candidato tem três minutos por questão.");
   }
@@ -5071,8 +5081,16 @@ function auditaQuestaoLocal(q){
        verdadeira. Nas 20 questões reais o resultado é o mesmo com "e" ou com "ou". */
     if(g > 40 && segunda && (g > 1.25 * segunda || (g - segunda) >= 25)){
       aviso(`A alternativa correta (${confAud.letra}) é a mais longa da questão: ${g} caracteres contra ${segunda} da segunda maior. O Guia do Inep pede paridade entre as cinco — do jeito que está, o tamanho pode entregar a resposta. Use "Regenerar".`);
-    } else if(menor > 40 && maior > 1.30 * menor){   // 1,25 é a paridade que o prompt pede; 1,30 dá a tolerância
-      info(`Alternativas com extensões desiguais (de ${menor} a ${maior} caracteres) — o Guia do Inep pede paridade técnica entre as cinco.`);
+    /* v18.23 — 1,30 REPROVAVA O PRÓPRIO ENEM. Medido nas provas oficiais
+       2015-2025, com o mesmo filtro deste ramo (menor > 40 caracteres): a razão
+       maior/menor tem p50 1,24 · p75 1,37 · p90 1,47 · p95 1,59, e 37,3% das
+       questões REAIS passam de 1,30. As questões que este app gera já são mais
+       uniformes que as reais (p90 de 1,30 em História a 1,36 em Artes). O
+       limiar vai para 1,50, entre o p90 e o p95 do exame: avisa no que o ENEM
+       de fato considera desigual, e cala no que é normal. O prompt continua
+       pedindo 1,25 — alvo apertado, alarme largo. */
+    } else if(menor > 40 && maior > 1.50 * menor){
+      info(`Alternativas com extensões desiguais (de ${menor} a ${maior} caracteres, razão ${(maior/menor).toFixed(2)}) — nas provas reais do ENEM o p90 é 1,47. O Guia do Inep pede paridade técnica entre as cinco.`);
     }
   }
 

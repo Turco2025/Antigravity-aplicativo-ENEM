@@ -33,11 +33,14 @@ const txt = n => 'a'.repeat(n);
 const sinteticos = [
   { nome: 'curtas com razão alta (30 a 48) — não deve apontar nada', alt: { A: txt(30), B: txt(34), C: txt(38), D: txt(42), E: txt(48) }, gab: 'E', esperado: null },
   { nome: 'correta 30% maior que a segunda — aviso', alt: { A: txt(150), B: txt(160), C: txt(170), D: txt(180), E: txt(240) }, gab: 'E', esperado: 'aviso' },
-  // a correta é a maior por pouco (10% acima da segunda): não é alerta de gabarito denunciado,
-  // mas as cinco vão de 150 a 198 (1,32x) — passa da paridade pedida, então sai a observação
-  { nome: 'correta 10% acima da segunda, conjunto 1,32x — só a observação de paridade', alt: { A: txt(150), B: txt(160), C: txt(170), D: txt(180), E: txt(198) }, gab: 'E', esperado: 'info' },
+  /* v18.23 — o limiar da observação de paridade subiu de 1,30 para 1,50, medido
+     nas provas oficiais 2015-2025 (mesmo filtro, menor > 40): p50 1,24 · p75 1,37 ·
+     p90 1,47 · p95 1,59, e 1,30 reprovava 37,3% das questões REAIS. Os casos
+     abaixo passaram a refletir isso: 1,32 é normal no ENEM e não deve apontar nada. */
+  { nome: 'correta 10% acima da segunda, conjunto 1,32x — normal no ENEM real, nada', alt: { A: txt(150), B: txt(160), C: txt(170), D: txt(180), E: txt(198) }, gab: 'E', esperado: null },
   { nome: 'correta 10% acima da segunda, conjunto 1,22x — nada', alt: { A: txt(162), B: txt(170), C: txt(175), D: txt(180), E: txt(198) }, gab: 'E', esperado: null },
-  { nome: 'desigualdade sem favorecer o gabarito — info de paridade', alt: { A: txt(240), B: txt(160), C: txt(150), D: txt(155), E: txt(158) }, gab: 'C', esperado: 'info' },
+  { nome: 'conjunto 1,55x sem favorecer o gabarito — acima do p95 real, sai a observação', alt: { A: txt(240), B: txt(160), C: txt(155), D: txt(158), E: txt(162) }, gab: 'C', esperado: 'info' },
+  { nome: 'conjunto 1,45x sem favorecer o gabarito — ainda dentro do ENEM real, nada', alt: { A: txt(232), B: txt(170), C: txt(160), D: txt(165), E: txt(168) }, gab: 'C', esperado: null },
   { nome: 'cinco iguais — nada', alt: { A: txt(120), B: txt(120), C: txt(120), D: txt(120), E: txt(120) }, gab: 'B', esperado: null },
   // regime longo: a correta passa de todos os distratores por 96 caracteres, mas só 1,24x —
   // com "e" entre razão e margem isso escapava das duas checagens (achado da revisão)
@@ -71,8 +74,11 @@ const sinteticos = [
   const infos = r.filter(x => x.nivel === 'info').map(x => x.nome);
   ok(JSON.stringify(avisos) === JSON.stringify(['Bio q07', 'Bio q10']),
     'R1 nas 20 questões reais, o alerta sai exatamente nas duas em que o gabarito se denuncia (Bio q07 e q10)', JSON.stringify(avisos));
-  ok(JSON.stringify(infos) === JSON.stringify(['Bio q04']),
-    'R2 o aviso de paridade (mais suave) sai na única questão real que o merece: Bio q04, com 102 contra 76 caracteres e o gabarito na maior', JSON.stringify(infos));
+  /* v18.23: Bio q04 tem 102 contra 76 caracteres — razão 1,34, abaixo do p75 das
+     provas oficiais (1,37). Com o limiar medido, nenhuma das 20 questões reais
+     merece a observação de paridade: elas já são tão uniformes quanto o ENEM. */
+  ok(infos.length === 0,
+    'R2 com o limiar medido (1,50), nenhuma das 20 questões reais é apontada por desigualdade — a maior razão é 1,34, abaixo do p75 do ENEM', JSON.stringify(infos));
   const q07 = r.find(x => x.nome === 'Bio q07');
   ok(/261 caracteres contra 199/.test(q07.texto), 'R3 a mensagem mostra os números que o professor precisa ver', q07.texto);
 
