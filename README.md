@@ -124,6 +124,55 @@ Teste: `verify_fontes_app.js` — 19 verificações; as seções B e C bis prova
 quatro marcas ligadas ao mesmo tempo nenhuma conferência bloqueia, e que nenhuma delas tem sequer um
 `return true` no corpo. `verify_gabarito_coerente.js` H1 passou a exigir o contrário do que exigia.
 
+## Custo: o cache voltou a ser cache (generate-question v74.17, 19/09/2026)
+
+A leva de 18/09 (10 questões de Artes, ids 1108–1117 em `question_generation_log`) saiu a
+**US$ 0,185 por questão** — o dobro do teto de US$ 0,09. O registro do app mostrava US$ 0,151,
+e a diferença também era um defeito. Quatro correções:
+
+**1. O bloco cacheado voltou a ser fixo.** `buildBlocoFixo` é o segundo ponto de cache do prompt
+de geração, mas o seu texto mudava a cada questão: carregava dentro de si o recurso visual
+(34.076 caracteres com `imagem` contra 20.944 com `texto`) e a Matriz completa. Texto diferente =
+prefixo diferente = cache errado e regravado — ~18 mil tokens gravados em **toda** questão, nunca
+lidos. Agora ele depende só de `(área, disciplina)`: grava uma vez por leva e é lido nas demais.
+A assinatura passou de `{ area, disciplina, recurso, competenciaNum, habilidadeCod }` para
+`{ area, disciplina }`.
+
+**2. O recurso visual e a Matriz passaram para a mensagem do usuário.** O modelo recebe exatamente
+o mesmo texto de antes — `instrucoesImagem(recurso, disciplina)` e `buildMatrizInstrucoes(area,
+competenciaNum, habilidadeCod)`, com os mesmos argumentos —, só que em `buildUserPrompt`, que nunca
+foi cacheado. A frase de abertura do pedido avisa que as duas coisas vêm ali mesmo, "mais abaixo
+nesta mesma mensagem". Nada foi retirado, encurtado ou reescrito: mudou o lugar, não o conteúdo.
+
+**3. O TTL do cache na geração voltou a ser o de 5 minutos.** A regra da v74.15 (1 hora a partir de
+3 questões) partia de "grava uma vez, lê muitas" — premissa que o defeito 1 derrubava: a gravação se
+repetia em todas as questões, e o TTL de 1 hora cobra **US$ 4,00/M** contra **US$ 2,50/M** do de
+5 minutos. Foram US$ 0,33 a mais na leva, por nada. O cache de 5 minutos se renova a cada uso, então
+dentro de uma leva contínua ele não expira. O de 1 hora sobrou só no aquecimento opcional
+(`?aquecer=1`, caixa desmarcada por padrão). A consulta `houveGeracaoRecente()` saiu do caminho da
+requisição — ela só servia para ligar o TTL caro.
+
+**4. O cálculo do custo parou de mentir.** `PRECO_USD_POR_M` ganhou `cacheEscrito1h: 4` e
+`precoCacheEscrito()` escolhe o preço pelo TTL em vigor. Antes a conta usava sempre US$ 2,50/M,
+mesmo com o cache de 1 hora ligado.
+
+**5. O pesquisador abre com UMA busca.** `BUSCA_PESQUISADOR.max_uses` caiu de 2 para 1 — o prompt já
+pedia uma consulta bem construída, mas o modelo gastava as duas em 10 de 10 questões, a US$ 0,01
+cada. A segunda busca não sumiu: ela é a segunda tentativa inteira (`BUSCA_PESQUISADOR_RETRY`,
+teto 2). Se essa troca empurrar questões demais para a segunda tentativa — que é uma chamada
+inteira, mais cara que uma busca —, a reversão é de uma linha.
+
+Testes: `deno run -A tests/verify_cache_v7417.ts supabase/functions/generate-question/index.ts` —
+29 verificações (bloco fixo estável, recurso e Matriz no prompt do usuário, TTL, preço por TTL,
+tetos de busca, cobertura no `?selftest=1`). `verify_fontes_backend.ts` foi para 87 com H2 e H3
+reescritos para o teto novo. No `?selftest=1`: `v7417_ttlSempre5min`, `v7417_blocoFixoEstavel`,
+`v7417_recursoEMatrizNoPromptDoUsuario`, `v7417_precoSegueOTtl` e `v7417_pesquisadorUmaBusca`.
+
+O bloco cacheado da geração ficou com 42.194 caracteres (`buildSystemPrompt` + `buildBlocoFixo`),
+estável para toda a leva. Próximo passo possível, ainda não feito: um terceiro ponto de cache para
+a Matriz e o recurso visual, que hoje voltam a pagar entrada nova em cada questão — vale a pena
+quando a leva repete o mesmo recurso, e não vale quando cada questão pede um diferente.
+
 ## Acervos de prioridade obrigatória em Português, Literatura e Artes (generate-question v74.16, 18/09/2026)
 
 Decisão do professor: nessas três disciplinas, o pesquisador deve procurar **primeiro** em cinco

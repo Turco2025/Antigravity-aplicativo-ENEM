@@ -323,10 +323,15 @@ const doss = {
 };
 t("H1 o teto geral de buscas caiu para 3 (era 5 — o custo cresce com o quadrado das buscas)",
   WEB_SEARCH_TOOL.max_uses === 3, String(WEB_SEARCH_TOOL.max_uses));
-t("H2 o pesquisador é a única etapa que varre a web, com teto 2",
-  BUSCA_PESQUISADOR.max_uses === 2 && BUSCA_PESQUISADOR.max_uses >= BUSCA_AUDITORIA.max_uses);
-t("H3 a segunda tentativa do pesquisador existe e não é mais cara que a primeira",
-  BUSCA_PESQUISADOR_RETRY.max_uses === 2 && BUSCA_PESQUISADOR_RETRY.max_uses <= BUSCA_PESQUISADOR.max_uses);
+/* v74.17: o teto da PRIMEIRA tentativa do pesquisador caiu de 2 para 1 — na
+   leva de 18/09 o modelo gastava as duas buscas em 10 de 10 questões, a US$ 0,01
+   cada. A segunda busca não sumiu: ela é a SEGUNDA TENTATIVA inteira (teto 2). */
+t("H2 o pesquisador abre com UMA busca e continua sendo quem mais busca",
+  BUSCA_PESQUISADOR.max_uses === 1
+  && BUSCA_PESQUISADOR.max_uses + BUSCA_PESQUISADOR_RETRY.max_uses >= BUSCA_AUDITORIA.max_uses,
+  String(BUSCA_PESQUISADOR.max_uses));
+t("H3 a segunda tentativa do pesquisador existe e é onde a segunda busca ficou",
+  BUSCA_PESQUISADOR_RETRY.max_uses === 2 && BUSCA_PESQUISADOR_RETRY.max_uses > BUSCA_PESQUISADOR.max_uses);
 t("H4 a auditoria sem dossiê tem teto 2", BUSCA_AUDITORIA.max_uses === 2);
 t("H5 COM dossiê validado a geração NÃO busca", buscaDaGeracao(doss, "linguagens", "Artes") === false);
 t("H6 SEM dossiê a geração continua buscando em Linguagens",

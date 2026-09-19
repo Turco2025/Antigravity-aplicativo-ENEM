@@ -530,24 +530,27 @@ function buildRegraAlternativas(): string {
 6. COERÊNCIA DA RESPOSTA — conferida antes da entrega. A alternativa a que a sua resolução chega, a letra do campo "gabarito", a alternativa com "status":"correta" em "analiseAlternativas" (exatamente UMA das cinco) e a alternativa citada no fecho da resolução comentada têm de ser A MESMA. Releia a resolução antes de responder e confira as quatro contra ela: se a conta levar a outra letra, é a LETRA que muda, nunca a conta — e as outras quatro alternativas ficam "incorreta". Questão em que essas marcações discordam é devolvida para conferência de conteúdo e não chega ao professor.`;
 }
 
-function buildBlocoFixo(opts: {
-  area: string; disciplina: string; recurso: string;
-  competenciaNum: number | null; habilidadeCod: string | null;
-}) {
-  // A lista completa da Matriz só é fixa quando o professor NÃO escolheu
-  // competência/habilidade; escolhida, o trecho é específico e fica no
-  // prompt do usuário (buildUserPrompt), exatamente como antes.
-  const matrizFixa = (!opts.competenciaNum && !opts.habilidadeCod)
-    ? `\n\n${buildMatrizInstrucoes(opts.area, null, null)}`
-    : "";
-  return `═══════ INSTRUÇÕES FIXAS DESTA CONFIGURAÇÃO (disciplina ${opts.disciplina}, recurso visual: ${opts.recurso}) ═══════
+/* v74.17 — O BLOCO CACHEADO VOLTOU A SER FIXO (19/09/2026).
+   Medição da leva de 18/09 (10 questões de Artes, ids 1108–1117): ~18 mil
+   tokens de cache GRAVADOS em cada questão, nunca lidos. A causa estava aqui:
+   este bloco é o segundo ponto de cache do prompt de geração, mas o seu texto
+   mudava a cada questão, porque carregava dentro de si o RECURSO VISUAL
+   (34.076 caracteres com "imagem" contra 20.944 com "texto") e a MATRIZ
+   completa, que só entra no modo automático. Texto diferente = prefixo
+   diferente = cache errado e regravado — ao preço de gravação, que é o mais
+   caro depois da saída.
+
+   A partir daqui o bloco depende só de (área, disciplina): grava uma vez por
+   leva e é LIDO nas demais questões. As instruções do recurso visual e a
+   Matriz continuam chegando ao modelo com o MESMO texto de antes — passaram
+   para a mensagem do usuário (buildUserPrompt), que nunca foi cacheada. */
+function buildBlocoFixo(opts: { area: string; disciplina: string }) {
+  return `═══════ INSTRUÇÕES FIXAS DESTA CONFIGURAÇÃO (disciplina ${opts.disciplina}) ═══════
 As instruções abaixo valem para a questão pedida no prompt do usuário e devem ser seguidas integralmente junto com ele.
 ${buildRecorteDaDisciplina(opts.area, opts.disciplina)}${buildRegraFontesReais(opts.disciplina, opts.area)}
 ${buildCalibracaoExtensao(opts.disciplina)}
 
 ${buildRegraAlternativas()}
-
-${instrucoesImagem(opts.recurso, opts.disciplina)}${matrizFixa}
 
 ${JSON_SCHEMA_TXT}`;
 }
@@ -804,11 +807,15 @@ function buildUserPrompt(opts: {
   eixoTematico?: string; temasEvitar?: string[]; recorte?: string;
   diversidade?: DiversidadeExtras; orientacoes?: string; dossie?: any;
 }) {
-  // Trecho específico da Matriz (só quando o professor escolheu
-  // competência/habilidade) — o caso "automático" está no bloco fixo.
-  const matrizEspecifica = (opts.competenciaNum || opts.habilidadeCod)
-    ? `\n\n${buildMatrizInstrucoes(opts.area, opts.competenciaNum, opts.habilidadeCod)}`
-    : "";
+  /* v74.17 — A MATRIZ E O RECURSO VISUAL VIAJAM AQUI, NÃO NO BLOCO CACHEADO.
+     Os dois mudam de questão para questão e, dentro do bloco fixo, estragavam
+     o cache da leva inteira (ver buildBlocoFixo). O texto é exatamente o mesmo
+     de antes — buildMatrizInstrucoes com os mesmos argumentos devolve a lista
+     completa no modo automático e o trecho específico quando o professor
+     escolhe competência/habilidade; instrucoesImagem devolve as instruções do
+     recurso pedido. Só o lugar mudou: mensagem do usuário, que não é cacheada. */
+  const matriz = `\n\n${buildMatrizInstrucoes(opts.area, opts.competenciaNum, opts.habilidadeCod)}`;
+  const instrucoesDoRecurso = `\n\n${instrucoesImagem(opts.recurso, opts.disciplina)}`;
   return `${buildDossieFonte(opts.dossie)}Elabore UMA questão inédita, original, no padrão ENEM, com os seguintes parâmetros definidos pelo professor:
 
 Área do conhecimento: ${AREA_LABELS[opts.area]}
@@ -817,9 +824,9 @@ Tema/conteúdo solicitado: ${opts.tema || (opts.eixoTematico ? (opts.diversidade
 Nível de dificuldade: ${opts.dificuldade}
 Recurso visual pedido: ${opts.recurso}
 
-Siga integralmente as INSTRUÇÕES FIXAS DESTA CONFIGURAÇÃO que estão no prompt do sistema (regra de fontes, calibração de extensão, instruções do recurso visual, Matriz de Referência e formato de entrega) — elas fazem parte deste pedido.
+Siga integralmente as INSTRUÇÕES FIXAS DESTA CONFIGURAÇÃO que estão no prompt do sistema (recorte da disciplina, regra de fontes, calibração de extensão, regra das cinco alternativas e formato de entrega) E as instruções do recurso visual e da Matriz de Referência que vêm mais abaixo nesta mesma mensagem — todas fazem parte deste pedido, com o mesmo peso.
 ${buildDiversidadeTematica(opts.eixoTematico || "", opts.temasEvitar || [], opts.tema, opts.recorte || "", opts.diversidade || {})}${opts.instrucoesVisual ? `\nInstrução adicional do professor especificamente para o recurso visual (siga-a com prioridade, desde que compatível com as instruções do recurso visual no prompt do sistema e com a ANCORAGEM DE ASSUNTO logo abaixo): ${opts.instrucoesVisual}\n` : ""}
-${buildAncoragemVisual(opts.area, opts.disciplina, opts.tema, opts.recurso)}${matrizEspecifica}
+${buildAncoragemVisual(opts.area, opts.disciplina, opts.tema, opts.recurso)}${instrucoesDoRecurso}${matriz}
 ${buildGabaritoAlvo(opts.gabaritoAlvo || null)}${buildOrientacoesProfessor(opts.orientacoes || "")}
 Entregue a questão chamando a ferramenta "entregar_questao", no formato descrito no prompt do sistema.`;
 }
@@ -1257,8 +1264,21 @@ const CACHE_5MIN: CacheControl = { type: "ephemeral" };
 const CACHE_1H: CacheControl = { type: "ephemeral", ttl: "1h" };
 let _cacheControlAtual: CacheControl = CACHE_5MIN;
 function cacheControlAtual(): CacheControl { return _cacheControlAtual; }
+/* v74.17 — DE VOLTA AOS 5 MINUTOS NA GERAÇÃO (19/09/2026).
+   A regra da v74.15 (1 hora a partir de 3 questões) partia de uma premissa que
+   a medição derrubou: "grava uma vez, lê muitas". Com o bloco fixo mudando a
+   cada questão, a gravação se repetia em TODAS elas — e o TTL de 1 hora cobra
+   US$ 4,00/M contra US$ 2,50/M do de 5 minutos, ou seja, 60% a mais em cima
+   justamente do item mais caro da conta. Na leva de 18/09 foram US$ 0,33 a
+   mais por nada.
+   O cache de 5 minutos SE RENOVA a cada uso: dentro de uma leva contínua ele
+   não expira. Com o bloco fixo consertado (v74.17), a leva grava uma vez e lê
+   o resto — e grava pelo preço menor. */
 function escolheCacheControl(quantidadeLeva: number, geracaoRecente: boolean): CacheControl {
-  return (Number(quantidadeLeva) >= 3 || geracaoRecente) ? CACHE_1H : CACHE_5MIN;
+  // Os parâmetros ficam na assinatura para documentar o que foi medido e para
+  // o autoteste provar a regra; hoje nenhum dos dois liga o TTL de 1 hora.
+  void quantidadeLeva; void geracaoRecente;
+  return CACHE_5MIN;
 }
 
 const WEB_SEARCH_TOOL = { type: "web_search_20250305", name: "web_search", max_uses: 3 };
@@ -1268,7 +1288,11 @@ const WEB_SEARCH_TOOL = { type: "web_search_20250305", name: "web_search", max_u
    questão dentro dos R$ 0,50. Quando nem assim aparece fonte, ele ainda tem a
    SEGUNDA TENTATIVA inteira do item 2 da regra, então economizar aqui não é
    desistir mais cedo. */
-const BUSCA_PESQUISADOR = { ...WEB_SEARCH_TOOL, max_uses: 2 };
+/* v74.17 — teto 1 na primeira tentativa. O prompt já pedia UMA consulta bem
+   construída, mas o modelo gastava as duas em todas as questões da leva de
+   18/09 (buscas_web = 2 em 10 de 10). A segunda busca continua existindo: é a
+   SEGUNDA TENTATIVA inteira do item 2 da regra, que tem teto 2. */
+const BUSCA_PESQUISADOR = { ...WEB_SEARCH_TOOL, max_uses: 1 };
 /* Segunda tentativa do pesquisador: já sabe o que não funcionou, procura em
    outro lugar — duas buscas bastam e evitam a leva cara do item 2. */
 const BUSCA_PESQUISADOR_RETRY = { ...WEB_SEARCH_TOOL, max_uses: 2 };
@@ -1851,7 +1875,14 @@ Reenvie a MESMA questão, agora como JSON estritamente válido. Verifique, antes
    US$ 2/M, gravação de cache (5 min) US$ 2,50/M, leitura de cache US$ 0,20/M,
    saída US$ 10/M, busca na web US$ 10 por mil. Serve para medir, com dado
    real, quanto cada questão custa e quantas buscas o modelo faz de fato. */
-const PRECO_USD_POR_M = { entrada: 2, cacheEscrito: 2.5, cacheLido: 0.2, saida: 10 };
+/* v74.17 — A GRAVAÇÃO DE CACHE TEM DOIS PREÇOS. Até aqui a conta usava sempre
+   US$ 2,50/M (TTL de 5 minutos) mesmo quando a requisição rodava com o TTL de
+   1 hora, que a Anthropic cobra a US$ 4,00/M. Na leva de 18/09 isso escondeu
+   US$ 0,33 (221.665 tokens gravados). Agora o preço segue o TTL em vigor. */
+const PRECO_USD_POR_M = { entrada: 2, cacheEscrito: 2.5, cacheEscrito1h: 4, cacheLido: 0.2, saida: 10 };
+function precoCacheEscrito(): number {
+  return cacheControlAtual().ttl === "1h" ? PRECO_USD_POR_M.cacheEscrito1h : PRECO_USD_POR_M.cacheEscrito;
+}
 const PRECO_USD_POR_BUSCA = 0.01;
 function resumoUso(usos: any[]) {
   const soma = (chave: string) => usos.reduce((t, u) => t + (Number(u?.[chave]) || 0), 0);
@@ -1875,7 +1906,7 @@ function resumoUso(usos: any[]) {
     })),
   };
   r.custoUSD = Number((
-    (r.entradaNova * PRECO_USD_POR_M.entrada + r.cacheEscrito * PRECO_USD_POR_M.cacheEscrito +
+    (r.entradaNova * PRECO_USD_POR_M.entrada + r.cacheEscrito * precoCacheEscrito() +
      r.cacheLido * PRECO_USD_POR_M.cacheLido + r.saida * PRECO_USD_POR_M.saida) / 1e6 +
     buscasWeb * PRECO_USD_POR_BUSCA
   ).toFixed(5));
@@ -2883,7 +2914,7 @@ async function aquecerCacheResponse(url: URL) {
   };
   const sistemaGeracao: SistemaPrompt = [
     { type: "text", text: buildSystemPrompt(area), cache_control: CACHE_1H },
-    { type: "text", text: buildBlocoFixo({ area, disciplina, recurso, competenciaNum: null, habilidadeCod: null }), cache_control: CACHE_1H },
+    { type: "text", text: buildBlocoFixo({ area, disciplina }), cache_control: CACHE_1H },
   ];
   await tentar("geracao", sistemaGeracao, ferramentaQuestaoPara(recurso, fontesReaisEstrito(area)));
   if (fontesReaisEstrito(area)) {
@@ -2932,6 +2963,7 @@ function selfTestResponse() {
     buscaDaGeracao.toString(),
     blocoNotacao.toString(), precisaNotacaoQuimica.toString(), JSON.stringify(AREAS_COM_NOTACAO_QUIMICA),   // v74.14
     SISTEMA_AUDITORIA_FONTES, escolheCacheControl.toString(), aquecerCacheResponse.toString(), registraUso.toString(),   // v74.15
+    precoCacheEscrito.toString(), JSON.stringify(PRECO_USD_POR_M), buildUserPrompt.toString(),   // v74.17
     JSON.stringify(ACERVOS_PRIORITARIOS), JSON.stringify(DISCIPLINAS_COM_ACERVO_PRIORITARIO), buildAcervosPrioritarios.toString(),   // v74.16
     JSON.stringify([WEB_SEARCH_TOOL, BUSCA_PESQUISADOR, BUSCA_PESQUISADOR_RETRY, BUSCA_AUDITORIA]),
     buildSystemPlanejamento.toString(),
@@ -3035,7 +3067,7 @@ function selfTestResponse() {
        controles e cerca forjada, que o teto de 600 vale, que entrada vazia ou de tipo
        errado não gera bloco nenhum, e que o texto NÃO contamina o bloco cacheado. */
     orientacoesProfessor: (() => {
-      const fixo = buildBlocoFixo({ area: "natureza", disciplina: "Química", recurso: "nenhum", competenciaNum: null, habilidadeCod: null });
+      const fixo = buildBlocoFixo({ area: "natureza", disciplina: "Química" });
       const U = (o: string) => buildUserPrompt({ area: "natureza", disciplina: "Química", tema: "oxirredução", dificuldade: "Médio", recurso: "nenhum", competenciaNum: null, habilidadeCod: null, gabaritoAlvo: "C", orientacoes: limpaOrientacoes(o) });
       const cerca = "\u2500".repeat(20);
       const simples = U("Contextualize com uma situação do cotidiano");
@@ -3086,7 +3118,7 @@ function selfTestResponse() {
         umConteudoSoNaoFixa: !umSo.includes("JÁ DISTRIBUIU"),
         // v74.3: regra das alternativas no bloco FIXO (cacheado) e sem referência morta.
         regraAlternativas: (() => {
-          const fixo = buildBlocoFixo({ area: "natureza", disciplina: "Biologia", recurso: "imagem", competenciaNum: null, habilidadeCod: null });
+          const fixo = buildBlocoFixo({ area: "natureza", disciplina: "Biologia" });
           const alvo = buildGabaritoAlvo("E");
           const usuario = buildUserPrompt({ area: "natureza", disciplina: "Biologia", tema: "t", dificuldade: "Médio", recurso: "nenhum", competenciaNum: null, habilidadeCod: null, gabaritoAlvo: "E" });
           return fixo.includes("REGRA DAS CINCO ALTERNATIVAS")
@@ -3231,7 +3263,12 @@ function selfTestResponse() {
         tetoAuditoria: BUSCA_AUDITORIA.max_uses,
         tetoBiologia: webSearchTool("Biologia").max_uses,
         // o pesquisador continua sendo o único com teto maior, e só ele varre a web
-        soOPesquisadorBusca: BUSCA_PESQUISADOR.max_uses >= BUSCA_AUDITORIA.max_uses
+        /* v74.17: o pesquisador passou a ter teto 1 na primeira tentativa, então
+           a comparação direta com a auditoria não vale mais — o que importa é
+           que o caminho do pesquisador (1ª + 2ª tentativa) continua sendo o
+           maior, e que a auditoria só busca quando não houve dossiê. */
+        soOPesquisadorBusca: BUSCA_PESQUISADOR.max_uses >= 1
+          && BUSCA_PESQUISADOR.max_uses + BUSCA_PESQUISADOR_RETRY.max_uses >= BUSCA_AUDITORIA.max_uses
           && pesquisarFonteReal.toString().includes("BUSCA_PESQUISADOR")
           && garantirFontesReais.toString().includes('diag.dossie === "sem_dossie" ? BUSCA_AUDITORIA : false'),
         // a auditoria recebe o dossiê e o dossiê aparece no prompt dela
@@ -3276,14 +3313,18 @@ function selfTestResponse() {
           && !SISTEMA_AUDITORIA_FONTES.includes(NOTACAO_MATEMATICA)
           && !SISTEMA_AUDITORIA_FONTES.includes(JSON_SCHEMA_TXT),
         v7415_charsAuditoria: SISTEMA_AUDITORIA_FONTES.length,
-        v7415_charsGeracao: buildSystemPrompt("linguagens").length + buildBlocoFixo({ area: "linguagens", disciplina: "Artes", recurso: "nenhum", competenciaNum: null, habilidadeCod: null }).length,
-        v7415_regraDoTtl:
+        v7415_charsGeracao: buildSystemPrompt("linguagens").length + buildBlocoFixo({ area: "linguagens", disciplina: "Artes" }).length,
+        /* v74.17 — a regra do TTL mudou: 5 minutos SEMPRE na geração. Ver
+           escolheCacheControl; o de 1 hora sobrou só no aquecimento opcional. */
+        v7417_ttlSempre5min:
           escolheCacheControl(1, false).ttl === undefined
           && escolheCacheControl(2, false).ttl === undefined
-          && escolheCacheControl(3, false).ttl === "1h"
-          && escolheCacheControl(20, false).ttl === "1h"
-          && escolheCacheControl(1, true).ttl === "1h"
-          && escolheCacheControl(2, true).ttl === "1h",
+          && escolheCacheControl(3, false).ttl === undefined
+          && escolheCacheControl(20, false).ttl === undefined
+          && escolheCacheControl(1, true).ttl === undefined
+          && escolheCacheControl(20, true).ttl === undefined
+          && CACHE_5MIN.ttl === undefined && CACHE_1H.ttl === "1h"
+          && typeof houveGeracaoRecente === "function",
         v7415_instrumentacaoPorEtapa: (() => {
           const usos: any[] = [];
           registraUso(usos, { input_tokens: 10, cache_creation_input_tokens: 0, cache_read_input_tokens: 500, output_tokens: 3 }, "geracao");
@@ -3296,6 +3337,46 @@ function selfTestResponse() {
         v7415_marcaPassoExiste: typeof aquecerCacheResponse === "function"
           && aquecerCacheResponse.toString().includes("CACHE_1H")
           && aquecerCacheResponse.toString().includes("16"),
+        /* v74.17 — O BLOCO CACHEADO VOLTOU A SER FIXO. Prova, no endpoint de
+           produção, que buildBlocoFixo não muda mais com o recurso visual nem
+           com a competência/habilidade, que o texto do recurso e o da Matriz
+           continuam chegando ao modelo (agora pela mensagem do usuário, com o
+           mesmo conteúdo de antes) e que o preço da gravação segue o TTL. */
+        v7417_blocoFixoEstavel: (() => {
+          const a = buildBlocoFixo({ area: "linguagens", disciplina: "Artes" });
+          const b = buildBlocoFixo({ area: "linguagens", disciplina: "Artes" });
+          const img = instrucoesImagem("imagem", "Artes");
+          const matrizToda = buildMatrizInstrucoes("linguagens", null, null);
+          return a === b
+            && img.length > 200 && matrizToda.length > 200
+            && !a.includes(img)
+            && !a.includes(matrizToda)
+            && !a.includes("recurso visual: ")
+            && a.includes("REGRA DAS CINCO ALTERNATIVAS")
+            && a.includes(JSON_SCHEMA_TXT);
+        })(),
+        v7417_recursoEMatrizNoPromptDoUsuario: (() => {
+          const base = { area: "linguagens", disciplina: "Artes", tema: "Tarsila do Amaral", dificuldade: "Médio" };
+          const auto = buildUserPrompt({ ...base, recurso: "imagem", competenciaNum: null, habilidadeCod: null });
+          const esc = buildUserPrompt({ ...base, recurso: "imagem", competenciaNum: 6, habilidadeCod: "H19" });
+          return auto.includes(instrucoesImagem("imagem", "Artes"))
+            && esc.includes(instrucoesImagem("imagem", "Artes"))
+            && auto.includes(buildMatrizInstrucoes("linguagens", null, null))
+            && esc.includes(buildMatrizInstrucoes("linguagens", 6, "H19"))
+            && auto.includes("que vêm mais abaixo nesta mesma mensagem");
+        })(),
+        v7417_precoSegueOTtl: (() => {
+          const antes = _cacheControlAtual;
+          _cacheControlAtual = CACHE_5MIN; const p5 = precoCacheEscrito();
+          _cacheControlAtual = CACHE_1H;  const p1 = precoCacheEscrito();
+          _cacheControlAtual = antes;
+          return p5 === 2.5 && p1 === 4
+            && resumoUso.toString().includes("precoCacheEscrito()");
+        })(),
+        v7417_pesquisadorUmaBusca:
+          BUSCA_PESQUISADOR.max_uses === 1
+          && BUSCA_PESQUISADOR_RETRY.max_uses === 2
+          && BUSCA_AUDITORIA.max_uses === 2,
         /* v74.16 — os cinco acervos que o professor mandou priorizar, na ordem
            dele, e só nas três disciplinas que ele nomeou. */
         v7416_acervosPrioritarios: (() => {
@@ -3511,11 +3592,11 @@ ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferrame
   const contextosEvitar: string[] = listaCurta(body.contextosEvitar, 10, 120);
   const diversidade: DiversidadeExtras = { subtopico, dominioContexto, dominioAlternativo, dominiosEvitar, contextosEvitar };
 
-  /* v74.15 — TTL do cache desta requisição: 1 hora quando a leva tem 3 ou mais
-     questões ou quando houve geração recente; 5 minutos na questão avulsa
-     isolada. Ver escolheCacheControl. */
+  /* v74.17 — TTL do cache desta requisição: 5 minutos, sempre, na geração (ver
+     escolheCacheControl). A consulta de "geração recente" saiu do caminho: ela
+     só servia para ligar o TTL de 1 hora, que passou a ser prejuízo. */
   const quantidadeLeva = Number(body.quantidadeLeva) || 1;
-  _cacheControlAtual = escolheCacheControl(quantidadeLeva, quantidadeLeva >= 3 ? true : await houveGeracaoRecente());
+  _cacheControlAtual = escolheCacheControl(quantidadeLeva, false);
   console.log(`[cache] TTL desta requisição: ${_cacheControlAtual.ttl || "5min"} (leva de ${quantidadeLeva})`);
 
   const capResponse = await checkDailyCap();
@@ -3528,7 +3609,7 @@ ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferrame
   try {
     const system: SistemaPrompt = [
       { type: "text", text: buildSystemPrompt(area), cache_control: cacheControlAtual() },
-      { type: "text", text: buildBlocoFixo({ area, disciplina, recurso, competenciaNum, habilidadeCod }), cache_control: cacheControlAtual() },
+      { type: "text", text: buildBlocoFixo({ area, disciplina }), cache_control: cacheControlAtual() },
     ];
     /* v74.10 — PESQUISA ANTES DE ESCREVER. Em Linguagens e Humanas o assunto é
        pesquisado primeiro e a questão nasce do material verificado. Fora dessas
