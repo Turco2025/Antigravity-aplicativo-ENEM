@@ -3573,7 +3573,7 @@ async function generateQuestion(q){
     // Consumo relatado pelo backend (tokens novos, escritos e lidos do cache).
     // Serve para conferir, em produção, que o cache de prompt está valendo.
     if(payload.uso) somaUso(payload.uso);
-    /* v18.25 — VALIDAÇÃO INDEPENDENTE DA FONTE (backend v74.21). Em Linguagens e
+    /* v18.25/v18.26 — VALIDAÇÃO INDEPENDENTE DA FONTE (backend v74.21). Em Linguagens e
        Humanas a questão só é gerada depois que um agente validador aprovou a
        fonte pesquisada. O veredito vem em fontesDiag.validacao e fica na questão
        (vai junto com o simulado arquivado) para aparecer na auditoria local do
@@ -4996,8 +4996,13 @@ function auditaQuestaoLocal(q){
   if(q.validacaoFonte && typeof q.validacaoFonte === "object"){
     const v = q.validacaoFonte;
     if(v.libera === true){
-      info("Fonte validada pelo agente validador · nível " + String(v.nivel || "?") + " · suporte " + String(v.suporte || "?") +
-           " · confiança " + String(v.confianca || "?") + (v.fonteAberta ? " · página aberta" : " · página não aberta (conferida pelos resultados da busca)") +
+      /* v18.26 — aprovação RESTRITA ao confirmado (backend v74.21c): o validador
+         descartou o trecho literal e liberou só os fatos que confirmou; a
+         questão é paráfrase com referência, sem citação. */
+      const restrita = v.estado === "aprovado_restrito";
+      info("Fonte validada pelo agente validador" + (restrita ? " (aprovação restrita ao confirmado — paráfrase, sem citação literal)" : "") +
+           " · nível " + String(v.nivel || "?") + " · suporte " + String(v.suporte || "?") +
+           " · confiança " + String(v.confianca || "?") + (v.fonteAberta ? " · página localizada" : " · página não localizada pela busca restrita") +
            (Number(v.rodada) > 1 ? " · aprovada na " + v.rodada + "ª rodada" : "") + ".");
     } else {
       aviso("Fonte não validada pelo agente validador" + (v.motivo ? ": " + String(v.motivo).slice(0, 200) : "") + ".");

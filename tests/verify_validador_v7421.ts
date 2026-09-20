@@ -72,7 +72,7 @@ async function callClaudeForJSON(_s: any, userMsg: string, ferramentaServidor: a
   if (fetches && Array.isArray(passo.fetches)) fetches.push(...passo.fetches);
   return passo.resposta;
 }
-export { pesquisarFonteReal, liberaGeracao, conferenciaPreviaDossie, MODO_VALIDADOR, DOMINIOS_VETADOS, RODADAS_VALIDACAO, MS_MINIMO_PARA_VALIDAR, MS_MINIMO_PARA_SEGUNDA_RODADA };
+export { pesquisarFonteReal, liberaGeracao, liberaRestritoAoConfirmado, conferenciaPreviaDossie, MODO_VALIDADOR, DOMINIOS_VETADOS, RODADAS_VALIDACAO, MS_MINIMO_PARA_VALIDAR, MS_MINIMO_PARA_SEGUNDA_RODADA };
 `;
 const tmp = await Deno.makeTempDir();
 await Deno.writeTextFile(`${tmp}/mod.ts`, modulo);
@@ -200,6 +200,28 @@ t("G1 ferramenta recusada pela API → repete a MESMA rodada sem ferramenta, mod
   && r.validacao.libera === true && r.validacao.modo === "sem_ferramenta" && r.validacao.fonteAberta === false);
 t("G2 a mensagem sem ferramenta manda declarar que não abriu a fonte",
   __stub.chamadas[2].userMsg.includes("declare em comoVerificou que não abriu a fonte"));
+
+/* I — v74.21c: aprovação restrita ao confirmado */
+const vParcialI = { ...vReprovado, afirmacoesComSuporte: ["Sodré fundou a Liga em 5/11/1904", "Varela usava o jornal contra a vacina", "Barbosa Lima se opôs à lei"], afirmacoesSemSuporte: ["frase de abertura não confirmada"] };
+roteiro(
+  { resposta: dossieBom(), buscas: [{ url: URL_ACERVO, title: "" }] },
+  { resposta: vParcialI, buscas: [{ url: URL_ACERVO, title: "a própria página" }] },   // página localizada
+);
+r = await pesquisarFonteReal({ area: "humanas", disciplina: "História", tema: "Revolta da Vacina" }, [], [], muitoTempo);
+t("I1 suporte parcial com página localizada, nível A e 3 fatos → aprovação RESTRITA na mesma rodada, sem segunda pesquisa",
+  __stub.chamadas.length === 2 && r.encontrou === true && r.validacao.libera === true && r.validacao.estado === "aprovado_restrito" && r.rodadas === 1);
+t("I2 o material vira a lista de fatos do validador, sem trecho literal, e o dossiê fica marcado como restrito",
+  r.restritoAoConfirmado === true && r.trechoEhLiteral === false && r.trecho.startsWith("1. Sodré fundou a Liga") && r.trecho.includes("3. Barbosa Lima")
+  && r.validacao.motivo.startsWith("aprovação restrita ao confirmado:"));
+roteiro(
+  { resposta: dossieBom(), buscas: [{ url: URL_ACERVO, title: "" }] },
+  { resposta: vParcialI, buscas: [{ url: "https://bndigital.bn.gov.br/outra-pagina", title: "" }] },   // página NÃO localizada
+  { resposta: dossieBom(URL_FORA), buscas: [{ url: URL_FORA, title: "" }] },
+  { resposta: { ...vParcialI, afirmacoesComSuporte: ["a", "b"] }, buscas: [{ url: URL_FORA, title: "" }] },   // só 2 fatos
+);
+r = await pesquisarFonteReal({ area: "humanas", disciplina: "História", tema: "Revolta da Vacina" }, [], [], muitoTempo);
+t("I3 sem página localizada, ou com menos de 3 fatos, a restrita NÃO libera — segue para a rodada 2 e bloqueia",
+  __stub.chamadas.length === 4 && r.encontrou === false && r.bloqueado === true);
 
 /* H — fora do escopo */
 roteiro();

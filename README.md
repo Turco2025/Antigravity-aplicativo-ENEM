@@ -275,6 +275,48 @@ Anthropic, robots.txt ou filtro de domínio — e uma pendurada num PDF). Três 
    pesquisador, 60 s no validador. O teto único de 240 s era maior que a vida da função.
 5. O modo efetivo, o erro do fetch e os resultados da busca restrita vão para o log da função.
 
+### Quarto ensaio (20/09, commit `2b44268f`): o squad inteiro funcionando — e a aprovação restrita ao confirmado (v74.21c · app v18.26)
+
+Três questões reais no slug de teste, com a busca restrita ao domínio no validador:
+
+| Questão | Rodada 1 | Validador | Elaborador | Auditor | Resultado | US$ |
+|---|---|---|---|---|---|---|
+| Literatura — Machado, *Memórias Póstumas* | BBM/USP → reprovada (referência misturava "Nova Aguilar 1994" com Domínio Público; trecho cortado) · rodada 2: **Domínio Público** | aprovada, nível A | citação literal real do cap. XIII | aprovada | **entregue** | 0,353 |
+| História — Revolta da Vacina | Fiocruz → reprovada por prefixo de URL (`portal.fiocruz.br` × `fiocruz.br`) · rodada 2: **Arquivo Nacional**, página localizada, 4 fatos confirmados | reprovada: trecho "literal" só parcialmente confirmado | — | — | bloqueada | 0,213 |
+| Artes — Abaporu | **BNDigital**, rodada 1 | aprovada, nível A, página localizada | gerada | **reprovou**: o texto-base deu a entender que o Abaporu foi criado para o Manifesto — a data não está na fonte (`questaoDentroDasAfirmacoes`) | entregue marcada | 0,200 |
+
+Tudo o que foi desenhado aconteceu — acervos pelo servidor em 3 de 3, página localizada em 4 de 6
+validações, o validador pegando referência misturada, URL imprecisa e trecho não confirmado, o
+auditor pegando o elaborador extrapolando. Mas **1 questão limpa em 3**, a US$ 0,20–0,35 por
+tentativa (um terço é cache frio; em leva, ≈ 0,10–0,12 com uma rodada, 0,18 com duas). Quatro
+decisões do professor ("realize 1, 2, 3 e 4"):
+
+1. **Elaborador preso à lista.** `buildBlocoValidacaoDossie` passa a dizer, com todas as letras:
+   tudo o que não está na lista de afirmações com suporte nem no material é PROIBIDO — inclusive o
+   que o modelo sabe que é verdade (data de criação, descrição da obra, contexto). O caso do Abaporu.
+2. **Pesquisador**: URL copiada caractere a caractere (subdomínio e caminho); preferir "fatos
+   confirmados" a trecho literal longo — `trechoEhLiteral: true` só para passagem curta e contínua
+   copiada tal qual; a referência descreve só a fonte de fato usada. Os casos Fiocruz, Revolta da
+   Vacina e Machado/rodada 1.
+3. **Cache quente**: o app já gera a primeira questão da leva sozinha (ela grava, as outras leem);
+   o marca-passo (`?aquecer=1`) passa a aquecer também o sistema do validador.
+4. **Aprovação restrita ao confirmado** (`liberaRestritoAoConfirmado`). Quando a trava estrita
+   reprova só pelo trecho literal, mas a fonte existe, a **página foi localizada** pela busca no
+   domínio, é **nível A ou B**, autoria e obra conferem, não há divergência de data, a confiança não
+   é baixa e o validador confirmou **≥ 3 fatos**: o trecho do pesquisador é **descartado**, a lista
+   de fatos do validador vira o material, e a questão sai como **paráfrase com referência, sem
+   aspas** — regra 6 do professor. O dossiê fica marcado (`restritoAoConfirmado`); o elaborador
+   recebe a proibição explícita de citar; `conferenciaFontes` reprova `tipoUso: "citacao"` nesse
+   caso; o auditor é avisado. A trava estrita (`liberaGeracao`) **não mudou** — este é um segundo
+   portão, depois dela. A História teria sido entregue. Vale para todas as disciplinas até o
+   professor restringir (`DISCIPLINAS_SEM_APROVACAO_RESTRITA`, vazio).
+
+No app (v18.26) a linha da auditoria local diz "aprovação restrita ao confirmado — paráfrase, sem
+citação literal" quando for o caso. Log: `validacao_status = aprovado_restrito`.
+
+Testes: seção **N** (8) em `verify_fontes_backend.ts` (128 no total); cenário **I** (3) em
+`verify_validador_v7421.ts` (23); self-test `v7421c_aprovacaoRestrita`.
+
 ### Custo esperado e o que ainda falta medir
 
 O validador custa ≈ US$ 0,006 por rodada sem ferramenta e ≈ US$ 0,018 com `web_fetch` (estimativa;

@@ -657,9 +657,9 @@ const FERRAMENTA_DOSSIE_FONTE = {
       obra: { type: "string", description: "Obra, verbete, página ou matéria." },
       ano: { type: "string", description: "Ano confirmado na página. Vazio se a página não exibir data — não suponha." },
       referencia: { type: "string", description: "Referência ABNT completa, só com dados confirmados." },
-      url: { type: "string", description: "URL que apareceu num resultado real desta busca." },
-      trecho: { type: "string", description: "O material para a questão: um trecho literal curto (até 300 caracteres) OU, quando não houver texto citável, os fatos confirmados em até cinco linhas. É isto que o texto-base vai usar." },
-      trechoEhLiteral: { type: "boolean", description: "true se 'trecho' são palavras copiadas da fonte; false se é um resumo dos fatos confirmados." },
+      url: { type: "string", description: "URL que apareceu num resultado real desta busca, copiada EXATAMENTE (subdomínio e caminho inteiros). O backend confere a URL exata." },
+      trecho: { type: "string", description: "O material para a questão: um trecho literal CURTO (até 300 caracteres, contínuo, copiado tal qual) OU os fatos confirmados em até cinco linhas. Na dúvida, fatos confirmados. É isto que o texto-base vai usar." },
+      trechoEhLiteral: { type: "boolean", description: "true SOMENTE se 'trecho' é uma passagem curta e contínua copiada palavra a palavra de um resultado desta busca; false se é resumo, junção de partes ou fatos confirmados." },
       abriuAFonte: { type: "boolean", description: "true se você abriu a página e leu o conteúdo; false se viu apenas o resumo do resultado de busca." },
       comoVerificou: { type: "string", description: "Em uma frase: onde confirmou." },
     },
@@ -720,7 +720,9 @@ ${REGRA_PESQUISA_PROFESSOR}
 
 COMO ISSO SE APLICA A VOCÊ, AGORA:
 · USE a ferramenta web_search. Seu conhecimento serve para orientar a busca, mas não substitui a confirmação: qualquer dúvida sobre existência, autoria, título, data ou conteúdo exige consulta externa.
-· Só declare uma URL que tenha aparecido de fato num resultado de busca desta conversa. O backend confere.
+· Só declare uma URL que tenha aparecido de fato num resultado de busca desta conversa, COPIADA CARACTERE A CARACTERE — incluindo o subdomínio ("portal.", "www.", "digital.") e o caminho inteiro. O backend confere a URL exata; "fiocruz.br/x" no lugar de "portal.fiocruz.br/x" reprova (ensaio de 20/09).
+· PREFIRA "FATOS CONFIRMADOS" A TRECHO LITERAL LONGO. Marque "trechoEhLiteral": true SOMENTE para uma passagem curta (até 300 caracteres), contínua, copiada tal qual de um resultado desta busca. Se você resumiu, juntou partes de lugares diferentes da página ou completou uma frase, é "fatos confirmados" ("trechoEhLiteral": false). O validador confere palavra a palavra o que você declarar literal — e um trecho "literal" montado derruba a fonte inteira (ensaio de 20/09, Revolta da Vacina).
+· A "referencia" descreve SÓ a fonte que você de fato usou. Não misture uma edição impressa que você não abriu (editora, ano de edição) com a página digital de onde tirou o trecho — isso reprovou a rodada 1 de Machado de Assis em 20/09.
 · Autoria institucional é legítima e é o padrão da ABNT em acervo e órgão público: sem autor assinado, preencha "instituicao" e deixe "autor" vazio. NUNCA invente nome de pessoa.
 · "ano" só se a página exibir a data. Campo não confirmado fica VAZIO — inventar data de publicação é proibido pelo item 2.
 · Em "trecho", só entra o que está na fonte. Não complete, não embeleze, não deduza.
@@ -893,15 +895,17 @@ Na referência, use o formato do item 5: "AUTOR. Título da obra. Editora ou ins
 /* v74.21 — o veredito do validador viaja com o dossiê: é o que faz o
    elaborador ficar DENTRO do que foi validado, em vez de "em cima do material"
    em geral. Sem validação aprovada não há dossiê (o handler bloqueia antes). */
-function buildBlocoValidacaoDossie(v: any): string {
+function buildBlocoValidacaoDossie(v: any, restrito = false): string {
   if (!v || v.libera !== true) return "";
   const com = Array.isArray(v.afirmacoesComSuporte) ? v.afirmacoesComSuporte : [];
   const sem = Array.isArray(v.afirmacoesSemSuporte) ? v.afirmacoesSemSuporte : [];
-  return `· VALIDAÇÃO INDEPENDENTE (agente validador): APROVADA · fonte nível ${String(v.nivel || "?")} · suporte ${String(v.suporte || "direto")} · confiança ${String(v.confianca || "alta")}${v.natureza ? ` · material: ${String(v.natureza).replace(/_/g, " ")}` : ""}
-· AFIRMAÇÕES QUE A QUESTÃO PODE FAZER — têm suporte na fonte; fique DENTRO delas:
+  return `· VALIDAÇÃO INDEPENDENTE (agente validador): ${restrito ? "APROVADA RESTRITA AO CONFIRMADO" : "APROVADA"} · fonte nível ${String(v.nivel || "?")} · suporte ${String(v.suporte || "direto")} · confiança ${String(v.confianca || "alta")}${v.natureza ? ` · material: ${String(v.natureza).replace(/_/g, " ")}` : ""}
+· AFIRMAÇÕES QUE A QUESTÃO PODE FAZER — têm suporte na fonte:
 ${com.map((a: string, i: number) => `  ${i + 1}. ${a}`).join("\n") || "  (nenhuma listada — use só o MATERIAL acima, literalmente)"}${sem.length ? `
 · NÃO AFIRME (o dossiê trazia, a fonte NÃO sustenta): ${sem.join(" · ")}` : ""}${v.observacoes ? `
 · observação do validador: ${String(v.observacoes)}` : ""}
+· ⛔ TUDO O QUE NÃO ESTÁ NA LISTA ACIMA NEM NO MATERIAL É PROIBIDO — no texto-base, no comando, nas alternativas, nas legendas, no gabarito e na resolução comentada. Isso inclui o que você SABE que é verdade: data de criação, descrição da obra, contexto, intenção do autor, dados numéricos. Se a data da obra não está na lista, a questão não diz a data. Se a lista não descreve a obra, a questão não a descreve. O auditor confere a questão CONTRA esta lista e reprova o que sair dela (ensaio de 20/09: o texto-base disse que o Abaporu foi criado para o Manifesto — a fonte não dizia isso, e a questão foi reprovada). A contextualização e o comando podem ser SEUS, desde que não afirmem nada factual sobre a obra, o autor ou a instituição além da lista.${restrito ? `
+· ⛔ APROVAÇÃO RESTRITA: o trecho literal do pesquisador foi DESCARTADO pelo validador. É PROIBIDO usar aspas ou apresentar qualquer frase como citação desta fonte. Escreva o texto-base como PARÁFRASE FIEL dos fatos listados, com a referência, e declare "tipoUso": "parafrase" (nunca "citacao"). O backend reprova "citacao" neste caso.` : ""}
 `;
 }
 function buildDossieFonte(d: any): string {
@@ -915,11 +919,11 @@ Uma etapa anterior pesquisou o assunto e trouxe esta fonte real. Use ESTA fonte 
 · referência: ${String(d.referencia || "")}
 · url verificada: ${String(d.url || "")}
 · a fonte foi aberta e lida: ${d.abriuAFonte === true ? "sim" : "não — só o resumo da busca"}
-· MATERIAL (${d.trechoEhLiteral === true ? "trecho literal" : "fatos confirmados"}):
+· MATERIAL (${d.trechoEhLiteral === true ? "trecho literal" : d.restritoAoConfirmado === true ? "fatos confirmados pelo VALIDADOR — só estes" : "fatos confirmados"}):
 """
 ${String(d.trecho || "").slice(0, 1200)}
 """
-${buildBlocoValidacaoDossie(d.validacao)}
+${buildBlocoValidacaoDossie(d.validacao, d.restritoAoConfirmado === true)}
 A BUSCA NA WEB ESTÁ DESLIGADA NESTA ETAPA, de propósito: a pesquisa já foi feita e validada na etapa anterior (itens 1 a 3 da regra), e o item 3 manda que a fonte ORIGINE a questão. Não procure outra fonte, não complete de memória: escreva a questão em cima do material acima. Se ele não bastar, use "tipoUso":"proprio".
 
 Como usar: o texto-base nasce DESTE material. Você pode resumir, parafrasear e contextualizar, mas NÃO pode afirmar sobre esta obra, autor ou instituição nada que não esteja acima — foi exatamente assim que a leva anterior atribuiu a obras reais coisas que elas não têm. Ao preencher o campo "fonte" da entrega, copie autor/instituicao/obra/ano/referencia/url deste dossiê, sem alterar, e marque "conferidoNaFonte" conforme a linha "a fonte foi aberta e lida" acima. Se o material NÃO der uma boa questão, escreva uma situação-problema de sua autoria e declare "tipoUso":"proprio" — sem citar esta fonte no texto-base.
@@ -1186,6 +1190,40 @@ function liberaGeracao(v: any, nivelDominio: string): { libera: boolean; motivo:
   return { libera: true, motivo: "" };
 }
 
+/* v74.21c — APROVAÇÃO RESTRITA AO CONFIRMADO (decisão do professor, 20/09).
+   Caso real: Revolta da Vacina (id 1212). Página do Arquivo Nacional localizada,
+   quatro fatos confirmados pelo validador — e o dossiê inteiro reprovado
+   porque o trecho declarado literal trazia frases que a página não mostrava.
+   Duas rodadas, US$ 0,21, nenhuma questão.
+   Regra: quando a fonte existe, foi LOCALIZADA pela busca no domínio, é nível
+   A ou B, autoria e obra conferem, não há divergência de data, e o validador
+   confirmou pelo menos 3 fatos — e o problema é só o trecho literal —, aprova-se
+   SÓ O CONFIRMADO: o trecho do pesquisador é descartado, a lista de fatos do
+   validador vira o material, e a questão sai como PARÁFRASE com referência,
+   sem aspas (regra 6 do professor; conferenciaFontes reprova "citacao" nesse
+   caso). Vale para todas as disciplinas até o professor restringir
+   (DISCIPLINAS_SEM_APROVACAO_RESTRITA). */
+const MINIMO_FATOS_APROVACAO_RESTRITA = 3;
+const DISCIPLINAS_SEM_APROVACAO_RESTRITA: string[] = [];
+function liberaRestritoAoConfirmado(v: any, nivelDominio: string, fonteLocalizada: boolean, disciplina: string): { libera: boolean; motivo: string } {
+  if (!v || typeof v !== "object") return { libera: false, motivo: "sem veredito" };
+  if (DISCIPLINAS_SEM_APROVACAO_RESTRITA.includes(String(disciplina || "").trim())) return { libera: false, motivo: "disciplina exige trecho literal confirmado" };
+  const nivel = piorNivel(nivelDominio, String(v.nivelFonte || ""));
+  if (nivel !== "A" && nivel !== "B") return { libera: false, motivo: `nível ${nivel} — só A ou B` };
+  if (fonteLocalizada !== true) return { libera: false, motivo: "página da fonte não localizada" };
+  if (v.status !== "corrigir" && v.status !== "aprovado") return { libera: false, motivo: `status "${String(v.status || "?")}"` };
+  if (v.fonteExiste !== true) return { libera: false, motivo: "fonte não confirmada" };
+  if (v.referenciaConfere !== true) return { libera: false, motivo: "referência não confere" };
+  if (v.autorConfirmado !== true) return { libera: false, motivo: "autoria não confirmada" };
+  if (v.obraConfirmada !== true) return { libera: false, motivo: "obra/página não confirmada" };
+  if (v.dataConfirmada === "divergente") return { libera: false, motivo: "divergência documental de data" };
+  if (v.confianca === "baixa") return { libera: false, motivo: "confiança baixa" };
+  if (v.suporteDaEvidencia !== "direto" && v.suporteDaEvidencia !== "parcial") return { libera: false, motivo: `suporte "${String(v.suporteDaEvidencia || "?")}"` };
+  const fatos = listaDeTextos(v.afirmacoesComSuporte, 5, 140).filter((a) => !/^nenhum/i.test(a));
+  if (fatos.length < MINIMO_FATOS_APROVACAO_RESTRITA) return { libera: false, motivo: `só ${fatos.length} fato(s) confirmado(s) — mínimo ${MINIMO_FATOS_APROVACAO_RESTRITA}` };
+  return { libera: true, motivo: "" };
+}
+
 async function validarDossie(
   o: { area: string; disciplina: string; tema: string; eixoTematico?: string; recorte?: string },
   d: any, usos: any[], buscas: { url: string; title: string }[], rodada: number, motivoAnterior: string, pre: { nivel: NivelFonte; host: string },
@@ -1331,6 +1369,21 @@ async function pesquisarFonteReal(
     if (lib.libera) {
       console.log(`[validador] rodada ${tentativa} APROVADA · nível ${d.validacao.nivel} · suporte ${d.validacao.suporte} · confiança ${d.validacao.confianca} · fonte aberta ${d.abriuAFonte} · modo ${r.modo}`);
       d.rodadas = tentativa;
+      return d;
+    }
+    /* v74.21c — aprovação restrita ao confirmado (ver liberaRestritoAoConfirmado). */
+    const restrito = r.v ? liberaRestritoAoConfirmado(v, pre.nivel, r.fonteAberta === true, o.disciplina) : { libera: false, motivo: "" };
+    if (restrito.libera) {
+      const fatos = d.validacao.afirmacoesComSuporte.filter((a: string) => !/^nenhum/i.test(a));
+      d.trecho = fatos.map((a: string, i: number) => `${i + 1}. ${a}`).join("\n");
+      d.trechoEhLiteral = false;
+      d.restritoAoConfirmado = true;
+      d.validacao.estado = "aprovado_restrito";
+      d.validacao.libera = true;
+      d.validacao.motivo = `aprovação restrita ao confirmado: ${lib.motivo}`;
+      d.validacao.suporte = "direto";   // o que sobrou tem suporte direto — o resto foi descartado
+      d.rodadas = tentativa;
+      console.log(`[validador] rodada ${tentativa} APROVADA RESTRITA AO CONFIRMADO (${fatos.length} fatos; descartado: ${lib.motivo}) · nível ${d.validacao.nivel} · modo ${r.modo}`);
       return d;
     }
     motivoAnterior = `o validador reprovou o dossiê anterior (${lib.motivo})`
@@ -3316,7 +3369,8 @@ VALIDAÇÃO INDEPENDENTE DO DOSSIÊ (agente validador, antes da elaboração) �
 · AFIRMAÇÕES COM SUPORTE NA FONTE (a questão podia usar):
 ${com.map((a: string, i: number) => `  ${i + 1}. ${a}`).join("\n") || "  (nenhuma listada)"}${sem.length ? `
 · SEM SUPORTE (a questão NÃO podia usar): ${sem.join(" · ")}` : ""}
-· "questaoDentroDasAfirmacoes": tudo o que a questão afirma sobre a obra, o autor ou a instituição cabe na lista COM SUPORTE? Se a questão usou algo da lista SEM SUPORTE, ou algo que não está em lista nenhuma nem no MATERIAL, responda false.`;
+· "questaoDentroDasAfirmacoes": tudo o que a questão afirma sobre a obra, o autor ou a instituição cabe na lista COM SUPORTE? Se a questão usou algo da lista SEM SUPORTE, ou algo que não está em lista nenhuma nem no MATERIAL, responda false.${v.estado === "aprovado_restrito" ? `
+· APROVAÇÃO RESTRITA AO CONFIRMADO: o trecho literal do pesquisador foi descartado; a questão só podia parafrasear a lista acima. Aspas atribuídas a esta fonte → "usoIdentificadoCorretamente" = false.` : ""}`;
 }
 function buildAuditoriaFontesPrompt(data: any, dossie?: any): string {
   const alts = (data && data.alternativas) || {};
@@ -3456,6 +3510,15 @@ async function garantirFontesReais(
      Custo zero, e é o que sustenta a auditoria poder rodar sem busca. */
   const doss = conferenciaDossie(data, dossiePrevio);
   diag.dossie = doss.estado;
+  /* v74.21c — dossiê aprovado RESTRITO ao confirmado: a questão não pode citar
+     literalmente (o trecho literal foi descartado pelo validador). */
+  if (dossiePrevio && dossiePrevio.restritoAoConfirmado === true && det.tipoUso === "citacao") {
+    diag.estado = "reprovado";
+    diag.motivo = "a fonte foi aprovada RESTRITA AO CONFIRMADO (paráfrase apenas) e a questão declarou citação literal";
+    data.fonteNaoVerificada = { motivo: diag.motivo, mensagem: MENSAGEM_FONTE_BLOQUEIO, etapa: "conferência do dossiê" };
+    console.error(`[fontes] BLOQUEADA: citação literal em dossiê restrito ao confirmado`);
+    return diag;
+  }
   if (doss.estado === "fonte_trocada") {
     diag.estado = "reprovado";
     diag.motivo = doss.motivo;
@@ -3593,6 +3656,7 @@ async function aquecerCacheResponse(url: URL) {
   await tentar("geracao", sistemaGeracao, ferramentaQuestaoPara(recurso, fontesReaisEstrito(area), disciplina));
   if (fontesReaisEstrito(area)) {
     await tentar("pesquisa", [{ type: "text", text: SISTEMA_PESQUISA_FONTE, cache_control: CACHE_1H }], FERRAMENTA_DOSSIE_FONTE);
+    await tentar("validacao", [{ type: "text", text: SISTEMA_VALIDACAO_FONTE, cache_control: CACHE_1H }], FERRAMENTA_VALIDACAO_FONTE);   // v74.21c
     await tentar("auditoria", [{ type: "text", text: SISTEMA_AUDITORIA_FONTES, cache_control: CACHE_1H }], FERRAMENTA_AUDITORIA_FONTE);
   }
   const uso = resumoUso(usos);
@@ -3649,7 +3713,7 @@ function selfTestResponse() {
     conferenciaPreviaDossie.toString(), liberaGeracao.toString(), validarDossie.toString(), ferramentaFetchPara.toString(),
     buildBlocoValidacaoDossie.toString(), buildAfirmacoesValidadasParaAuditoria.toString(), JSON.stringify(FERRAMENTA_AUDITORIA_FONTE),
     JSON.stringify([BUSCA_PESQUISADOR_ACERVOS, MODO_VALIDADOR, TETO_TOKENS_FETCH_VALIDADOR, RODADAS_VALIDACAO, MS_MINIMO_PARA_VALIDAR, MS_MINIMO_PARA_SEGUNDA_RODADA]),
-    ferramentaBuscaNoDominioPara.toString(),
+    ferramentaBuscaNoDominioPara.toString(), liberaRestritoAoConfirmado.toString(), JSON.stringify([MINIMO_FATOS_APROVACAO_RESTRITA, DISCIPLINAS_SEM_APROVACAO_RESTRITA]),   // v74.21c
     JSON.stringify(ACERVOS_PRIORITARIOS), JSON.stringify(DISCIPLINAS_COM_ACERVO_PRIORITARIO), buildAcervosPrioritarios.toString(),   // v74.16
     JSON.stringify([WEB_SEARCH_TOOL, BUSCA_PESQUISADOR, BUSCA_PESQUISADOR_RETRY, BUSCA_AUDITORIA]),
     buildSystemPlanejamento.toString(),
@@ -4124,6 +4188,31 @@ function selfTestResponse() {
             && registraUso.toString().includes("usage.ms") && resumoUso.toString().includes("duracaoMs");
         })(),
         v7421_regraDoProfessorInalterada: fnv1a(REGRA_FONTES_PROFESSOR) === "17ab00e5",
+        /* v74.21c — aprovação restrita ao confirmado: só com página localizada,
+           nível A/B, autoria+obra+referência conferindo, ≥ 3 fatos, e nunca
+           com confiança baixa, nível C/D ou data divergente. O dossiê restrito
+           proíbe citação literal, e o elaborador recebe a proibição explícita. */
+        v7421c_aprovacaoRestrita: (() => {
+          const base: any = { status: "corrigir", fonteExiste: true, referenciaConfere: true, autorConfirmado: true, obraConfirmada: true, dataConfirmada: "confirmada", suporteDaEvidencia: "parcial", confianca: "media", nivelFonte: "A", afirmacoesComSuporte: ["a", "b", "c"] };
+          return liberaRestritoAoConfirmado(base, "A", true, "História").libera === true
+            && liberaRestritoAoConfirmado(base, "A", false, "História").libera === false
+            && liberaRestritoAoConfirmado(base, "C", true, "História").libera === false
+            && liberaRestritoAoConfirmado({ ...base, confianca: "baixa" }, "A", true, "História").libera === false
+            && liberaRestritoAoConfirmado({ ...base, afirmacoesComSuporte: ["a", "b"] }, "A", true, "História").libera === false
+            && liberaRestritoAoConfirmado({ ...base, dataConfirmada: "divergente" }, "A", true, "História").libera === false
+            && liberaRestritoAoConfirmado({ ...base, status: "rejeitar" }, "A", true, "História").libera === false
+            && liberaRestritoAoConfirmado({ ...base, afirmacoesComSuporte: ["Nenhuma: nada confirmado", "b", "c"] }, "A", true, "História").libera === false
+            && liberaGeracao(base, "A").libera === false
+            && buildBlocoValidacaoDossie({ libera: true, afirmacoesComSuporte: ["x"] }, true).includes("APROVAÇÃO RESTRITA")
+            && buildBlocoValidacaoDossie({ libera: true, afirmacoesComSuporte: ["x"] }, true).includes("PROIBIDO usar aspas")
+            && buildBlocoValidacaoDossie({ libera: true, afirmacoesComSuporte: ["x"] }).includes("TUDO O QUE NÃO ESTÁ NA LISTA ACIMA NEM NO MATERIAL É PROIBIDO")
+            && !buildBlocoValidacaoDossie({ libera: true, afirmacoesComSuporte: ["x"] }).includes("APROVAÇÃO RESTRITA")
+            && pesquisarFonteReal.toString().includes("liberaRestritoAoConfirmado(v, pre.nivel, r.fonteAberta === true, o.disciplina)")
+            && garantirFontesReais.toString().includes("restritoAoConfirmado === true && det.tipoUso === \"citacao\"")
+            && SISTEMA_PESQUISA_FONTE.includes("COPIADA CARACTERE A CARACTERE")
+            && SISTEMA_PESQUISA_FONTE.includes("PREFIRA \"FATOS CONFIRMADOS\" A TRECHO LITERAL LONGO")
+            && aquecerCacheResponse.toString().includes("SISTEMA_VALIDACAO_FONTE");
+        })(),
         /* v74.20 — A CALIBRAÇÃO PASSOU A SAIR SÓ DAS QUATRO PROVAS RECENTES
            (2022-2025), por decisão do professor, e 2021 ficou fora porque o PDF
            daquele ano tem a fonte quebrada. Prova que a tabela carrega os

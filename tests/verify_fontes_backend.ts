@@ -13,6 +13,7 @@
      D. URL inventada (regras 4 e 7)               I. v74.13 — a fonte é a do dossiê
      E. o prompt de auditoria                      L. v74.18 — trava dos acervos
      M. v74.21 — o agente validador entre a pesquisa e a elaboração
+     N. v74.21c — aprovação restrita ao confirmado; elaborador preso à lista
 
    Uso:
      deno run -A tests/verify_fontes_backend.ts supabase/functions/generate-question/index.ts  */
@@ -165,6 +166,9 @@ async function callClaudeForJSON(_s: any, userMsg: string, w: any, usos: any[], 
 ` + recorta("buildValidacaoPrompt") + `
 ` + recorta("ferramentaFetchPara") + `
 ` + recorta("ferramentaBuscaNoDominioPara") + `
+` + recorta("liberaRestritoAoConfirmado") + `
+const MINIMO_FATOS_APROVACAO_RESTRITA = 3;
+const DISCIPLINAS_SEM_APROVACAO_RESTRITA: string[] = [];
 ` + recortaConstArray("DOMINIOS_VETADOS") + `
 ` + recortaConstArray("DOMINIOS_NIVEL_A") + `
 ` + recortaConstArray("DOMINIOS_NIVEL_B") + `
@@ -178,7 +182,7 @@ const SISTEMA_VALIDACAO_FONTE = ${JSON.stringify(recortaConstTemplate("SISTEMA_V
 const FERRAMENTA_VALIDACAO_FONTE = ${recortaObjeto("FERRAMENTA_VALIDACAO_FONTE")};
 export { SISTEMA_AUDITORIA_FONTES, REGRA_FONTES_PROFESSOR };
 export { DOMINIOS_VETADOS, DOMINIOS_NIVEL_A, DOMINIOS_NIVEL_B, ehDominioVetado, nivelDoDominio, piorNivel, conferenciaPreviaDossie,
-         liberaGeracao, buildValidacaoPrompt, ferramentaFetchPara, ferramentaBuscaNoDominioPara, SISTEMA_VALIDACAO_FONTE, FERRAMENTA_VALIDACAO_FONTE, buildBlocoValidacaoDossie };
+         liberaGeracao, liberaRestritoAoConfirmado, buildValidacaoPrompt, ferramentaFetchPara, ferramentaBuscaNoDominioPara, SISTEMA_VALIDACAO_FONTE, FERRAMENTA_VALIDACAO_FONTE, buildBlocoValidacaoDossie };
 export { ACERVOS_PRIORITARIOS, DISCIPLINAS_COM_ACERVO_PRIORITARIO, temAcervoPrioritario, buildAcervosPrioritarios };
 export { DOMINIOS_ACERVO_PRIORITARIO, hostDaUrl, ehDominioDeAcervo, acervoFoiConsultado, consultaCombinadaAcervos };
 export { conferenciaFontes, conferenciaDossie, tokensDeFonte, normalizaUrl, buildAuditoriaFontesPrompt,
@@ -198,7 +202,7 @@ const { conferenciaFontes, conferenciaDossie, normalizaUrl, buildAuditoriaFontes
         DOMINIOS_ACERVO_PRIORITARIO, hostDaUrl, ehDominioDeAcervo, acervoFoiConsultado,
         consultaCombinadaAcervos,
         DOMINIOS_VETADOS, DOMINIOS_NIVEL_A, DOMINIOS_NIVEL_B, ehDominioVetado, nivelDoDominio, piorNivel, conferenciaPreviaDossie,
-        liberaGeracao, buildValidacaoPrompt, ferramentaFetchPara, ferramentaBuscaNoDominioPara, SISTEMA_VALIDACAO_FONTE, FERRAMENTA_VALIDACAO_FONTE, buildBlocoValidacaoDossie,
+        liberaGeracao, liberaRestritoAoConfirmado, buildValidacaoPrompt, ferramentaFetchPara, ferramentaBuscaNoDominioPara, SISTEMA_VALIDACAO_FONTE, FERRAMENTA_VALIDACAO_FONTE, buildBlocoValidacaoDossie,
         __stub } = M;
 
 let ok = 0, bad = 0;
@@ -735,6 +739,47 @@ t("M20 'fonte aberta' é do código: sai dos blocos web_fetch_tool_result e sobr
 t("M21 a regra das 8 fontes do professor não foi tocada",
   REGRA_FONTES_PROFESSOR.includes("É EXPRESSAMENTE PROIBIDO INVENTAR AUTORES, OBRAS, CITAÇÕES OU REFERÊNCIAS")
   && [1, 2, 3, 4, 5, 6, 7, 8].every((n) => REGRA_FONTES_PROFESSOR.includes("\n" + n + ". ")));
+
+/* ─────────────── N. v74.21c — aprovação restrita ao confirmado + elaborador preso à lista ─────────────── */
+const vParcial: any = { status: "corrigir", fonteExiste: true, referenciaConfere: true, autorConfirmado: true, obraConfirmada: true, dataConfirmada: "confirmada", suporteDaEvidencia: "parcial", confianca: "media", nivelFonte: "A", afirmacoesComSuporte: ["Sodré fundou a Liga em 1904", "Varela usava o jornal contra a vacina", "Barbosa Lima se opôs à lei"], afirmacoesSemSuporte: ["frase de abertura"] };
+t("N1 a trava estrita continua reprovando suporte parcial — a restrita é um segundo portão, não um afrouxamento do primeiro",
+  liberaGeracao(vParcial, "A").libera === false && liberaRestritoAoConfirmado(vParcial, "A", true, "História").libera === true);
+t("N2 a aprovação restrita exige página localizada, nível A/B, ≥ 3 fatos, autoria e obra confirmadas, sem data divergente, sem confiança baixa",
+  !liberaRestritoAoConfirmado(vParcial, "A", false, "História").libera
+  && !liberaRestritoAoConfirmado(vParcial, "C", true, "História").libera
+  && !liberaRestritoAoConfirmado({ ...vParcial, afirmacoesComSuporte: ["a", "b"] }, "A", true, "História").libera
+  && !liberaRestritoAoConfirmado({ ...vParcial, autorConfirmado: false }, "A", true, "História").libera
+  && !liberaRestritoAoConfirmado({ ...vParcial, obraConfirmada: false }, "A", true, "História").libera
+  && !liberaRestritoAoConfirmado({ ...vParcial, dataConfirmada: "divergente" }, "A", true, "História").libera
+  && !liberaRestritoAoConfirmado({ ...vParcial, confianca: "baixa" }, "A", true, "História").libera
+  && !liberaRestritoAoConfirmado({ ...vParcial, status: "rejeitar" }, "A", true, "História").libera
+  && !liberaRestritoAoConfirmado({ ...vParcial, suporteDaEvidencia: "nenhum" }, "A", true, "História").libera
+  && !liberaRestritoAoConfirmado({ ...vParcial, nivelFonte: "D" }, "A", true, "História").libera
+  && liberaRestritoAoConfirmado(vParcial, "B", true, "Artes").libera === true);
+t("N3 'Nenhuma: …' não conta como fato confirmado",
+  !liberaRestritoAoConfirmado({ ...vParcial, afirmacoesComSuporte: ["Nenhuma: URL inacessível", "b", "c"] }, "A", true, "História").libera);
+t("N4 o elaborador recebe a proibição explícita de sair da lista, e no modo restrito a proibição de aspas",
+  buildBlocoValidacaoDossie({ libera: true, afirmacoesComSuporte: ["x"] }).includes("TUDO O QUE NÃO ESTÁ NA LISTA ACIMA NEM NO MATERIAL É PROIBIDO")
+  && buildBlocoValidacaoDossie({ libera: true, afirmacoesComSuporte: ["x"] }).includes("data de criação, descrição da obra")
+  && !buildBlocoValidacaoDossie({ libera: true, afirmacoesComSuporte: ["x"] }).includes("APROVAÇÃO RESTRITA")
+  && buildBlocoValidacaoDossie({ libera: true, afirmacoesComSuporte: ["x"] }, true).includes("APROVAÇÃO RESTRITA")
+  && buildBlocoValidacaoDossie({ libera: true, afirmacoesComSuporte: ["x"] }, true).includes("PROIBIDO usar aspas")
+  && buildBlocoValidacaoDossie({ libera: true, afirmacoesComSuporte: ["x"] }, true).includes('"tipoUso": "parafrase"'));
+t("N5 dossiê restrito ao confirmado: o material vira a lista do validador e citação literal reprova na conferência",
+  buildDossieFonte({ encontrou: true, trecho: "1. a\n2. b\n3. c", url: "https://bndigital.bn.gov.br/x", autor: "A", referencia: "R", restritoAoConfirmado: true, trechoEhLiteral: false, validacao: { libera: true, estado: "aprovado_restrito", afirmacoesComSuporte: ["a", "b", "c"] } })
+    .includes("fatos confirmados pelo VALIDADOR — só estes")
+  && fonte.includes('dossiePrevio.restritoAoConfirmado === true && det.tipoUso === "citacao"')
+  && fonte.includes("aprovada RESTRITA AO CONFIRMADO (paráfrase apenas) e a questão declarou citação literal"));
+t("N6 o auditor sabe quando a aprovação foi restrita",
+  buildAuditoriaFontesPrompt({ fonte: {}, disciplina: "História" }, { encontrou: true, trecho: "t", url: "u", autor: "A", referencia: "R", validacao: { libera: true, estado: "aprovado_restrito", afirmacoesComSuporte: ["a"], afirmacoesSemSuporte: [] } })
+    .includes("APROVAÇÃO RESTRITA AO CONFIRMADO")
+  && !buildAuditoriaFontesPrompt({ fonte: {}, disciplina: "História" }, { encontrou: true, trecho: "t", url: "u", autor: "A", referencia: "R", validacao: { libera: true, estado: "aprovado", afirmacoesComSuporte: ["a"], afirmacoesSemSuporte: [] } })
+    .includes("APROVAÇÃO RESTRITA AO CONFIRMADO"));
+t("N7 o pesquisador é instruído a copiar a URL exata, preferir fatos confirmados a trecho literal longo e não misturar edições na referência",
+  fonte.includes("COPIADA CARACTERE A CARACTERE") && fonte.includes("PREFIRA \"FATOS CONFIRMADOS\" A TRECHO LITERAL LONGO")
+  && fonte.includes("Não misture uma edição impressa que você não abriu")
+  && fonte.includes("copiada EXATAMENTE (subdomínio e caminho inteiros)"));
+t("N8 o aquecimento do cache passa a cobrir o validador", fonte.includes('await tentar("validacao", [{ type: "text", text: SISTEMA_VALIDACAO_FONTE'));
 
 console.log(`\n${ok} verificações passaram, ${bad} falharam.`);
 if (bad) Deno.exit(1);
