@@ -11,7 +11,8 @@
      B. escopo por área                            G. autoria institucional (leva de 18/09)
      C. conferência determinística                 H. v74.13 — só o pesquisador busca
      D. URL inventada (regras 4 e 7)               I. v74.13 — a fonte é a do dossiê
-     E. o prompt de auditoria
+     E. o prompt de auditoria                      L. v74.18 — trava dos acervos
+     M. v74.21 — o agente validador entre a pesquisa e a elaboração
 
    Uso:
      deno run -A tests/verify_fontes_backend.ts supabase/functions/generate-question/index.ts  */
@@ -34,7 +35,19 @@ function recorta(nome: string): string {
     if (fonte[q] === "(") np++;
     else if (fonte[q] === ")") { np--; if (np === 0) break; }
   }
-  let k = fonte.indexOf("{", q), nivel = 0, dentroStr = "", escapou = false;
+  /* v74.21: o tipo de retorno pode ser um objeto (`): { estado: string; … } {`).
+     O corpo é a primeira chave, fora de outra chave, seguida de quebra de linha —
+     a chave do tipo vem seguida de espaço. */
+  let k = fonte.indexOf("{", q);
+  {
+    let prof = 0;
+    for (let p = q + 1; p < fonte.length; p++) {
+      const c = fonte[p];
+      if (c === "{") { if (prof === 0 && fonte[p + 1] === "\n") { k = p; break; } prof++; }
+      else if (c === "}") prof--;
+    }
+  }
+  let nivel = 0, dentroStr = "", escapou = false;
   for (let p = k; p < fonte.length; p++) {
     const c = fonte[p];
     if (dentroStr) {
@@ -62,6 +75,28 @@ function recortaConstTemplate(nome: string): string {
     if (fonte[p] === "`") return fonte.slice(ini, p);
   }
   console.error(`FALHA: a const ${nome} não fecha`); Deno.exit(1); return "";
+}
+
+/* v74.21 — recorta uma const declarada como array literal (`const X: string[] = [ ... ];`). */
+function recortaConstArray(nome: string): string {
+  const m = fonte.match(new RegExp(`const ${nome}: string\\[\\] = (\\[[^;]*?\\]);`, "s"));
+  if (!m) { console.error(`FALHA: não achei a const ${nome} em ${alvo}`); Deno.exit(1); }
+  return `const ${nome}: string[] = ${m[1]};`;
+}
+/* v74.21 — recorta uma const objeto (`const X = { ... };`), casando chaves fora de strings. */
+function recortaObjeto(nome: string): string {
+  const marca = `const ${nome} = {`;
+  const a = fonte.indexOf(marca);
+  if (a < 0) { console.error(`FALHA: não achei o objeto ${nome} em ${alvo}`); Deno.exit(1); }
+  let k = a + marca.length - 1, nivel = 0, dentroStr = "", escapou = false;
+  for (let p = k; p < fonte.length; p++) {
+    const c = fonte[p];
+    if (dentroStr) { if (escapou) { escapou = false; continue; } if (c === "\\") { escapou = true; continue; } if (c === dentroStr) dentroStr = ""; continue; }
+    if (c === '"' || c === "'" || c === "`") { dentroStr = c; continue; }
+    if (c === "{") nivel++;
+    else if (c === "}") { nivel--; if (nivel === 0) return fonte.slice(k, p + 1); }
+  }
+  console.error(`FALHA: o objeto ${nome} não fecha`); Deno.exit(1); return "";
 }
 
 // A mensagem, o escopo e os tetos de busca são lidos do MESMO arquivo, não
@@ -119,7 +154,30 @@ async function callClaudeForJSON(_s: any, userMsg: string, w: any, usos: any[], 
 ` + recorta("buildAcervosPrioritarios") + `
 ` + recorta("buscaDaGeracao") + `
 ` + recorta("buildDossieFonte") + `
+` + recorta("buildBlocoValidacaoDossie") + `
+` + recorta("hostBateEm") + `
+` + recorta("ehDominioVetado") + `
+` + recorta("nivelDoDominio") + `
+` + recorta("piorNivel") + `
+` + recorta("conferenciaPreviaDossie") + `
+` + recorta("liberaGeracao") + `
+` + recorta("listaDeTextos") + `
+` + recorta("buildValidacaoPrompt") + `
+` + recorta("ferramentaFetchPara") + `
+` + recortaConstArray("DOMINIOS_VETADOS") + `
+` + recortaConstArray("DOMINIOS_NIVEL_A") + `
+` + recortaConstArray("DOMINIOS_NIVEL_B") + `
+const ORDEM_NIVEL = ["A", "B", "C", "D"] as const;
+type NivelFonte = typeof ORDEM_NIVEL[number];
+type ModoValidador = "sem_ferramenta" | "web_fetch";
+const RODADAS_VALIDACAO = 2;
+const TETO_TOKENS_FETCH_VALIDADOR = 6000;
+const AREA_LABELS: Record<string, string> = { linguagens: "Linguagens, Códigos e suas Tecnologias", humanas: "Ciências Humanas e suas Tecnologias" };
+const SISTEMA_VALIDACAO_FONTE = ${JSON.stringify(recortaConstTemplate("SISTEMA_VALIDACAO_FONTE"))};
+const FERRAMENTA_VALIDACAO_FONTE = ${recortaObjeto("FERRAMENTA_VALIDACAO_FONTE")};
 export { SISTEMA_AUDITORIA_FONTES, REGRA_FONTES_PROFESSOR };
+export { DOMINIOS_VETADOS, DOMINIOS_NIVEL_A, DOMINIOS_NIVEL_B, ehDominioVetado, nivelDoDominio, piorNivel, conferenciaPreviaDossie,
+         liberaGeracao, buildValidacaoPrompt, ferramentaFetchPara, SISTEMA_VALIDACAO_FONTE, FERRAMENTA_VALIDACAO_FONTE, buildBlocoValidacaoDossie };
 export { ACERVOS_PRIORITARIOS, DISCIPLINAS_COM_ACERVO_PRIORITARIO, temAcervoPrioritario, buildAcervosPrioritarios };
 export { DOMINIOS_ACERVO_PRIORITARIO, hostDaUrl, ehDominioDeAcervo, acervoFoiConsultado, consultaCombinadaAcervos };
 export { conferenciaFontes, conferenciaDossie, tokensDeFonte, normalizaUrl, buildAuditoriaFontesPrompt,
@@ -138,6 +196,8 @@ const { conferenciaFontes, conferenciaDossie, normalizaUrl, buildAuditoriaFontes
         DISCIPLINAS_COM_ACERVO_PRIORITARIO, temAcervoPrioritario, buildAcervosPrioritarios,
         DOMINIOS_ACERVO_PRIORITARIO, hostDaUrl, ehDominioDeAcervo, acervoFoiConsultado,
         consultaCombinadaAcervos,
+        DOMINIOS_VETADOS, DOMINIOS_NIVEL_A, DOMINIOS_NIVEL_B, ehDominioVetado, nivelDoDominio, piorNivel, conferenciaPreviaDossie,
+        liberaGeracao, buildValidacaoPrompt, ferramentaFetchPara, SISTEMA_VALIDACAO_FONTE, FERRAMENTA_VALIDACAO_FONTE, buildBlocoValidacaoDossie,
         __stub } = M;
 
 let ok = 0, bad = 0;
@@ -216,12 +276,12 @@ t("E2 a auditoria recebe a legenda do recurso visual quando existe",
 t("E3 SEM dossiê, a auditoria manda usar a busca e não confiar na memória",
   promptAud.includes("web_search") && promptAud.includes("memória"));
 t("E4 a auditoria manda reprovar na dúvida", promptAud.includes("na dúvida, verificar; sem confirmação, não utilizar"));
-t("E5 a ficha da ferramenta tem as DEZ perguntas do professor (12 positivos + varredor + veredito + motivo)",
-  FERRAMENTA_AUDITORIA_FONTE.input_schema.required.length === 15
+t("E5 a ficha da ferramenta tem as DEZ perguntas do professor (12 positivos + varredor + item do validador (v74.21) + veredito + motivo)",
+  FERRAMENTA_AUDITORIA_FONTE.input_schema.required.length === 16
   && ["autorExiste", "obraExiste", "obraPertenceAoAutor", "fonteExiste", "instituicaoExiste",
       "trechoConferidoNaFonte", "parafraseFielAFonte", "usoIdentificadoCorretamente",
       "referenciaLocalizavelEConfirmada", "nadaFoiInventado", "nenhumaFraseAtribuidaIndevidamente",
-      "comprovavelPelaFonte", "inventadoEmOutraParte", "aprovado", "motivo"]
+      "comprovavelPelaFonte", "inventadoEmOutraParte", "questaoDentroDasAfirmacoes", "aprovado", "motivo"]
      .every((k) => FERRAMENTA_AUDITORIA_FONTE.input_schema.required.includes(k)),
   JSON.stringify(FERRAMENTA_AUDITORIA_FONTE.input_schema.required));
 t("E6 a auditoria explica que autoria institucional é legítima (não reprovar por autor vazio)",
@@ -486,13 +546,13 @@ t("K6 o bloco manda buscar dentro dos acervos já na primeira busca, respeitando
   (() => { const b = buildAcervosPrioritarios("Literatura");
     return b.includes("ACERVOS DE PRIORIDADE OBRIGATÓRIA")
       && b.includes("Consulte-os PRIMEIRO, NESTA ORDEM")
-      && b.includes("A sua PRIMEIRA busca")
+      && b.includes("Na PRIMEIRA tentativa de pesquisa o SISTEMA já restringe a busca")
       && b.includes(consultaCombinadaAcervos())
       && b.includes("prefira sempre o acervo que vier ANTES na lista")
       && ORDEM_DO_PROFESSOR.every((u, i) => b.indexOf(u) > -1 && (i === 0 || b.indexOf(u) > b.indexOf(ORDEM_DO_PROFESSOR[i - 1])));
   })());
 t("K7 é PRIORIDADE, não exclusividade: não achando neles, valem as fontes do item 1 da regra",
-  buildAcervosPrioritarios("Artes").includes("Só procure FORA dos acervos quando essa busca não devolver material utilizável")
+  buildAcervosPrioritarios("Artes").includes("Só procure FORA dos acervos quando a busca neles não devolver material utilizável")
   && buildAcervosPrioritarios("Artes").includes("universidades, bibliotecas, museus"));
 t("K8 a prioridade não afrouxa autoria, ano, referência nem trecho conferido",
   buildAcervosPrioritarios("Artes").includes("A prioridade NÃO afrouxa nada"));
@@ -505,8 +565,8 @@ t("K9 a trava da URL continua inteira — nada de link deduzido",
    .v7416_acervosPrioritarios.noPromptDoPesquisador). */
 t("K10 buildPesquisaFontePrompt injeta o bloco pela disciplina da questão",
   fonte.includes("${buildAcervosPrioritarios(o.disciplina)}"));
-t("K11 a segunda tentativa manda sair dos acervos quando eles já foram varridos",
-  fonte.includes("Se você já varreu os acervos de prioridade e eles não tinham o material, procure AGORA fora deles"));
+t("K11 a segunda tentativa manda sair dos acervos quando a primeira, restrita, não achou",
+  fonte.includes("Se a primeira tentativa foi restrita aos acervos de prioridade e eles não tinham o material, procure AGORA fora deles"));
 
 /* ---------- L. v74.18 — a trava de domínio ---------- */
 t("L1 os cinco acervos cabem em quatro domínios (a Hemeroteca vive dentro da BNDigital)",
@@ -543,12 +603,15 @@ t("L6 sabe dizer se a busca chegou a passar pelos acervos",
   && !acervoFoiConsultado([]) && !acervoFoiConsultado(undefined as any));
 t("L7 o bloco avisa que o backend confere o domínio",
   buildAcervosPrioritarios("Artes").includes("O BACKEND CONFERE O DOMÍNIO DA FONTE"));
-t("L8 a trava está no pesquisador, e separa 'não tinham' de 'nem olhou'",
+t("L8 (v74.21) a trava está no pesquisador: a rodada 1 das disciplinas com acervo é restrita PELO SERVIDOR",
   fonte.includes("const exigeAcervo = temAcervoPrioritario(o.disciplina);")
-  && fonte.includes("if (tentativa === 1 && !acervoFoiConsultado(buscas))")
-  && fonte.includes("os acervos de prioridade foram consultados e não tinham o material"));
-t("L9 a fonte de reserva volta marcada quando a busca restrita não acha nada",
-  fonte.includes("if (reserva) {") && fonte.includes("volta a fonte de reserva, fora dos acervos"));
+  && fonte.includes("const restrita = tentativa === 1 && exigeAcervo;")
+  && fonte.includes("restrita ? BUSCA_PESQUISADOR_ACERVOS : (tentativa === 1 ? BUSCA_PESQUISADOR : BUSCA_PESQUISADOR_RETRY)")
+  && /const BUSCA_PESQUISADOR_ACERVOS = \{[^}]*allowed_domains: DOMINIOS_ACERVO_PRIORITARIO[^}]*max_uses: 1 \};/.test(fonte)
+  && !fonte.slice(fonte.indexOf("async function pesquisarFonteReal("), fonte.indexOf("/* v74.19 — O ALVO REPETIDO")).includes("exigirAcervoAgora"));
+t("L9 (v74.21) fonte de fora dos acervos fica marcada, e a segunda tentativa é avisada de que a primeira foi restrita",
+  fonte.includes("a busca restrita aos acervos não devolveu material utilizável; a fonte veio das demais fontes confiáveis")
+  && fonte.includes("procure agora nas demais fontes confiáveis do item 1"));
 t("L10 a geração recebe o bloco só quando vai buscar (sem dossiê)",
   fonte.includes("const acervosDaGeracao = buildDossieFonte(opts.dossie) ? \"\" : buildAcervosPrioritarios(opts.disciplina);")
   && fonte.includes("${acervosDaGeracao}"));
@@ -559,6 +622,113 @@ t("L11 a auditoria recebe o bloco só quando vai buscar (sem dossiê)",
 t("L12 o log passa a registrar o domínio e se ele é de acervo",
   fonte.includes("linha.fonte_dominio = host.slice(0, 120);")
   && fonte.includes("linha.fonte_no_acervo = ehDominioDeAcervo("));
+
+/* ─────────────── M. v74.21 — o agente validador entre a pesquisa e a elaboração ─────────────── */
+t("M1 a lista negra veta o que o professor listou, e nenhum acervo está nela",
+  ["pt.wikipedia.org", "brasilescola.uol.com.br", "todamateria.com.br", "mundoeducacao.uol.com.br", "brainly.com.br", "x.blogspot.com", "meublog.wordpress.com"]
+    .every((h) => ehDominioVetado("https://" + h + "/p"))
+  && DOMINIOS_VETADOS.every((d: string) => !ehDominioDeAcervo("https://" + d + "/"))
+  && !ehDominioVetado("https://bndigital.bn.gov.br/x") && !ehDominioVetado("https://enciclopedia.itaucultural.org.br/x"));
+t("M2 nível por domínio: acervo e gov/edu/scielo = A · instituição cultural = B · jornal = C · vetado ou vazio = D",
+  nivelDoDominio("https://bndigital.bn.gov.br/x") === "A" && nivelDoDominio("https://www.scielo.br/j/x") === "A"
+  && nivelDoDominio("https://search.bbm.usp.br/x") === "A" && nivelDoDominio("https://www.ufmg.br/x") === "A"
+  && nivelDoDominio("https://enciclopedia.itaucultural.org.br/x") === "B" && nivelDoDominio("https://masp.org.br/x") === "B"
+  && nivelDoDominio("https://www1.folha.uol.com.br/x") === "C" && nivelDoDominio("https://editora.com.br/x") === "C"
+  && nivelDoDominio("https://bia-senday.blogspot.com/2014/04/semana-de-arte-moderna-de-1922_7151.html") === "D"
+  && nivelDoDominio("") === "D");
+t("M3 o modelo só rebaixa o nível, nunca sobe",
+  piorNivel("A", "D") === "D" && piorNivel("C", "A") === "C" && piorNivel("B", "") === "C" && piorNivel("A", "A") === "A");
+t("M4 a lista negra vai como blocked_domains em toda web_search; a busca dos acervos usa allowed_domains e não mistura",
+  /const WEB_SEARCH_TOOL = \{[^}]*blocked_domains: DOMINIOS_VETADOS[^}]*\};/.test(fonte)
+  && /const BUSCA_PESQUISADOR_ACERVOS = \{[^}]*allowed_domains: DOMINIOS_ACERVO_PRIORITARIO[^}]*\};/.test(fonte)
+  && !/const BUSCA_PESQUISADOR_ACERVOS = \{[^}]*blocked_domains/.test(fonte));
+const buscasM = [{ url: "https://bndigital.bn.gov.br/dossies/x", title: "t" }, { url: "https://outro.org/y", title: "" }];
+const dossieM: any = { encontrou: true, trecho: "Trecho real.", url: "https://bndigital.bn.gov.br/dossies/x", autor: "", instituicao: "Biblioteca Nacional", referencia: "BIBLIOTECA NACIONAL. Dossiê X.", ano: "1922", trechoEhLiteral: false };
+t("M5 conferência prévia aprova o dossiê íntegro e devolve o nível do domínio",
+  conferenciaPreviaDossie(dossieM, buscasM).estado === "ok" && conferenciaPreviaDossie(dossieM, buscasM).nivel === "A");
+t("M6 conferência prévia reprova URL que não veio da busca (regras 4 e 7)",
+  conferenciaPreviaDossie({ ...dossieM, url: "https://inventada.org/x" }, buscasM).estado === "url_fora_da_busca");
+t("M7 conferência prévia reprova domínio vetado mesmo que tenha vindo da busca",
+  conferenciaPreviaDossie({ ...dossieM, url: "https://x.blogspot.com/a" }, [{ url: "https://x.blogspot.com/a", title: "" }]).estado === "dominio_vetado");
+t("M8 conferência prévia exige autoria e referência, aceita ano vazio e rejeita ano inválido",
+  conferenciaPreviaDossie({ ...dossieM, instituicao: "" }, buscasM).estado === "sem_autoria"
+  && conferenciaPreviaDossie({ ...dossieM, referencia: "" }, buscasM).estado === "sem_referencia"
+  && conferenciaPreviaDossie({ ...dossieM, ano: "" }, buscasM).estado === "ok"
+  && conferenciaPreviaDossie({ ...dossieM, ano: "c. 1922" }, buscasM).estado === "ok"
+  && conferenciaPreviaDossie({ ...dossieM, ano: "século XX" }, buscasM).estado === "ano_invalido");
+const vBom: any = { status: "aprovado", fonteExiste: true, referenciaConfere: true, suporteDaEvidencia: "direto", confianca: "alta", trechoLiteralConfere: "nao_e_literal", dataConfirmada: "confirmada", nivelFonte: "A", afirmacoesComSuporte: ["A obra é de 1922."] };
+t("M9 a trava (seção 42 do professor) libera só com aprovado + fonte + referência + suporte direto + confiança alta",
+  liberaGeracao(vBom, "A").libera === true
+  && !liberaGeracao({ ...vBom, status: "corrigir" }, "A").libera
+  && !liberaGeracao({ ...vBom, suporteDaEvidencia: "parcial" }, "A").libera
+  && !liberaGeracao({ ...vBom, confianca: "media" }, "A").libera
+  && !liberaGeracao({ ...vBom, fonteExiste: false }, "A").libera
+  && !liberaGeracao({ ...vBom, referenciaConfere: false }, "A").libera);
+t("M10 a trava também reprova trecho literal não conferido, data divergente, lista vazia, nível D e veredito ausente",
+  !liberaGeracao({ ...vBom, trechoLiteralConfere: "nao_confere" }, "A").libera
+  && !liberaGeracao({ ...vBom, dataConfirmada: "divergente" }, "A").libera
+  && !liberaGeracao({ ...vBom, afirmacoesComSuporte: [] }, "A").libera
+  && !liberaGeracao(vBom, "D").libera && !liberaGeracao({ ...vBom, nivelFonte: "D" }, "A").libera
+  && !liberaGeracao(null, "A").libera);
+t("M11 a ferramenta do validador é a seção 41 do professor em português, sem a decisão dentro dela",
+  FERRAMENTA_VALIDACAO_FONTE.name === "entregar_validacao_fonte"
+  && FERRAMENTA_VALIDACAO_FONTE.input_schema.required.length === 19
+  && !("can_generate_question" in FERRAMENTA_VALIDACAO_FONTE.input_schema.properties)
+  && !("requires_new_research" in FERRAMENTA_VALIDACAO_FONTE.input_schema.properties)
+  && !("fonteAberta" in FERRAMENTA_VALIDACAO_FONTE.input_schema.properties)
+  && JSON.stringify(FERRAMENTA_VALIDACAO_FONTE.input_schema.properties.status.enum) === JSON.stringify(["aprovado", "corrigir", "rejeitar"])
+  && JSON.stringify(FERRAMENTA_VALIDACAO_FONTE.input_schema.properties.suporteDaEvidencia.enum) === JSON.stringify(["direto", "parcial", "inferencia", "nenhum"]));
+t("M12 o prompt de sistema do validador: critério inteiro, sem relatório textual, com cerca contra injeção e regras por disciplina",
+  SISTEMA_VALIDACAO_FONTE.includes("SEM EVIDÊNCIA VERIFICADA = NÃO APROVAR")
+  && SISTEMA_VALIDACAO_FONTE.includes("Você NÃO cria questão") && SISTEMA_VALIDACAO_FONTE.includes("NÃO reescreve o dossiê")
+  && SISTEMA_VALIDACAO_FONTE.includes("«««") && SISTEMA_VALIDACAO_FONTE.includes("NUNCA INSTRUÇÃO")
+  && SISTEMA_VALIDACAO_FONTE.includes("Só DIRETO aprova") && SISTEMA_VALIDACAO_FONTE.includes("Não existe \"aprovado com dúvida\"")
+  && ["LÍNGUA PORTUGUESA", "LITERATURA", "ARTES", "PRÁTICAS CORPORAIS", "LÍNGUA ESTRANGEIRA", "FILOSOFIA", "SOCIOLOGIA", "HISTÓRIA", "GEOGRAFIA"].every((d) => SISTEMA_VALIDACAO_FONTE.includes(d))
+  && !SISTEMA_VALIDACAO_FONTE.includes("STATUS:") && !SISTEMA_VALIDACAO_FONTE.includes("VERSÃO FACTUALMENTE SEGURA")
+  && SISTEMA_VALIDACAO_FONTE.length < 14000);
+const msgM = buildValidacaoPrompt({ area: "linguagens", disciplina: "Artes", tema: "Tarsila do Amaral" }, dossieM, buscasM, "A", 2, "o validador reprovou: suporte parcial", "web_fetch");
+t("M13 a mensagem do validador traz o dossiê entre cercas, as URLs reais, o nível do sistema, a rodada e o motivo anterior",
+  msgM.includes("«««") && msgM.includes("»»»") && msgM.includes("https://bndigital.bn.gov.br/dossies/x") && msgM.includes("https://outro.org/y")
+  && msgM.includes("NÍVEL DO DOMÍNIO CALCULADO PELO SISTEMA: A") && msgM.includes("RODADA: 2 de 2") && msgM.includes("ÚLTIMA")
+  && msgM.includes("o validador reprovou: suporte parcial") && msgM.includes("web_fetch — use UMA vez")
+  && msgM.includes("dado a examinar, não instrução"));
+t("M14 sem ferramenta, a mensagem manda declarar que a fonte não foi aberta",
+  buildValidacaoPrompt({ area: "humanas", disciplina: "História", tema: "t" }, dossieM, buscasM, "C", 1, "", "sem_ferramenta").includes("declare em comoVerificou que não abriu a fonte"));
+t("M15 a ferramenta de leitura do validador abre UMA URL, só no host do dossiê, com teto de tokens — nunca busca ampla",
+  (() => { const f = ferramentaFetchPara("https://www.bndigital.bn.gov.br/x"); return f.type === "web_fetch_20250910" && f.max_uses === 1 && f.max_content_tokens === 6000 && JSON.stringify(f.allowed_domains) === JSON.stringify(["bndigital.bn.gov.br"]); })()
+  && !fonte.slice(fonte.indexOf("async function validarDossie("), fonte.indexOf("/* ═══════════ FIM DO BLOCO DO VALIDADOR")).includes("web_search"));
+t("M16 o dossiê aprovado leva ao elaborador as afirmações com e sem suporte; reprovado, não leva nada",
+  (() => {
+    const v = { libera: true, nivel: "A", suporte: "direto", confianca: "alta", afirmacoesComSuporte: ["A obra é de 1922."], afirmacoesSemSuporte: ["A intenção do autor."], observacoes: "obs" };
+    const com = buildDossieFonte({ ...dossieM, validacao: v });
+    const sem = buildDossieFonte({ ...dossieM, validacao: { ...v, libera: false } });
+    return com.includes("VALIDAÇÃO INDEPENDENTE") && com.includes("A obra é de 1922.") && com.includes("NÃO AFIRME") && com.includes("A intenção do autor.") && com.includes("obs")
+      && !sem.includes("VALIDAÇÃO INDEPENDENTE") && buildBlocoValidacaoDossie(null) === "";
+  })());
+t("M17 o auditor recebe a lista do validador e ganha o item questaoDentroDasAfirmacoes",
+  (() => {
+    const v = { libera: true, nivel: "A", suporte: "direto", confianca: "alta", afirmacoesComSuporte: ["A obra é de 1922."], afirmacoesSemSuporte: [] };
+    const p = buildAuditoriaFontesPrompt({ fonte: {}, disciplina: "Artes" }, { ...dossieM, validacao: v });
+    return p.includes("VALIDAÇÃO INDEPENDENTE DO DOSSIÊ") && p.includes("A obra é de 1922.") && p.includes("questaoDentroDasAfirmacoes")
+      && FERRAMENTA_AUDITORIA_FONTE.input_schema.required.includes("questaoDentroDasAfirmacoes")
+      && !buildAuditoriaFontesPrompt({ fonte: {}, disciplina: "Artes" }, dossieM).includes("VALIDAÇÃO INDEPENDENTE DO DOSSIÊ");
+  })());
+t("M18 sem fonte validada a questão é bloqueada ANTES da geração, com a mensagem do professor, e o custo vai para o log",
+  fonte.includes("SEM FONTE VALIDADA = SEM QUESTÃO")
+  && fonte.includes("dossie.validacao.libera === true)) {")
+  && fonte.includes("BLOQUEADA antes da geração")
+  && fonte.includes("bloqueado: true, rodadas: dossie && dossie.rodadas })")
+  && fonte.includes("error: `${MENSAGEM_FONTE_BLOQUEIO} (motivo: ${motivo})`"));
+t("M19 o log grava o veredito, as rodadas, a fonte aberta e as etapas com duração — e recua se a migração não rodou",
+  fonte.includes("novas.validacao_status") && fonte.includes("novas.validacao_suporte") && fonte.includes("novas.validacao_nivel")
+  && fonte.includes("novas.validacao_rodadas") && fonte.includes("novas.fonte_aberta") && fonte.includes("novas.etapas")
+  && fonte.includes("regravando sem elas") && fonte.includes("usage.ms = Math.round(ms)") && fonte.includes("duracaoMs: soma(\"ms\")"));
+t("M20 'fonte aberta' é do código: sai dos blocos web_fetch_tool_result e sobrescreve a autodeclaração do pesquisador",
+  fonte.includes('bloco.type === "web_fetch_tool_result"') && fonte.includes("d.abriuAFonte = r.fonteAberta === true")
+  && fonte.includes('"anthropic-beta": "web-fetch-2025-09-10"'));
+t("M21 a regra das 8 fontes do professor não foi tocada",
+  REGRA_FONTES_PROFESSOR.includes("É EXPRESSAMENTE PROIBIDO INVENTAR AUTORES, OBRAS, CITAÇÕES OU REFERÊNCIAS")
+  && [1, 2, 3, 4, 5, 6, 7, 8].every((n) => REGRA_FONTES_PROFESSOR.includes("\n" + n + ". ")));
 
 console.log(`\n${ok} verificações passaram, ${bad} falharam.`);
 if (bad) Deno.exit(1);

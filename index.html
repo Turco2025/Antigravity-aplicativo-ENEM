@@ -3573,6 +3573,12 @@ async function generateQuestion(q){
     // Consumo relatado pelo backend (tokens novos, escritos e lidos do cache).
     // Serve para conferir, em produção, que o cache de prompt está valendo.
     if(payload.uso) somaUso(payload.uso);
+    /* v18.25 — VALIDAÇÃO INDEPENDENTE DA FONTE (backend v74.21). Em Linguagens e
+       Humanas a questão só é gerada depois que um agente validador aprovou a
+       fonte pesquisada. O veredito vem em fontesDiag.validacao e fica na questão
+       (vai junto com o simulado arquivado) para aparecer na auditoria local do
+       card — só na tela; PDF, impressão, HTML e DOCX não mudam. */
+    q.validacaoFonte = payload.fontesDiag && payload.fontesDiag.validacao ? payload.fontesDiag.validacao : null;
     // Rede de segurança: a letra planejada tem de ser mesmo a correta.
     q.gabaritoStatus = aplicaGabaritoAlvo(q.data, gabaritoAlvoDe(state.questions.indexOf(q)));
     /* v18.9 — a letra planejada nunca prevalece sobre a resposta certa: quando
@@ -4982,6 +4988,20 @@ function auditaQuestaoLocal(q){
      de exportação está em bloqueiaSeFonteNaoVerificada(). */
   if(d.fonteNaoVerificada){
     aviso(MENSAGEM_FONTE_BLOQUEIO + (d.fonteNaoVerificada.motivo ? " (motivo: " + d.fonteNaoVerificada.motivo + ")" : ""));
+  }
+
+  /* v18.25 — o veredito do agente validador (backend v74.21), quando houve.
+     Aprovado vira observação com nível da fonte, suporte, confiança e se a
+     página foi de fato aberta (isso é o backend quem sabe, não o modelo). */
+  if(q.validacaoFonte && typeof q.validacaoFonte === "object"){
+    const v = q.validacaoFonte;
+    if(v.libera === true){
+      info("Fonte validada pelo agente validador · nível " + String(v.nivel || "?") + " · suporte " + String(v.suporte || "?") +
+           " · confiança " + String(v.confianca || "?") + (v.fonteAberta ? " · página aberta" : " · página não aberta (conferida pelos resultados da busca)") +
+           (Number(v.rodada) > 1 ? " · aprovada na " + v.rodada + "ª rodada" : "") + ".");
+    } else {
+      aviso("Fonte não validada pelo agente validador" + (v.motivo ? ": " + String(v.motivo).slice(0, 200) : "") + ".");
+    }
   }
 
   /* v18.18 — recorte da disciplina e extensão medida nas provas reais. */

@@ -1,0 +1,218 @@
+/* v74.21 — O LAÇO PESQUISADOR → VALIDADOR → (elaborador), SEM CHAMAR A ANTHROPIC.
+
+   A seção M de verify_fontes_backend.ts prova as peças (lista negra, nível por
+   domínio, conferência prévia, trava em código, prompts, ferramenta). Este
+   arquivo prova o COMPORTAMENTO do laço de pesquisarFonteReal com dublês
+   roteirizados no lugar de callClaudeForJSON:
+     A. rodada 1 restrita aos acervos (allowed_domains), rodada 2 aberta
+     B. dossiê aprovado volta com validação e "fonte aberta" vinda do código
+     C. reprovação do validador leva o motivo à rodada 2
+     D. duas reprovações → objeto bloqueado (encontrou:false) — a questão não é gerada
+     E. conferência prévia reprova sem gastar a chamada do validador
+     F. sem tempo, não abre rodada 2 nem valida
+     G. web_fetch recusado pela API → repete a rodada sem ferramenta
+     H. fora de Linguagens/Humanas nada muda (null)
+
+   Uso: deno run -A tests/verify_validador_v7421.ts supabase/functions/generate-question/index.ts */
+const alvo = Deno.args[0] || "supabase/functions/generate-question/index.ts";
+const fonte = await Deno.readTextFile(alvo);
+
+function fatiar(ini: string, fim: string): string {
+  const a = fonte.indexOf(ini), b = fonte.indexOf(fim, a);
+  if (a < 0 || b < 0) { console.error(`FALHA: não achei o trecho ${ini.slice(0, 40)} … ${fim.slice(0, 40)}`); Deno.exit(1); }
+  return fonte.slice(a, b);
+}
+function recortaConstArray(nome: string): string {
+  const m = fonte.match(new RegExp(`const ${nome}: string\\[\\] = (\\[[^;]*?\\]);`, "s"));
+  if (!m) { console.error(`FALHA: não achei ${nome}`); Deno.exit(1); }
+  return `const ${nome}: string[] = ${m[1]};`;
+}
+const mAcervos = fonte.match(/const ACERVOS_PRIORITARIOS: \{ nome: string; url: string; dominio: string \}\[\] = (\[[^;]*?\]);/s)!;
+
+// O bloco do validador inteiro + pesquisarFonteReal, como estão no arquivo de produção.
+const blocoValidador = fatiar("/* ═══════════ v74.21 — AGENTE VALIDADOR DE FONTES E EVIDÊNCIAS", "/* ═══════════ FIM DO BLOCO DO VALIDADOR");
+const pesquisar = fatiar("async function pesquisarFonteReal(", "/* v74.19 — O ALVO REPETIDO ONDE A QUESTÃO É ESCRITA.");
+// níveis por domínio + consulta combinada + DISCIPLINAS_COM_ACERVO_PRIORITARIO + buildAcervosPrioritarios + buildPesquisaFontePrompt + buildDossieFonte, reais
+const dominios = fatiar("const ORDEM_NIVEL = ", "\n/* ═══════════ v74.21 — AGENTE VALIDADOR");
+const acervosFns = fatiar("function hostDaUrl(", "const DOMINIOS_VETADOS");                          // hostDaUrl, ehDominioDeAcervo, acervoFoiConsultado
+const normalizaUrl = fatiar("function normalizaUrl(", "\nfunction conferenciaFontes(");
+
+const modulo = `type SistemaPrompt = any;
+type FetchRegistro = { url: string; ok: boolean; erro: string };
+const LIMITE_FUNCAO_MS = 140_000;
+const AREA_LABELS: Record<string, string> = { linguagens: "Linguagens", humanas: "Humanas", natureza: "Natureza" };
+const AREAS_FONTES_REAIS_ESTRITO = ["linguagens", "humanas"];
+function fontesReaisEstrito(area: string) { return AREAS_FONTES_REAIS_ESTRITO.includes(String(area || "").toLowerCase()); }
+function cacheControlAtual() { return { type: "ephemeral" }; }
+const SISTEMA_PESQUISA_FONTE = "sistema do pesquisador";
+const FERRAMENTA_DOSSIE_FONTE = { name: "entregar_dossie_fonte" };
+const ACERVOS_PRIORITARIOS: { nome: string; url: string; dominio: string }[] = ${mAcervos[1]};
+const DOMINIOS_ACERVO_PRIORITARIO: string[] = Array.from(new Set(ACERVOS_PRIORITARIOS.map((a) => a.dominio)));
+${recortaConstArray("DOMINIOS_VETADOS")}
+${recortaConstArray("DOMINIOS_NIVEL_A")}
+${recortaConstArray("DOMINIOS_NIVEL_B")}
+const WEB_SEARCH_TOOL = { type: "web_search_20250305", name: "web_search", blocked_domains: DOMINIOS_VETADOS, max_uses: 3 };
+const BUSCA_PESQUISADOR_ACERVOS = { type: WEB_SEARCH_TOOL.type, name: WEB_SEARCH_TOOL.name, allowed_domains: DOMINIOS_ACERVO_PRIORITARIO, max_uses: 1 };
+const BUSCA_PESQUISADOR = { ...WEB_SEARCH_TOOL, max_uses: 1 };
+const BUSCA_PESQUISADOR_RETRY = { ...WEB_SEARCH_TOOL, max_uses: 2 };
+${normalizaUrl}
+${acervosFns}
+${dominios}
+${blocoValidador}
+${pesquisar}
+/* dublê roteirizado: cada chamada consome a próxima resposta da fila */
+export const __stub: any = { fila: [] as any[], chamadas: [] as any[] };
+async function callClaudeForJSON(_s: any, userMsg: string, ferramentaServidor: any, usos: any[], ferramenta: any, buscas?: any[], etapa = "", fetches?: any[]) {
+  const passo = __stub.fila.shift();
+  __stub.chamadas.push({ etapa, ferramentaServidor, ferramentaNome: ferramenta && ferramenta.name, userMsg });
+  if (usos) usos.push({ input_tokens: 1, output_tokens: 1, etapa });
+  if (!passo) throw new Error("fila do dublê vazia em " + etapa);
+  if (passo.erro) throw new Error(passo.erro);
+  if (buscas && Array.isArray(passo.buscas)) buscas.push(...passo.buscas);
+  if (fetches && Array.isArray(passo.fetches)) fetches.push(...passo.fetches);
+  return passo.resposta;
+}
+export { pesquisarFonteReal, liberaGeracao, conferenciaPreviaDossie, MODO_VALIDADOR, DOMINIOS_VETADOS, RODADAS_VALIDACAO, MS_MINIMO_PARA_VALIDAR, MS_MINIMO_PARA_SEGUNDA_RODADA };
+`;
+const tmp = await Deno.makeTempDir();
+await Deno.writeTextFile(`${tmp}/mod.ts`, modulo);
+const M: any = await import("file://" + `${tmp}/mod.ts`);
+const { pesquisarFonteReal, __stub, MODO_VALIDADOR } = M;
+
+let ok = 0, bad = 0;
+const t = (n: string, c: boolean, extra = "") => { if (c) { ok++; console.log("PASS " + n); } else { bad++; console.log("FAIL " + n + (extra ? "\n     " + extra : "")); } };
+const roteiro = (...passos: any[]) => { __stub.fila = passos; __stub.chamadas = []; };
+const URL_ACERVO = "https://bndigital.bn.gov.br/dossies/modernismo";
+const URL_FORA = "https://enciclopedia.itaucultural.org.br/pessoas/1";
+const dossieBom = (url = URL_ACERVO) => ({ encontrou: true, autor: "", instituicao: "Biblioteca Nacional", obra: "Dossiê", ano: "1922", referencia: "BIBLIOTECA NACIONAL. Dossiê.", url, trecho: "Trecho real do acervo.", trechoEhLiteral: true, abriuAFonte: true, comoVerificou: "busca" });
+const vAprovado = { status: "aprovado", fonteExiste: true, autorConfirmado: true, obraConfirmada: true, dataConfirmada: "confirmada", referenciaConfere: true, suporteDaEvidencia: "direto", trechoLiteralConfere: "confere", naturezaDoMaterial: "fato_documental", nivelFonte: "A", risco: "alto", confianca: "alta", afirmacoesComSuporte: ["O dossiê é da BN."], afirmacoesSemSuporte: [], divergenciaDocumental: "", correcoesNecessarias: [], observacoesAoElaborador: "", comoVerificou: "abri a página", motivo: "" };
+const vReprovado = { ...vAprovado, status: "corrigir", suporteDaEvidencia: "parcial", confianca: "media", correcoesNecessarias: ["confirmar o ano na página"], motivo: "a fonte não sustenta o ano" };
+const o = { area: "linguagens", disciplina: "Artes", tema: "Semana de 1922" };
+const muitoTempo = () => 140_000;
+
+/* A/B — aprovado na rodada 1, restrita aos acervos, com fonte aberta pelo código */
+roteiro(
+  { resposta: dossieBom(), buscas: [{ url: URL_ACERVO, title: "BN" }] },
+  { resposta: vAprovado, fetches: [{ url: URL_ACERVO, ok: true, erro: "" }] },
+);
+let usos: any[] = [], buscas: any[] = [];
+let r = await pesquisarFonteReal(o, usos, buscas, muitoTempo);
+t("A1 a rodada 1 de Artes usa a busca RESTRITA aos acervos (allowed_domains), com 1 uso",
+  __stub.chamadas[0].etapa === "pesquisa/tentativa-1"
+  && JSON.stringify(__stub.chamadas[0].ferramentaServidor.allowed_domains) === JSON.stringify(["bndigital.bn.gov.br", "bbm.usp.br", "buscaintegrada.usp.br", "dominiopublico.gov.br"])
+  && !("blocked_domains" in __stub.chamadas[0].ferramentaServidor) && __stub.chamadas[0].ferramentaServidor.max_uses === 1);
+t("A2 o prompt da rodada 1 avisa que a restrição é do sistema (e o da rodada 2 não)",
+  __stub.chamadas[0].userMsg.includes("RESTRITA, PELO SISTEMA"));
+t("B1 o validador roda em seguida, com web_fetch restrito ao host do dossiê e teto de tokens, sem web_search",
+  __stub.chamadas[1].etapa === "validacao/rodada-1" && __stub.chamadas[1].ferramentaNome === "entregar_validacao_fonte"
+  && __stub.chamadas[1].ferramentaServidor.type === "web_fetch_20250910"
+  && JSON.stringify(__stub.chamadas[1].ferramentaServidor.allowed_domains) === JSON.stringify(["bndigital.bn.gov.br"])
+  && __stub.chamadas[1].ferramentaServidor.max_content_tokens === 6000 && MODO_VALIDADOR === "web_fetch");
+t("B2 o dossiê volta aprovado, com a validação, o nível, as afirmações e 'fonte aberta' vindo do fetch registrado pelo código",
+  r && r.encontrou === true && r.validacao && r.validacao.libera === true && r.validacao.estado === "aprovado"
+  && r.validacao.nivel === "A" && r.validacao.suporte === "direto" && r.validacao.fonteAberta === true && r.abriuAFonte === true
+  && r.validacao.afirmacoesComSuporte[0] === "O dossiê é da BN." && r.rodadas === 1 && r.validacao.modo === "web_fetch");
+t("B3 duas chamadas no total (pesquisa + validação) e o dossiê veio do acervo (sem marca foraDoAcervo)",
+  __stub.chamadas.length === 2 && usos.length === 2 && !r.foraDoAcervo);
+
+/* B4 — sem fetch registrado, 'fonte aberta' é false mesmo que o pesquisador tenha dito que abriu */
+roteiro(
+  { resposta: dossieBom(), buscas: [{ url: URL_ACERVO, title: "BN" }] },
+  { resposta: vAprovado, fetches: [] },
+);
+r = await pesquisarFonteReal(o, [], [], muitoTempo);
+t("B4 sem web_fetch_tool_result, fonteAberta = false e abriuAFonte do pesquisador é sobrescrito",
+  r.validacao.libera === true && r.validacao.fonteAberta === false && r.abriuAFonte === false);
+
+/* C — reprovado na rodada 1, aprovado na 2 (aberta, com lista negra), fonte de fora marcada */
+roteiro(
+  { resposta: dossieBom(), buscas: [{ url: URL_ACERVO, title: "BN" }] },
+  { resposta: vReprovado, fetches: [{ url: URL_ACERVO, ok: true, erro: "" }] },
+  { resposta: dossieBom(URL_FORA), buscas: [{ url: URL_FORA, title: "Itaú Cultural" }] },
+  { resposta: { ...vAprovado, nivelFonte: "B" }, fetches: [{ url: URL_FORA, ok: true, erro: "" }] },
+);
+usos = []; buscas = [];
+r = await pesquisarFonteReal(o, usos, buscas, muitoTempo);
+t("C1 a rodada 2 recebe o motivo e as correções do validador",
+  __stub.chamadas[2].etapa === "pesquisa/tentativa-2"
+  && __stub.chamadas[2].userMsg.includes("o validador reprovou o dossiê anterior (a fonte não sustenta o ano)")
+  && __stub.chamadas[2].userMsg.includes("confirmar o ano na página"));
+t("C2 a rodada 2 busca ABERTA, com a lista negra como blocked_domains e 2 usos",
+  JSON.stringify(__stub.chamadas[2].ferramentaServidor.blocked_domains) === JSON.stringify(M.DOMINIOS_VETADOS) && M.DOMINIOS_VETADOS.length > 30
+  && __stub.chamadas[2].ferramentaServidor.max_uses === 2 && !("allowed_domains" in __stub.chamadas[2].ferramentaServidor));
+t("C3 aprovado na rodada 2: dossiê volta com rodadas = 2, nível B (Itaú Cultural) e marcado como fora do acervo",
+  r.encontrou === true && r.validacao.libera === true && r.rodadas === 2 && r.validacao.nivel === "B" && r.foraDoAcervo && r.foraDoAcervo.dominio === "enciclopedia.itaucultural.org.br");
+t("C4 quatro chamadas no total (2 pesquisas + 2 validações)", __stub.chamadas.length === 4);
+
+/* D — duas reprovações → bloqueado */
+roteiro(
+  { resposta: dossieBom(), buscas: [{ url: URL_ACERVO, title: "BN" }] },
+  { resposta: vReprovado },
+  { resposta: dossieBom(URL_FORA), buscas: [{ url: URL_FORA, title: "" }] },
+  { resposta: { ...vReprovado, motivo: "citação não localizada", trechoLiteralConfere: "nao_confere" } },
+);
+r = await pesquisarFonteReal(o, [], [], muitoTempo);
+t("D1 sem fonte aprovada em duas rodadas, volta encontrou:false + bloqueado:true com o último motivo",
+  r && r.encontrou === false && r.bloqueado === true && r.rodadas === 2
+  && String(r.motivo).includes("o validador reprovou o dossiê anterior") && r.validacao && r.validacao.libera === false);
+t("D2 um objeto bloqueado NÃO passa por dossiê válido (encontrou !== true)", !(r.encontrou === true));
+
+/* E — conferência prévia reprova sem chamar o validador */
+roteiro(
+  { resposta: dossieBom("https://x.blogspot.com/post"), buscas: [{ url: "https://x.blogspot.com/post", title: "" }] },
+  { resposta: dossieBom(), buscas: [{ url: URL_ACERVO, title: "" }] },
+  { resposta: vAprovado, fetches: [{ url: URL_ACERVO, ok: true, erro: "" }] },
+);
+r = await pesquisarFonteReal(o, [], [], muitoTempo);
+t("E1 domínio vetado reprova na conferência prévia, sem gastar a chamada do validador, e a rodada 2 recebe o motivo",
+  __stub.chamadas.length === 3 && __stub.chamadas[1].etapa === "pesquisa/tentativa-2"
+  && __stub.chamadas[1].userMsg.includes("nível D") && r.validacao.libera === true && r.rodadas === 2);
+roteiro(
+  { resposta: dossieBom("https://bndigital.bn.gov.br/outra"), buscas: [{ url: "https://outro.org/z", title: "" }] },
+  { resposta: dossieBom(), buscas: [{ url: URL_ACERVO, title: "" }] },
+  { resposta: vAprovado },
+);
+r = await pesquisarFonteReal(o, [], [], muitoTempo);
+t("E2 URL que não veio da busca reprova na conferência prévia (regras 4 e 7)",
+  __stub.chamadas[1].userMsg.includes("não apareceu em nenhum resultado real da busca") && r.validacao.libera === true);
+
+/* F — tempo */
+roteiro({ resposta: dossieBom(), buscas: [{ url: URL_ACERVO, title: "" }] });
+r = await pesquisarFonteReal(o, [], [], () => 60_000);
+t("F1 sem tempo para validar (< 70 s), o dossiê é tratado como não validado e a questão bloqueia",
+  __stub.chamadas.length === 1 && r.encontrou === false && r.bloqueado === true && r.validacao.estado === "sem_tempo");
+roteiro({ resposta: dossieBom(), buscas: [{ url: URL_ACERVO, title: "" }] }, { resposta: vReprovado });
+let chamadasTempo = 0;
+r = await pesquisarFonteReal(o, [], [], () => (chamadasTempo++ < 1 ? 100_000 : 80_000));   // 1ª leitura: antes de validar (ok); 2ª: antes da rodada 2 (80 s < 90 s)
+t("F2 reprovado na rodada 1 e sem 90 s para a rodada 2, não abre a rodada 2",
+  __stub.chamadas.length === 2 && r.bloqueado === true && r.rodadas === 1);
+
+/* G — web_fetch recusado pela API */
+roteiro(
+  { resposta: dossieBom(), buscas: [{ url: URL_ACERVO, title: "" }] },
+  { erro: "HTTP 400: tools.0: web_fetch_20250910 is not a supported tool type" },
+  { resposta: vAprovado },
+);
+r = await pesquisarFonteReal(o, [], [], muitoTempo);
+t("G1 web_fetch recusado → repete a MESMA rodada sem ferramenta, modo registrado, fonte aberta false",
+  __stub.chamadas.length === 3 && __stub.chamadas[1].ferramentaServidor.type === "web_fetch_20250910"
+  && __stub.chamadas[2].ferramentaServidor === false && __stub.chamadas[2].etapa === "validacao/rodada-1"
+  && r.validacao.libera === true && r.validacao.modo === "sem_ferramenta" && r.validacao.fonteAberta === false);
+t("G2 a mensagem sem ferramenta manda declarar que não abriu a fonte",
+  __stub.chamadas[2].userMsg.includes("declare em comoVerificou que não abriu a fonte"));
+
+/* H — fora do escopo */
+roteiro();
+r = await pesquisarFonteReal({ area: "natureza", disciplina: "Biologia", tema: "t" }, [], [], muitoTempo);
+t("H1 fora de Linguagens e Humanas nada muda: null, sem chamada", r === null && __stub.chamadas.length === 0);
+roteiro(
+  { resposta: dossieBom("https://www.scielo.br/j/x"), buscas: [{ url: "https://www.scielo.br/j/x", title: "" }] },
+  { resposta: vAprovado },
+);
+r = await pesquisarFonteReal({ area: "humanas", disciplina: "História", tema: "t" }, [], [], muitoTempo);
+t("H2 em Humanas (sem acervo prioritário) a rodada 1 já é aberta, com a lista negra, e o fluxo é o mesmo",
+  !("allowed_domains" in __stub.chamadas[0].ferramentaServidor) && Array.isArray(__stub.chamadas[0].ferramentaServidor.blocked_domains)
+  && r.validacao.libera === true && r.validacao.nivel === "A" && !r.foraDoAcervo);
+
+console.log(`\n${ok} verificações passaram, ${bad} falharam.`);
+if (bad) Deno.exit(1);

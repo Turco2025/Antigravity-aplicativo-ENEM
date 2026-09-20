@@ -124,6 +124,120 @@ Teste: `verify_fontes_app.js` — 19 verificações; as seções B e C bis prova
 quatro marcas ligadas ao mesmo tempo nenhuma conferência bloqueia, e que nenhuma delas tem sequer um
 `return true` no corpo. `verify_gabarito_coerente.js` H1 passou a exigir o contrário do que exigia.
 
+## O agente validador entre a pesquisa e a elaboração — e o custo que o log mostrou (generate-question v74.21 · app v18.25, 20/09/2026)
+
+Pedido do professor (20/09): um squad de quatro agentes — **pesquisador, validador, elaborador e
+auditor** — em que o elaborador só escreve depois que a fonte foi aprovada, com o prompt "AGENTE
+VALIDADOR DE FONTES E EVIDÊNCIAS" (52 seções) adaptado ao backend. E, antes de qualquer alteração,
+"fazer tudo o que for necessário para parar com os erros". Esta versão faz as duas coisas.
+
+### O que o log mostrou primeiro (ids 1118–1208, 91 questões de Linguagens)
+
+| Faixa | n | Custo médio (US$) | Entrada não cacheada | Cache escrito | Cache lido | Saída | Buscas |
+|---|---|---|---|---|---|---|---|
+| Linguagens, antes do id 1041 | 42 | 0,153 | 3.315 | 27.552 | 82.409 | 3.853 | 2,29 |
+| Linguagens, 1041–1117 | 77 | 0,190 | 5.665 | 32.292 | 95.197 | 5.232 | 2,70 |
+| **Linguagens, v74.20 (> 1117)** | **91** | **0,215** | **46.936** | 15.184 | 40.334 | 5.617 | 1,93 |
+| Matemática (referência) | 63 | 0,036 | 2.030 | 2.200 | 18.534 | 2.287 | 0 |
+
+Máximo individual: US$ 0,518. **O teto é US$ 0,09; Linguagens está em 0,215 — 2,4 vezes o teto**, e
+acima dele desde que o pesquisador existe (v74.10). Erro meu a registrar: na v74.17 eu disse que a
+correção do cache resolvia o custo. Resolveu o item que medi (gravação repetida), mas o total
+**subiu 13%** — 40 mil tokens saíram de "cache lido" (US$ 0,20/M) e foram para "entrada não
+cacheada" (US$ 2/M). Olhei para a coluna errada.
+
+Por etapa, nos logs da função (24 h): **pesquisa/tentativa-1 — entrada média 34.976, mediana
+12.611, máximo 143.562 tokens**; pesquisa/tentativa-2 — 28 de 43 questões (**65%**), entrada
+1.910 e **16.936 tokens gravados em cache** cada; geração — 8.605; auditoria — 3.644. Ou seja:
+
+1. **O pesquisador é o custo.** A entrada dele são os resultados da `web_search`, cobrados como
+   tokens de entrada: uma busca de 70 mil tokens custa US$ 0,14 sozinha.
+2. **A segunda tentativa era a "busca restrita aos acervos" da v74.18** — voltava vazia (o operador
+   `site:` no texto da consulta não estava sendo respeitado) e ainda custava ≈ US$ 0,05 em gravação
+   de cache. E havia um erro no código: a conferência de domínio lia `d.urlVerificacao`, campo que o
+   dossiê do pesquisador **não tem** (o dele é `url`) — a fonte nunca era reconhecida como vinda do
+   acervo, e a repetição disparava sempre que nenhum resultado da busca fosse de acervo. Só 30% das
+   fontes saíram dos acervos.
+3. Geração (≈ US$ 0,02) e auditoria (≈ US$ 0,01) estão baratas, com cache acertando.
+
+### O que mudou
+
+**Pesquisador.** A rodada 1 das disciplinas com acervo (Língua Portuguesa, Literatura, Artes) é
+restrita **pelo servidor** aos domínios dos cinco acervos — `allowed_domains` da `web_search`
+(`BUSCA_PESQUISADOR_ACERVOS`, 1 uso). Ou traz fonte do acervo, ou volta pequena e barata, e a rodada
+2 abre para as demais fontes confiáveis. A repetição "restrita aos acervos" (`exigirAcervoAgora`)
+saiu. A conferência de domínio passou a ler `d.url || d.urlVerificacao`.
+
+**Lista negra.** `DOMINIOS_VETADOS` (Wikipédia, Brasil Escola, Toda Matéria, Mundo Educação,
+Brainly, blogs, fóruns, redes sociais…) entra como `blocked_domains` em **toda** `web_search`: o
+resultado vetado nem chega à conversa e não é cobrado. Em código, `nivelDoDominio()` classifica a
+URL em A (acervos, gov/edu, universidades, SciELO, bibliotecas nacionais), B (instituições culturais
+e grandes museus), C (qualquer outro não vetado) ou D (vetado).
+
+**Validador** (`SISTEMA_VALIDACAO_FONTE`, ferramenta `entregar_validacao_fonte`). Roda dentro do
+laço de `pesquisarFonteReal`, depois de cada dossiê, antes de qualquer elaboração:
+
+- **Conferência prévia em código**, custo zero (`conferenciaPreviaDossie`): material presente, URL
+  presente **e vinda de um resultado real da busca** (regras 4 e 7), domínio não vetado, autoria e
+  referência preenchidas, trecho literal ≤ 300 caracteres, ano plausível.
+- **O agente**, com o prompt do professor adaptado (≈ 2.800 tokens; o original tinha ≈ 8.000): saiu
+  o relatório textual (seção 40), saíram os exemplos de saída (48–50), a mensagem de interface (43 —
+  já existe uma) e as seções que julgam um texto pronto (15, 18, 19, 32, 33 — são do auditor). A
+  saída é **só** a ferramenta (a seção 41 em português). A decisão **não** vem do modelo: a seção 42
+  virou `liberaGeracao()` em código — status aprovado + fonte existe + referência confere + suporte
+  **direto** + confiança **alta** + trecho literal conferido + sem divergência de data + ao menos uma
+  afirmação com suporte + nível ≠ D. O modelo só pode **rebaixar** o nível calculado pelo sistema.
+- **Sem busca ampla.** O validador trabalha com a URL do dossiê. `MODO_VALIDADOR = "web_fetch"`:
+  abre **só essa URL** (`allowed_domains` = host dela) com teto de 6.000 tokens de conteúdo
+  (≈ US$ 0,012). Se a API recusar a ferramenta beta, repete a rodada sem ferramenta. **"Fonte aberta"
+  é do código** (houve bloco `web_fetch_tool_result` da URL?), nunca autodeclarado — e sobrescreve o
+  `abriuAFonte` do pesquisador.
+- **Teto de duas rodadas** (pesquisa + validação) e guardas de tempo: validação só com > 70 s
+  restantes; rodada 2 só com > 90 s. Reprovado, a rodada seguinte recebe o motivo e as correções.
+- Tudo o que vem do dossiê ou da página vai entre cercas `««« »»»` como DADO, com a mesma proteção
+  contra injeção do campo de orientações do professor.
+
+**Elaborador.** O dossiê aprovado leva a lista de **afirmações com suporte** e **sem suporte** e a
+observação do validador (`buildBlocoValidacaoDossie`): a questão fica dentro do que foi validado.
+
+**Auditor.** Recebe a mesma lista e ganha o item `questaoDentroDasAfirmacoes` — a ponte entre o
+agente 2 e o agente 4 ("compara a questão, a fonte e o gabarito").
+
+**SEM FONTE VALIDADA = SEM QUESTÃO.** Em Linguagens e Humanas, sem dossiê aprovado em duas rodadas
+o handler devolve 422 com `MENSAGEM_FONTE_BLOQUEIO` e o motivo, **sem chamar o elaborador**; o custo
+até ali vai para o log. Antes, a geração seguia sem dossiê e o auditor decidia no fim, depois da
+chamada mais cara. A saída `tipoUso: "proprio"` continua existindo para o caso de o material aprovado
+não render uma boa questão.
+
+**Log.** Colunas novas em `question_generation_log` (migração separada): `validacao_status`,
+`validacao_suporte`, `validacao_nivel`, `validacao_rodadas`, `fonte_aberta`, `etapas` (jsonb com
+tokens **e milissegundos** por etapa — o que faltava para medir custo e tempo sem depender dos logs
+de 24 h). Se a migração ainda não rodou, o insert é refeito sem as colunas novas: o registro de
+custo nunca se perde.
+
+**App (v18.25).** O card mostra, na auditoria local, "Fonte validada pelo agente validador · nível A
+· suporte direto · confiança alta · página aberta" (ou o motivo da não validação). Só tela: PDF,
+impressão, HTML e DOCX não mudam. O bloqueio chega ao app pelo caminho de erro já existente.
+
+**Não alterados:** `REGRA_FONTES_PROFESSOR` (`regraHash` 17ab00e5), `REGRA_PESQUISA_PROFESSOR`,
+`ACERVOS_PRIORITARIOS`, `MENSAGEM_FONTE_BLOQUEIO`, a calibração de extensão, a skill
+`enem-question-generator`, `app_data.json`.
+
+### Custo esperado e o que ainda falta medir
+
+O validador custa ≈ US$ 0,006 por rodada sem ferramenta e ≈ US$ 0,018 com `web_fetch` (estimativa;
+o real sai da coluna `etapas`). O que traz a conta para baixo é o pesquisador: a rodada 1 restrita
+volta pequena quando não acha, e a lista negra corta resultados que só custavam. Se isso basta para
+o teto de US$ 0,09, **só a próxima leva diz** — e é o que será medido, questão a questão, a partir do
+id 1209.
+
+Testes: `verify_fontes_backend.ts` — 120 verificações (seção **M**, 21 novas: lista negra, níveis,
+conferência prévia, trava, ferramenta, prompts, dossiê, auditor, bloqueio, log, regra intacta);
+`verify_validador_v7421.ts` — 20 verificações do **comportamento do laço** com dublês roteirizados
+(rodada 1 restrita, rodada 2 aberta, motivo levado adiante, bloqueio após duas reprovações,
+conferência prévia sem gastar chamada, guardas de tempo, `web_fetch` recusado, fora do escopo).
+`?selftest=1`: blocos `v7421_*` (9) e `v7418_*` ajustados à restrição pelo servidor.
+
 ## A calibração passou a sair só das quatro provas recentes (v74.20 · app v18.24, 19/09/2026)
 
 Decisão do professor: **só contam 2022, 2023, 2024 e 2025**. E há um erro meu a registrar antes.
