@@ -245,6 +245,10 @@ r = await pesquisarFonteReal({ area: "linguagens", disciplina: "Literatura", tem
 t("J1 fonte no banco: volta como dossiê aprovado SEM nenhuma chamada à IA (pesquisa e validação poupadas)",
   __stub.chamadas.length === 0 && r.encontrou === true && r.validacao.libera === true && r.validacao.estado === "aprovado_banco" && r.doBanco && r.doBanco.id === 7
   && __banco.consultas.length === 1);
+__banco.resposta = { ...__banco.resposta }; roteiro(); buscas = [];
+r = await pesquisarFonteReal({ area: "linguagens", disciplina: "Literatura", tema: "Machado de Assis" }, [], buscas, muitoTempo);
+t("J1b a URL da fonte do banco entra nas buscas reais da chamada (a conferência estrutural exige URL vinda de busca)",
+  buscas.length === 1 && buscas[0].url === "https://www.dominiopublico.gov.br/x" && /banco de fontes/.test(buscas[0].title));
 __banco.resposta = null; __banco.consultas = []; __banco.guardados = [];
 roteiro(
   { resposta: dossieBom(), buscas: [{ url: URL_ACERVO, title: "" }] },

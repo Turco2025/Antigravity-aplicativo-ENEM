@@ -864,6 +864,11 @@ t("P4 a resposta carrega tentativa, fontesTentadas, reelaboracoes, doBanco e ult
   handlerP.includes("fontesDiag.reelaboracoes = reelaboracoes;") && handlerP.includes("fontesDiag.fontesTentadas = fontesTentadas;")
   && handlerP.includes("fontesDiag.doBanco = fonteDoBanco;") && handlerP.includes("if (textoProprio) fontesDiag.ultimoRecurso = textoProprio;")
   && fonte.includes("novas.tentativa = extra.tentativa") && fonte.includes("novas.reelaboracoes") && fonte.includes("novas.fonte_do_banco") && fonte.includes("novas.ultimo_recurso"));
+t("P6 fonte do banco entra nas buscas reais da chamada (senão a conferência estrutural reprova a URL); reelaboração não repete o mesmo motivo nem tenta corrigir reprovação estrutural; item da lista com suporte nunca reprova",
+  fonte.includes('buscas.push({ url: String(doBanco.url), title: "fonte validada — banco de fontes')
+  && fonte.includes('fontesDiag.determinista === "url_nao_confirmada" ||') && fonte.includes("motivoAtual === motivoReelabAnterior")
+  && buildAuditoriaFontesPrompt({ fonte: {}, disciplina: "Literatura" }, { encontrou: true, trecho: "t", url: "u", autor: "A", referencia: "R", validacao: { libera: true, estado: "aprovado", afirmacoesComSuporte: ["a"], afirmacoesSemSuporte: [] } })
+    .includes("O que CONSTA da lista COM SUPORTE NUNCA reprova"));
 t("P5 o bloco de texto próprio proíbe atribuir qualquer coisa a terceiros e exige tipoUso proprio com campos de fonte vazios; a correção da auditoria manda ficar no dossiê e não trocar a fonte",
   fonte.includes("SITUAÇÃO-PROBLEMA DE AUTORIA PRÓPRIA") && fonte.includes("autor, instituicao, obra, ano, referencia e urlVerificacao VAZIOS")
   && fonte.includes("É PROIBIDO afirmar qualquer fato sobre autor, obra, movimento, data, enredo")

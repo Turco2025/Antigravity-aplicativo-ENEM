@@ -1417,7 +1417,14 @@ async function pesquisarFonteReal(
   /* v74.23 — banco de fontes validadas primeiro: custo zero. */
   if (o.usarBanco !== false) {
     const doBanco = await consultarBancoFontes(o, evitar);
-    if (doBanco) return doBanco;
+    if (doBanco) {
+      /* A URL do banco foi resultado real de busca e página localizada pelo
+         validador numa chamada anterior: entra nas buscas desta, senão a
+         conferência estrutural (regras 4 e 7) reprova a questão por "URL que
+         não apareceu em nenhuma busca" — ensaio de 20/09, 22h15. */
+      if (Array.isArray(buscas) && doBanco.url) buscas.push({ url: String(doBanco.url), title: "fonte validada — banco de fontes (validador localizou a página)" });
+      return doBanco;
+    }
   }
   const sistema: SistemaPrompt = [{ type: "text", text: SISTEMA_PESQUISA_FONTE, cache_control: cacheControlAtual() }];
   const exigeAcervo = temAcervoPrioritario(o.disciplina);
@@ -3545,7 +3552,8 @@ VALIDAÇÃO INDEPENDENTE DO DOSSIÊ (agente validador, antes da elaboração) �
 · AFIRMAÇÕES COM SUPORTE NA FONTE (a questão podia usar):
 ${com.map((a: string, i: number) => `  ${i + 1}. ${a}`).join("\n") || "  (nenhuma listada)"}${sem.length ? `
 · SEM SUPORTE (a questão NÃO podia usar): ${sem.join(" · ")}` : ""}
-· "questaoDentroDasAfirmacoes": tudo o que a questão afirma sobre a obra, o autor ou a instituição cabe na lista COM SUPORTE? Se a questão usou algo da lista SEM SUPORTE, ou algo que não está em lista nenhuma nem no MATERIAL, responda false.${v.estado === "aprovado_restrito" ? `
+· "questaoDentroDasAfirmacoes": tudo o que a questão afirma sobre a obra, o autor ou a instituição cabe na lista COM SUPORTE? Se a questão usou algo da lista SEM SUPORTE, ou algo que não está em lista nenhuma nem no MATERIAL, responda false.
+· O que CONSTA da lista COM SUPORTE NUNCA reprova — seja qual for a função que tenha no texto, mesmo que pareça lateral, redundante ou pouco explorado. Julgar se a informação "tem função textual" é qualidade pedagógica, e não é o seu papel (ensaio de 20/09: uma questão foi reprovada por citar um comentário crítico que estava na lista).${v.estado === "aprovado_restrito" ? `
 · APROVAÇÃO RESTRITA AO CONFIRMADO: o trecho literal do pesquisador foi descartado; a questão só podia parafrasear a lista acima. Aspas atribuídas a esta fonte → "usoIdentificadoCorretamente" = false.` : ""}`;
 }
 function buildAuditoriaFontesPrompt(data: any, dossie?: any): string {
@@ -5048,8 +5056,19 @@ ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferrame
        Até REELABORACOES_MAX vezes, enquanto houver tempo. */
     let reelaboracoes = 0;
     let objetoDiagFinal = objetoDiag;
+    let motivoReelabAnterior = "";
     while (fontesDiag && fontesDiag.estado === "reprovado" && reelaboracoes < REELABORACOES_MAX
            && (LIMITE_FUNCAO_MS - (Date.now() - inicioReq)) > MS_MINIMO_PARA_REELABORAR) {
+      /* Reprovação estrutural que o elaborador não corrige (URL fora da busca,
+         tempo, erro) ou o MESMO motivo de novo: parar, não gastar a 2ª. */
+      const motivoAtual = String(fontesDiag.motivo || "");
+      const etapaRep = String((data && data.fonteNaoVerificada && data.fonteNaoVerificada.etapa) || "");
+      if (fontesDiag.determinista === "url_nao_confirmada" || ["tempo", "erro"].includes(etapaRep)
+          || (motivoReelabAnterior && motivoAtual === motivoReelabAnterior)) {
+        console.warn(`[fontes] reelaboração não ajudaria (${fontesDiag.determinista || etapaRep || "mesmo motivo"}) — parando`);
+        break;
+      }
+      motivoReelabAnterior = motivoAtual;
       reelaboracoes++;
       console.warn(`[fontes] reelaboração ${reelaboracoes}/${REELABORACOES_MAX} — ${String(fontesDiag.motivo || "").slice(0, 160)}`);
       let nova = await callClaudeForJSON(system, userMsg + buildCorrecaoAuditoria(fontesDiag, reelaboracoes), false, usos, ferramentaQuestaoPara(recurso, fontesReaisEstrito(area), disciplina), buscasWeb, `geracao/reelaboracao-${reelaboracoes}`);

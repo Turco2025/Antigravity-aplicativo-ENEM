@@ -396,8 +396,18 @@ Custo esperado por questão limpa: US$ 0,12–0,25 (banco quente), teto ≈ US$ 
 esgota as 3 tentativas com reelaborações. Rendimento esperado: 100% das questões entregues, a maior
 parte com fonte validada; a fração em último recurso é o número a acompanhar.
 
-Testes: cenários **D3, J1–J3, K1–K2** em `verify_validador_v7421.ts` (29); seção **P** (5) em
-`verify_fontes_backend.ts` (140); self-test `v7423_insistenciaAutomatica`.
+**Primeiro ensaio da v74.23 no slug (20/09, 22h15)** — Graciliano/*Vidas Secas*: 1ª pergunta entregue
+limpa na rodada 1 (BBM/USP, citação literal) e guardada no banco; 2ª pergunta sobre o mesmo tema veio
+do banco em 0 s de pesquisa — e expôs dois defeitos, corrigidos na mesma versão: (a) a URL do banco
+não tinha "aparecido em busca real nesta chamada", e a conferência estrutural reprovava a questão,
+gastando as duas reelaborações no mesmo erro que o elaborador não corrige → a URL do banco entra nas
+buscas da chamada, e a reelaboração para quando o motivo é estrutural ou se repete; (b) o auditor
+reprovou uma informação que **estava na lista com suporte** ("sem função textual clara") → o prompt
+passa a dizer que o que consta da lista nunca reprova — função textual é qualidade pedagógica, não
+fonte.
+
+Testes: cenários **D3, J1–J3 (J1b), K1–K2** em `verify_validador_v7421.ts` (30); seção **P** (6) em
+`verify_fontes_backend.ts` (141); self-test `v7423_insistenciaAutomatica`.
 
 ### Custo esperado e o que ainda falta medir
 
