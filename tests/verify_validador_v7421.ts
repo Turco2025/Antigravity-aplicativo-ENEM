@@ -54,7 +54,7 @@ ${recortaConstArray("DOMINIOS_NIVEL_B")}
 const WEB_SEARCH_TOOL = { type: "web_search_20250305", name: "web_search", blocked_domains: DOMINIOS_VETADOS, max_uses: 3 };
 const BUSCA_PESQUISADOR_ACERVOS = { type: WEB_SEARCH_TOOL.type, name: WEB_SEARCH_TOOL.name, allowed_domains: DOMINIOS_ACERVO_PRIORITARIO, max_uses: 1 };
 const BUSCA_PESQUISADOR = { ...WEB_SEARCH_TOOL, max_uses: 1 };
-const BUSCA_PESQUISADOR_RETRY = { ...WEB_SEARCH_TOOL, max_uses: 2 };
+const BUSCA_PESQUISADOR_RETRY = { ...WEB_SEARCH_TOOL, max_uses: 1 };
 ${normalizaUrl}
 ${acervosFns}
 ${dominios}
@@ -106,7 +106,7 @@ t("A2 o prompt da rodada 1 avisa que a restrição é do sistema (e o da rodada 
 t("B1 o validador roda em seguida, com web_fetch restrito ao host do dossiê e teto de tokens, sem web_search",
   __stub.chamadas[1].etapa === "validacao/rodada-1" && __stub.chamadas[1].ferramentaNome === "entregar_validacao_fonte"
   && __stub.chamadas[1].ferramentaServidor.type === "web_fetch_20250910"
-  && JSON.stringify(__stub.chamadas[1].ferramentaServidor.allowed_domains) === JSON.stringify(["bndigital.bn.gov.br"])
+  && !("allowed_domains" in __stub.chamadas[1].ferramentaServidor)
   && __stub.chamadas[1].ferramentaServidor.max_content_tokens === 6000 && MODO_VALIDADOR === "web_fetch");
 t("B2 o dossiê volta aprovado, com a validação, o nível, as afirmações e 'fonte aberta' vindo do fetch registrado pelo código",
   r && r.encontrou === true && r.validacao && r.validacao.libera === true && r.validacao.estado === "aprovado"
@@ -137,9 +137,9 @@ t("C1 a rodada 2 recebe o motivo e as correções do validador",
   __stub.chamadas[2].etapa === "pesquisa/tentativa-2"
   && __stub.chamadas[2].userMsg.includes("o validador reprovou o dossiê anterior (a fonte não sustenta o ano)")
   && __stub.chamadas[2].userMsg.includes("confirmar o ano na página"));
-t("C2 a rodada 2 busca ABERTA, com a lista negra como blocked_domains e 2 usos",
+t("C2 a rodada 2 busca ABERTA, com a lista negra como blocked_domains e 1 uso",
   JSON.stringify(__stub.chamadas[2].ferramentaServidor.blocked_domains) === JSON.stringify(M.DOMINIOS_VETADOS) && M.DOMINIOS_VETADOS.length > 30
-  && __stub.chamadas[2].ferramentaServidor.max_uses === 2 && !("allowed_domains" in __stub.chamadas[2].ferramentaServidor));
+  && __stub.chamadas[2].ferramentaServidor.max_uses === 1 && !("allowed_domains" in __stub.chamadas[2].ferramentaServidor));
 t("C3 aprovado na rodada 2: dossiê volta com rodadas = 2, nível B (Itaú Cultural) e marcado como fora do acervo",
   r.encontrou === true && r.validacao.libera === true && r.rodadas === 2 && r.validacao.nivel === "B" && r.foraDoAcervo && r.foraDoAcervo.dominio === "enciclopedia.itaucultural.org.br");
 t("C4 quatro chamadas no total (2 pesquisas + 2 validações)", __stub.chamadas.length === 4);

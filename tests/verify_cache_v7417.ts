@@ -101,7 +101,7 @@ t("D3 a conta do custo usa precoCacheEscrito()",
 t("E1 primeira tentativa do pesquisador: teto 1",
   /const BUSCA_PESQUISADOR = \{ \.\.\.WEB_SEARCH_TOOL, max_uses: 1 \};/.test(src));
 t("E2 segunda tentativa: teto 2",
-  /const BUSCA_PESQUISADOR_RETRY = \{ \.\.\.WEB_SEARCH_TOOL, max_uses: 2 \};/.test(src));
+  /const BUSCA_PESQUISADOR_RETRY = \{ \.\.\.WEB_SEARCH_TOOL, max_uses: 1 \};/.test(src));   // v74.21: era 2
 t("E3 auditoria sem dossiê: teto 2 (inalterado)",
   /const BUSCA_AUDITORIA = \{ \.\.\.WEB_SEARCH_TOOL, max_uses: 2 \};/.test(src));
 t("E4 o teto geral continua 3", /const WEB_SEARCH_TOOL = \{[^}]*max_uses: 3 \};/.test(src));

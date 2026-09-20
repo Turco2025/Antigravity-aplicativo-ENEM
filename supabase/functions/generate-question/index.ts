@@ -963,9 +963,13 @@ const RODADAS_VALIDACAO = 2;                  // pesquisa + validação, duas ve
 const MS_MINIMO_PARA_VALIDAR = 70_000;        // abaixo disso o dossiê é tratado como NÃO validado
 const MS_MINIMO_PARA_SEGUNDA_RODADA = 90_000; // abaixo disso não se abre a rodada 2
 
-function ferramentaFetchPara(url: string) {
-  const host = hostDaUrl(url);
-  return { type: "web_fetch_20250910", name: "web_fetch", max_uses: 1, allowed_domains: host ? [host] : [], max_content_tokens: TETO_TOKENS_FETCH_VALIDADOR };
+/* Sem allowed_domains, de propósito: no primeiro ensaio real (20/09) a API
+   recusou o fetch da URL do dossiê com o domínio permitido igual ao host dela.
+   A única URL que o validador conhece é a do dossiê (a mensagem só traz essa e
+   as da busca), e quem confere o host do que foi aberto é o código
+   (fonteAberta). O teto de tokens continua. */
+function ferramentaFetchPara(_url: string) {
+  return { type: "web_fetch_20250910", name: "web_fetch", max_uses: 1, max_content_tokens: TETO_TOKENS_FETCH_VALIDADOR };
 }
 
 /* A seção 41 do prompt do professor, como schema da ferramenta. Fora dela, de
@@ -989,13 +993,13 @@ const FERRAMENTA_VALIDACAO_FONTE = {
       nivelFonte: { type: "string", enum: ["A", "B", "C", "D"], description: "Igual ou PIOR que o nível calculado pelo sistema, informado na mensagem. Nunca melhor." },
       risco: { type: "string", enum: ["baixo", "medio", "alto", "critico"] },
       confianca: { type: "string", enum: ["alta", "media", "baixa"] },
-      afirmacoesComSuporte: { type: "array", maxItems: 6, items: { type: "string", maxLength: 180 }, description: "O que a questão PODE afirmar com base na fonte. Frases curtas e factuais." },
-      afirmacoesSemSuporte: { type: "array", maxItems: 6, items: { type: "string", maxLength: 180 }, description: "O que aparece no dossiê mas a fonte NÃO sustenta (ampliação indevida, intenção atribuída, data não confirmada)." },
-      divergenciaDocumental: { type: "string", maxLength: 300, description: "Vazio se não houver. Senão: 'a fonte afirma X; o dossiê afirma Y'." },
-      correcoesNecessarias: { type: "array", maxItems: 6, items: { type: "string", maxLength: 180 }, description: "Só com status corrigir: instruções para o PESQUISADOR refazer. Nunca uma versão reescrita do dossiê." },
-      observacoesAoElaborador: { type: "string", maxLength: 400, description: "O que quem vai escrever a questão precisa saber sobre esta fonte." },
-      comoVerificou: { type: "string", maxLength: 240, description: "Em uma frase: o que conferiu e onde. Se não abriu a fonte, diga." },
-      motivo: { type: "string", maxLength: 300, description: "Obrigatório quando status ≠ aprovado. Vazio quando aprovado." },
+      afirmacoesComSuporte: { type: "array", maxItems: 5, items: { type: "string", maxLength: 140 }, description: "O que a questão PODE afirmar com base na fonte. Frases curtas e factuais — telegráficas." },
+      afirmacoesSemSuporte: { type: "array", maxItems: 4, items: { type: "string", maxLength: 140 }, description: "O que aparece no dossiê mas a fonte NÃO sustenta (ampliação indevida, intenção atribuída, data não confirmada). Telegráfico." },
+      divergenciaDocumental: { type: "string", maxLength: 200, description: "Vazio se não houver. Senão: 'a fonte afirma X; o dossiê afirma Y'." },
+      correcoesNecessarias: { type: "array", maxItems: 4, items: { type: "string", maxLength: 120 }, description: "Só com status corrigir: instruções curtas para o PESQUISADOR refazer. Nunca uma versão reescrita do dossiê." },
+      observacoesAoElaborador: { type: "string", maxLength: 240, description: "Só o que quem vai escrever a questão precisa saber. Uma ou duas frases." },
+      comoVerificou: { type: "string", maxLength: 160, description: "Uma frase: o que conferiu e onde. Se não abriu a fonte, diga." },
+      motivo: { type: "string", maxLength: 200, description: "Obrigatório quando status ≠ aprovado, em UMA frase. Vazio quando aprovado." },
     },
     required: ["status", "fonteExiste", "autorConfirmado", "obraConfirmada", "dataConfirmada", "referenciaConfere",
                "suporteDaEvidencia", "trechoLiteralConfere", "naturezaDoMaterial", "nivelFonte", "risco", "confianca",
@@ -1069,6 +1073,8 @@ CONTROLE CONTRA ALUCINAÇÃO — antes de entregar, pergunte-se: "alguma parte d
 CLASSIFICAÇÃO — somente três status. APROVADO: fonte existe, referência confere, evidência DIRETA, sem erro factual relevante, sem atribuição falsa, sem inferência indevida, confiança ALTA. CORRIGIR: núcleo certo, problema pontual e corrigível pelo pesquisador. REJEITAR: fonte falsa, obra inexistente, autor errado, citação inventada, informação central ausente da fonte, referência fabricada, nível D. Não existe "aprovado com dúvida": dúvida factual relevante é corrigir ou rejeitar.
 
 TESTE FINAL antes de aprovar — as cinco respostas têm de ser SIM: a fonte existe de verdade? eu efetivamente confirmei o conteúdo (ou declarei que não abri)? a fonte sustenta EXATAMENTE as afirmações listadas? a referência permite que outra pessoa a encontre? eu defenderia esta validação diante de uma banca, com a fonte aberta?
+
+SEJA TELEGRÁFICO NA ENTREGA: cada campo de texto em uma frase curta, cada item de lista em poucas palavras. O rigor está no julgamento, não no tamanho do texto — texto longo aqui só custa.
 
 Você não existe para confirmar o que o sistema quer ouvir. Você existe para impedir que uma questão incorreta seja publicada. Se estiver errado, rejeite. Se estiver incompleto, mande corrigir. Se estiver correto e documentado, aprove. Nunca diminua o rigor para aumentar a velocidade.`;
 
@@ -1158,7 +1164,7 @@ function liberaGeracao(v: any, nivelDominio: string): { libera: boolean; motivo:
 async function validarDossie(
   o: { area: string; disciplina: string; tema: string; eixoTematico?: string; recorte?: string },
   d: any, usos: any[], buscas: { url: string; title: string }[], rodada: number, motivoAnterior: string, pre: { nivel: NivelFonte; host: string },
-): Promise<{ v: any | null; fonteAberta: boolean; modo: ModoValidador; erro: string }> {
+): Promise<{ v: any | null; fonteAberta: boolean; modo: ModoValidador; erro: string; fetchErro?: string }> {
   const sistema: SistemaPrompt = [{ type: "text", text: SISTEMA_VALIDACAO_FONTE, cache_control: cacheControlAtual() }];
   let modo: ModoValidador = MODO_VALIDADOR;
   for (let passo = 0; passo < 2; passo++) {
@@ -1171,7 +1177,9 @@ async function validarDossie(
       );
       const alvo = hostDaUrl(String(d.url || ""));
       const fonteAberta = fetches.some((f) => f.ok && hostDaUrl(f.url) === alvo);
-      return { v: v && typeof v === "object" ? v : null, fonteAberta, modo, erro: v && typeof v === "object" ? "" : "veredito ilegível" };
+      const fetchErro = fetches.filter((f) => !f.ok).map((f) => `${f.erro}${f.url ? ` (${hostDaUrl(f.url)})` : ""}`).join("; ");
+      if (fetches.length) console.log(`[validador] web_fetch: ${fetches.length} tentativa(s) · aberta ${fonteAberta}${fetchErro ? ` · erro: ${fetchErro}` : ""}`);
+      return { v: v && typeof v === "object" ? v : null, fonteAberta, modo, erro: v && typeof v === "object" ? "" : "veredito ilegível", fetchErro };
     } catch (e) {
       const msg = String((e as any)?.message || e);
       /* A ferramenta beta pode não estar habilitada na conta: a API recusa a
@@ -1275,15 +1283,15 @@ async function pesquisarFonteReal(
     const lib = r.v ? liberaGeracao(v, pre.nivel) : { libera: false, motivo: `a validação não pôde ser concluída: ${r.erro}` };
     d.validacao = {
       estado: lib.libera ? "aprovado" : "reprovado", etapa: "validador", libera: lib.libera, motivo: lib.motivo,
-      rodada: tentativa, modo: r.modo, fonteAberta: r.fonteAberta === true, nivel: piorNivel(pre.nivel, String(v.nivelFonte || "")),
+      rodada: tentativa, modo: r.modo, fonteAberta: r.fonteAberta === true, fetchErro: String(r.fetchErro || ""), nivel: piorNivel(pre.nivel, String(v.nivelFonte || "")),
       status: String(v.status || ""), suporte: String(v.suporteDaEvidencia || ""), confianca: String(v.confianca || ""),
       risco: String(v.risco || ""), natureza: String(v.naturezaDoMaterial || ""),
-      afirmacoesComSuporte: listaDeTextos(v.afirmacoesComSuporte, 6, 180),
-      afirmacoesSemSuporte: listaDeTextos(v.afirmacoesSemSuporte, 6, 180),
-      correcoes: listaDeTextos(v.correcoesNecessarias, 6, 180),
-      divergencia: String(v.divergenciaDocumental || "").slice(0, 300),
-      observacoes: String(v.observacoesAoElaborador || "").slice(0, 400),
-      comoVerificou: String(v.comoVerificou || "").slice(0, 240),
+      afirmacoesComSuporte: listaDeTextos(v.afirmacoesComSuporte, 5, 140),
+      afirmacoesSemSuporte: listaDeTextos(v.afirmacoesSemSuporte, 4, 140),
+      correcoes: listaDeTextos(v.correcoesNecessarias, 4, 120),
+      divergencia: String(v.divergenciaDocumental || "").slice(0, 200),
+      observacoes: String(v.observacoesAoElaborador || "").slice(0, 240),
+      comoVerificou: String(v.comoVerificou || "").slice(0, 160),
     };
     /* "fonte aberta" passa a ser do código, não do pesquisador. */
     d.abriuAFonte = r.fonteAberta === true;
@@ -1834,7 +1842,13 @@ const BUSCA_PESQUISADOR_ACERVOS = { type: WEB_SEARCH_TOOL.type, name: WEB_SEARCH
 const BUSCA_PESQUISADOR = { ...WEB_SEARCH_TOOL, max_uses: 1 };
 /* Segunda tentativa do pesquisador: já sabe o que não funcionou, procura em
    outro lugar — duas buscas bastam e evitam a leva cara do item 2. */
-const BUSCA_PESQUISADOR_RETRY = { ...WEB_SEARCH_TOOL, max_uses: 2 };
+/* v74.21 — teto 1 também na segunda tentativa. No primeiro ensaio real do
+   validador (20/09) a segunda tentativa fez 2 buscas e gravou 29 mil tokens de
+   cache (≈ US$ 0,07) só de resultados. Cada busca custa, medido, US$ 0,03–0,07
+   em tokens além do US$ 0,01 da busca em si; e o prompt já pede UMA consulta
+   bem construída. A segunda tentativa continua sendo uma pesquisa inteira, em
+   outro lugar — só não faz duas buscas dentro dela. */
+const BUSCA_PESQUISADOR_RETRY = { ...WEB_SEARCH_TOOL, max_uses: 1 };
 /* Auditoria SEM dossiê (o pesquisador não achou nada): aí ela ainda precisa
    confirmar por fora. Com dossiê ela não busca — confere a questão CONTRA a
    fonte já validada, que é o item 7 da regra ("REVISAR"), não uma segunda
@@ -4058,7 +4072,7 @@ function selfTestResponse() {
           const fer = ferramentaFetchPara("https://www.bndigital.bn.gov.br/x");
           return !f.includes("BUSCA_PESQUISADOR") && !f.includes("WEB_SEARCH_TOOL") && !f.includes("web_search")
             && fer.type === "web_fetch_20250910" && fer.max_uses === 1 && fer.max_content_tokens === TETO_TOKENS_FETCH_VALIDADOR
-            && JSON.stringify(fer.allowed_domains) === JSON.stringify(["bndigital.bn.gov.br"])
+            && !("allowed_domains" in fer)
             && RODADAS_VALIDACAO === 2 && MS_MINIMO_PARA_VALIDAR >= 60_000 && MS_MINIMO_PARA_SEGUNDA_RODADA > MS_MINIMO_PARA_VALIDAR;
         })(),
         v7421_bloqueiaSemFonteValidada: (() => {
@@ -4255,7 +4269,7 @@ function selfTestResponse() {
         })(),
         v7417_pesquisadorUmaBusca:
           BUSCA_PESQUISADOR.max_uses === 1
-          && BUSCA_PESQUISADOR_RETRY.max_uses === 2
+          && BUSCA_PESQUISADOR_RETRY.max_uses === 1   // v74.21: era 2
           && BUSCA_AUDITORIA.max_uses === 2,
         /* v74.16 — os cinco acervos que o professor mandou priorizar, na ordem
            dele, e só nas três disciplinas que ele nomeou. */

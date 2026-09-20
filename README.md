@@ -223,6 +223,29 @@ impressão, HTML e DOCX não mudam. O bloqueio chega ao app pelo caminho de erro
 `ACERVOS_PRIORITARIOS`, `MENSAGEM_FONTE_BLOQUEIO`, a calibração de extensão, a skill
 `enem-question-generator`, `app_data.json`.
 
+### Primeiro ensaio real no slug de teste (20/09, Artes, "Tarsila do Amaral — Abaporu")
+
+Depois do push do commit `8eabf835`, uma questão de teste no slug `gq-teste-v7413`: **bloqueada
+antes da geração**, como desenhado. O validador achou uma inconsistência real dentro do próprio
+dossiê (número de inventário `2003.33` contra doação "em 2001") e não conseguiu abrir a URL. Três
+correções saíram desse ensaio, antes de qualquer produção:
+
+1. **`web_fetch` sem `allowed_domains`.** A API aceitou a ferramenta beta (o fetch foi contado em
+   `server_tool_use`), mas recusou a URL do dossiê com o domínio permitido igual ao host dela. A
+   única URL que o validador conhece é a do dossiê, e quem confere o host do que foi aberto é o
+   código (`fonteAberta`); o teto de tokens continua. O erro do fetch passa a ir para o diagnóstico
+   (`validacao.fetchErro`) e para o log da função.
+2. **Saída do validador com tetos menores** (afirmações 140, correções 120, observações 240,
+   motivo 200) e a instrução "seja telegráfico": o veredito do ensaio gastou 1.943 tokens de saída
+   (US$ 0,019).
+3. **`BUSCA_PESQUISADOR_RETRY` de 2 para 1 uso.** A segunda tentativa fez 2 buscas e gravou 29 mil
+   tokens de cache (≈ US$ 0,07) só de resultados.
+
+O custo daquela questão bloqueada foi **US$ 0,216** — e é exatamente o número que prova onde o
+problema está: 51 mil tokens gravados em cache (US$ 0,128), quase todos resultados de busca, com
+**nenhuma** elaboração feita. O validador e a lista negra não mudam isso; o que muda é o número de
+buscas por questão e o tamanho do que cada busca devolve. Isso é o que a próxima leva mede.
+
 ### Custo esperado e o que ainda falta medir
 
 O validador custa ≈ US$ 0,006 por rodada sem ferramenta e ≈ US$ 0,018 com `web_fetch` (estimativa;
