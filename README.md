@@ -246,6 +246,35 @@ problema está: 51 mil tokens gravados em cache (US$ 0,128), quase todos resulta
 **nenhuma** elaboração feita. O validador e a lista negra não mudam isso; o que muda é o número de
 buscas por questão e o tamanho do que cada busca devolve. Isso é o que a próxima leva mede.
 
+### Segundo e terceiro ensaios (20/09, commit `7c889dd6`) — e a troca do `web_fetch`
+
+**Artes, "Abaporu", de novo (id 1210, US$ 0,151):** a rodada 1 **restrita aos acervos funcionou** —
+trouxe "O Modernismo", da Rede da Memória Virtual Brasileira da BNDigital. E a minha conferência
+prévia jogou a fonte fora por um detalhe: trecho literal com mais de 300 caracteres. A rodada 2
+trouxe uma página da UFBA que a busca **não** tinha devolvido (mesmo host, outro caminho), o
+`web_fetch` respondeu `url_not_allowed`, e o validador reprovou. Duas lições viraram código:
+
+1. **Tamanho do trecho literal não reprova mais.** Quem julga literalidade é o validador; o corte é
+   do elaborador.
+2. **A URL do dossiê tem de ser exatamente a de um resultado da busca**, não só o mesmo host —
+   o mesmo critério que `conferenciaFontes` já aplica à questão.
+
+**Literatura, "Machado de Assis — Memórias Póstumas":** a rodada 1 restrita achou a edição na
+**BBM Digital (USP)**. Aí o validador tentou abrir o PDF pelo `web_fetch` e a chamada ficou
+pendurada até a Edge Function ser encerrada aos 150 s — sem log, sem registro de custo. O
+`web_fetch` falhou nas três vezes em que foi usado (duas `url_not_allowed` — pela documentação da
+Anthropic, robots.txt ou filtro de domínio — e uma pendurada num PDF). Três mudanças:
+
+3. **O validador passa a usar `busca_no_dominio`**: UMA `web_search` com `allowed_domains` = host
+   da fonte. Não depende de robots.txt, devolve a própria página como resultado (é contra ela que o
+   validador confere trecho, autoria, título e data), e poucos resultados de um só domínio pesam
+   pouco. **"Fonte aberta" passa a significar: a URL do dossiê apareceu nos resultados dessa busca**
+   (ou foi aberta pelo fetch, se o modo `web_fetch` voltar a ser usado). O `web_fetch` fica no
+   código como modo alternativo.
+4. **Teto de tempo por chamada** (`timeoutMs` em `callClaude`/`callClaudeForJSON`): 70 s no
+   pesquisador, 60 s no validador. O teto único de 240 s era maior que a vida da função.
+5. O modo efetivo, o erro do fetch e os resultados da busca restrita vão para o log da função.
+
 ### Custo esperado e o que ainda falta medir
 
 O validador custa ≈ US$ 0,006 por rodada sem ferramenta e ≈ US$ 0,018 com `web_fetch` (estimativa;

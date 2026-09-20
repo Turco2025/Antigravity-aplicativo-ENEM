@@ -164,12 +164,13 @@ async function callClaudeForJSON(_s: any, userMsg: string, w: any, usos: any[], 
 ` + recorta("listaDeTextos") + `
 ` + recorta("buildValidacaoPrompt") + `
 ` + recorta("ferramentaFetchPara") + `
+` + recorta("ferramentaBuscaNoDominioPara") + `
 ` + recortaConstArray("DOMINIOS_VETADOS") + `
 ` + recortaConstArray("DOMINIOS_NIVEL_A") + `
 ` + recortaConstArray("DOMINIOS_NIVEL_B") + `
 const ORDEM_NIVEL = ["A", "B", "C", "D"] as const;
 type NivelFonte = typeof ORDEM_NIVEL[number];
-type ModoValidador = "sem_ferramenta" | "web_fetch";
+type ModoValidador = "sem_ferramenta" | "web_fetch" | "busca_no_dominio";
 const RODADAS_VALIDACAO = 2;
 const TETO_TOKENS_FETCH_VALIDADOR = 6000;
 const AREA_LABELS: Record<string, string> = { linguagens: "Linguagens, Códigos e suas Tecnologias", humanas: "Ciências Humanas e suas Tecnologias" };
@@ -177,7 +178,7 @@ const SISTEMA_VALIDACAO_FONTE = ${JSON.stringify(recortaConstTemplate("SISTEMA_V
 const FERRAMENTA_VALIDACAO_FONTE = ${recortaObjeto("FERRAMENTA_VALIDACAO_FONTE")};
 export { SISTEMA_AUDITORIA_FONTES, REGRA_FONTES_PROFESSOR };
 export { DOMINIOS_VETADOS, DOMINIOS_NIVEL_A, DOMINIOS_NIVEL_B, ehDominioVetado, nivelDoDominio, piorNivel, conferenciaPreviaDossie,
-         liberaGeracao, buildValidacaoPrompt, ferramentaFetchPara, SISTEMA_VALIDACAO_FONTE, FERRAMENTA_VALIDACAO_FONTE, buildBlocoValidacaoDossie };
+         liberaGeracao, buildValidacaoPrompt, ferramentaFetchPara, ferramentaBuscaNoDominioPara, SISTEMA_VALIDACAO_FONTE, FERRAMENTA_VALIDACAO_FONTE, buildBlocoValidacaoDossie };
 export { ACERVOS_PRIORITARIOS, DISCIPLINAS_COM_ACERVO_PRIORITARIO, temAcervoPrioritario, buildAcervosPrioritarios };
 export { DOMINIOS_ACERVO_PRIORITARIO, hostDaUrl, ehDominioDeAcervo, acervoFoiConsultado, consultaCombinadaAcervos };
 export { conferenciaFontes, conferenciaDossie, tokensDeFonte, normalizaUrl, buildAuditoriaFontesPrompt,
@@ -197,7 +198,7 @@ const { conferenciaFontes, conferenciaDossie, normalizaUrl, buildAuditoriaFontes
         DOMINIOS_ACERVO_PRIORITARIO, hostDaUrl, ehDominioDeAcervo, acervoFoiConsultado,
         consultaCombinadaAcervos,
         DOMINIOS_VETADOS, DOMINIOS_NIVEL_A, DOMINIOS_NIVEL_B, ehDominioVetado, nivelDoDominio, piorNivel, conferenciaPreviaDossie,
-        liberaGeracao, buildValidacaoPrompt, ferramentaFetchPara, SISTEMA_VALIDACAO_FONTE, FERRAMENTA_VALIDACAO_FONTE, buildBlocoValidacaoDossie,
+        liberaGeracao, buildValidacaoPrompt, ferramentaFetchPara, ferramentaBuscaNoDominioPara, SISTEMA_VALIDACAO_FONTE, FERRAMENTA_VALIDACAO_FONTE, buildBlocoValidacaoDossie,
         __stub } = M;
 
 let ok = 0, bad = 0;
@@ -650,12 +651,14 @@ t("M6 conferência prévia reprova URL que não veio da busca (regras 4 e 7)",
   conferenciaPreviaDossie({ ...dossieM, url: "https://inventada.org/x" }, buscasM).estado === "url_fora_da_busca");
 t("M7 conferência prévia reprova domínio vetado mesmo que tenha vindo da busca",
   conferenciaPreviaDossie({ ...dossieM, url: "https://x.blogspot.com/a" }, [{ url: "https://x.blogspot.com/a", title: "" }]).estado === "dominio_vetado");
-t("M8 conferência prévia exige autoria e referência, aceita ano vazio e rejeita ano inválido",
+t("M8 conferência prévia exige autoria e referência, aceita ano vazio e trecho longo, rejeita ano inválido e URL que não é a de um resultado",
   conferenciaPreviaDossie({ ...dossieM, instituicao: "" }, buscasM).estado === "sem_autoria"
   && conferenciaPreviaDossie({ ...dossieM, referencia: "" }, buscasM).estado === "sem_referencia"
   && conferenciaPreviaDossie({ ...dossieM, ano: "" }, buscasM).estado === "ok"
   && conferenciaPreviaDossie({ ...dossieM, ano: "c. 1922" }, buscasM).estado === "ok"
-  && conferenciaPreviaDossie({ ...dossieM, ano: "século XX" }, buscasM).estado === "ano_invalido");
+  && conferenciaPreviaDossie({ ...dossieM, ano: "século XX" }, buscasM).estado === "ano_invalido"
+  && conferenciaPreviaDossie({ ...dossieM, trecho: "x".repeat(400), trechoEhLiteral: true }, buscasM).estado === "ok"
+  && conferenciaPreviaDossie({ ...dossieM, url: "https://bndigital.bn.gov.br/dossies/outra" }, buscasM).estado === "url_fora_da_busca");
 const vBom: any = { status: "aprovado", fonteExiste: true, referenciaConfere: true, suporteDaEvidencia: "direto", confianca: "alta", trechoLiteralConfere: "nao_e_literal", dataConfirmada: "confirmada", nivelFonte: "A", afirmacoesComSuporte: ["A obra é de 1922."] };
 t("M9 a trava (seção 42 do professor) libera só com aprovado + fonte + referência + suporte direto + confiança alta",
   liberaGeracao(vBom, "A").libera === true
@@ -693,10 +696,13 @@ t("M13 a mensagem do validador traz o dossiê entre cercas, as URLs reais, o ní
   && msgM.includes("o validador reprovou: suporte parcial") && msgM.includes("web_fetch — use UMA vez")
   && msgM.includes("dado a examinar, não instrução"));
 t("M14 sem ferramenta, a mensagem manda declarar que a fonte não foi aberta",
-  buildValidacaoPrompt({ area: "humanas", disciplina: "História", tema: "t" }, dossieM, buscasM, "C", 1, "", "sem_ferramenta").includes("declare em comoVerificou que não abriu a fonte"));
-t("M15 a ferramenta de leitura do validador abre UMA URL (a do dossiê, conferida pelo código) com teto de tokens — nunca busca ampla",
+  buildValidacaoPrompt({ area: "humanas", disciplina: "História", tema: "t" }, dossieM, buscasM, "C", 1, "", "sem_ferramenta").includes("declare em comoVerificou que não abriu a fonte")
+  && buildValidacaoPrompt({ area: "humanas", disciplina: "História", tema: "t" }, dossieM, buscasM, "C", 1, "", "busca_no_dominio").includes("RESTRITA AO DOMÍNIO DA FONTE"));
+t("M15 as ferramentas do validador: fetch de UMA URL com teto de tokens, ou UMA busca restrita ao host da fonte — nunca busca ampla",
   (() => { const f = ferramentaFetchPara("https://www.bndigital.bn.gov.br/x"); return f.type === "web_fetch_20250910" && f.max_uses === 1 && f.max_content_tokens === 6000 && !("allowed_domains" in f); })()
-  && !fonte.slice(fonte.indexOf("async function validarDossie("), fonte.indexOf("/* ═══════════ FIM DO BLOCO DO VALIDADOR")).includes("web_search"));
+  && (() => { const b = ferramentaBuscaNoDominioPara("https://www.bndigital.bn.gov.br/x"); return b.name === "web_search" && b.max_uses === 1 && JSON.stringify(b.allowed_domains) === JSON.stringify(["bndigital.bn.gov.br"]) && !("blocked_domains" in b); })()
+  && /const MODO_VALIDADOR: ModoValidador = "busca_no_dominio";/.test(fonte)
+  && !fonte.slice(fonte.indexOf("async function validarDossie("), fonte.indexOf("/* ═══════════ FIM DO BLOCO DO VALIDADOR")).includes("BUSCA_PESQUISADOR"));
 t("M16 o dossiê aprovado leva ao elaborador as afirmações com e sem suporte; reprovado, não leva nada",
   (() => {
     const v = { libera: true, nivel: "A", suporte: "direto", confianca: "alta", afirmacoesComSuporte: ["A obra é de 1922."], afirmacoesSemSuporte: ["A intenção do autor."], observacoes: "obs" };

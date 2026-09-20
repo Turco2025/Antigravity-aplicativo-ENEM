@@ -10,7 +10,7 @@
      D. duas reprovações → objeto bloqueado (encontrou:false) — a questão não é gerada
      E. conferência prévia reprova sem gastar a chamada do validador
      F. sem tempo, não abre rodada 2 nem valida
-     G. web_fetch recusado pela API → repete a rodada sem ferramenta
+     G. ferramenta do validador recusada pela API → repete a rodada sem ferramenta
      H. fora de Linguagens/Humanas nada muda (null)
 
    Uso: deno run -A tests/verify_validador_v7421.ts supabase/functions/generate-question/index.ts */
@@ -62,7 +62,7 @@ ${blocoValidador}
 ${pesquisar}
 /* dublê roteirizado: cada chamada consome a próxima resposta da fila */
 export const __stub: any = { fila: [] as any[], chamadas: [] as any[] };
-async function callClaudeForJSON(_s: any, userMsg: string, ferramentaServidor: any, usos: any[], ferramenta: any, buscas?: any[], etapa = "", fetches?: any[]) {
+async function callClaudeForJSON(_s: any, userMsg: string, ferramentaServidor: any, usos: any[], ferramenta: any, buscas?: any[], etapa = "", fetches?: any[], _timeoutMs?: number) {
   const passo = __stub.fila.shift();
   __stub.chamadas.push({ etapa, ferramentaServidor, ferramentaNome: ferramenta && ferramenta.name, userMsg });
   if (usos) usos.push({ input_tokens: 1, output_tokens: 1, etapa });
@@ -93,7 +93,7 @@ const muitoTempo = () => 140_000;
 /* A/B — aprovado na rodada 1, restrita aos acervos, com fonte aberta pelo código */
 roteiro(
   { resposta: dossieBom(), buscas: [{ url: URL_ACERVO, title: "BN" }] },
-  { resposta: vAprovado, fetches: [{ url: URL_ACERVO, ok: true, erro: "" }] },
+  { resposta: vAprovado, buscas: [{ url: URL_ACERVO, title: "BN — a própria página" }] },
 );
 let usos: any[] = [], buscas: any[] = [];
 let r = await pesquisarFonteReal(o, usos, buscas, muitoTempo);
@@ -103,15 +103,15 @@ t("A1 a rodada 1 de Artes usa a busca RESTRITA aos acervos (allowed_domains), co
   && !("blocked_domains" in __stub.chamadas[0].ferramentaServidor) && __stub.chamadas[0].ferramentaServidor.max_uses === 1);
 t("A2 o prompt da rodada 1 avisa que a restrição é do sistema (e o da rodada 2 não)",
   __stub.chamadas[0].userMsg.includes("RESTRITA, PELO SISTEMA"));
-t("B1 o validador roda em seguida, com web_fetch restrito ao host do dossiê e teto de tokens, sem web_search",
+t("B1 o validador roda em seguida, com UMA busca restrita ao host do dossiê (modo busca_no_dominio), sem lista negra e sem busca ampla",
   __stub.chamadas[1].etapa === "validacao/rodada-1" && __stub.chamadas[1].ferramentaNome === "entregar_validacao_fonte"
-  && __stub.chamadas[1].ferramentaServidor.type === "web_fetch_20250910"
-  && !("allowed_domains" in __stub.chamadas[1].ferramentaServidor)
-  && __stub.chamadas[1].ferramentaServidor.max_content_tokens === 6000 && MODO_VALIDADOR === "web_fetch");
-t("B2 o dossiê volta aprovado, com a validação, o nível, as afirmações e 'fonte aberta' vindo do fetch registrado pelo código",
+  && __stub.chamadas[1].ferramentaServidor.name === "web_search" && __stub.chamadas[1].ferramentaServidor.max_uses === 1
+  && JSON.stringify(__stub.chamadas[1].ferramentaServidor.allowed_domains) === JSON.stringify(["bndigital.bn.gov.br"])
+  && !("blocked_domains" in __stub.chamadas[1].ferramentaServidor) && MODO_VALIDADOR === "busca_no_dominio");
+t("B2 o dossiê volta aprovado, com a validação, o nível, as afirmações e 'fonte aberta' = a URL do dossiê apareceu na busca restrita do validador",
   r && r.encontrou === true && r.validacao && r.validacao.libera === true && r.validacao.estado === "aprovado"
   && r.validacao.nivel === "A" && r.validacao.suporte === "direto" && r.validacao.fonteAberta === true && r.abriuAFonte === true
-  && r.validacao.afirmacoesComSuporte[0] === "O dossiê é da BN." && r.rodadas === 1 && r.validacao.modo === "web_fetch");
+  && r.validacao.afirmacoesComSuporte[0] === "O dossiê é da BN." && r.rodadas === 1 && r.validacao.modo === "busca_no_dominio");
 t("B3 duas chamadas no total (pesquisa + validação) e o dossiê veio do acervo (sem marca foraDoAcervo)",
   __stub.chamadas.length === 2 && usos.length === 2 && !r.foraDoAcervo);
 
@@ -121,15 +121,15 @@ roteiro(
   { resposta: vAprovado, fetches: [] },
 );
 r = await pesquisarFonteReal(o, [], [], muitoTempo);
-t("B4 sem web_fetch_tool_result, fonteAberta = false e abriuAFonte do pesquisador é sobrescrito",
+t("B4 sem a URL do dossiê nos resultados do validador (nem fetch), fonteAberta = false e abriuAFonte do pesquisador é sobrescrito",
   r.validacao.libera === true && r.validacao.fonteAberta === false && r.abriuAFonte === false);
 
 /* C — reprovado na rodada 1, aprovado na 2 (aberta, com lista negra), fonte de fora marcada */
 roteiro(
   { resposta: dossieBom(), buscas: [{ url: URL_ACERVO, title: "BN" }] },
-  { resposta: vReprovado, fetches: [{ url: URL_ACERVO, ok: true, erro: "" }] },
+  { resposta: vReprovado, buscas: [{ url: URL_ACERVO, title: "" }] },
   { resposta: dossieBom(URL_FORA), buscas: [{ url: URL_FORA, title: "Itaú Cultural" }] },
-  { resposta: { ...vAprovado, nivelFonte: "B" }, fetches: [{ url: URL_FORA, ok: true, erro: "" }] },
+  { resposta: { ...vAprovado, nivelFonte: "B" }, buscas: [{ url: URL_FORA, title: "" }] },
 );
 usos = []; buscas = [];
 r = await pesquisarFonteReal(o, usos, buscas, muitoTempo);
@@ -161,7 +161,7 @@ t("D2 um objeto bloqueado NÃO passa por dossiê válido (encontrou !== true)", 
 roteiro(
   { resposta: dossieBom("https://x.blogspot.com/post"), buscas: [{ url: "https://x.blogspot.com/post", title: "" }] },
   { resposta: dossieBom(), buscas: [{ url: URL_ACERVO, title: "" }] },
-  { resposta: vAprovado, fetches: [{ url: URL_ACERVO, ok: true, erro: "" }] },
+  { resposta: vAprovado, buscas: [{ url: URL_ACERVO, title: "" }] },
 );
 r = await pesquisarFonteReal(o, [], [], muitoTempo);
 t("E1 domínio vetado reprova na conferência prévia, sem gastar a chamada do validador, e a rodada 2 recebe o motivo",
@@ -190,12 +190,12 @@ t("F2 reprovado na rodada 1 e sem 90 s para a rodada 2, não abre a rodada 2",
 /* G — web_fetch recusado pela API */
 roteiro(
   { resposta: dossieBom(), buscas: [{ url: URL_ACERVO, title: "" }] },
-  { erro: "HTTP 400: tools.0: web_fetch_20250910 is not a supported tool type" },
+  { erro: "HTTP 400: tools.0.allowed_domains: invalid" },
   { resposta: vAprovado },
 );
 r = await pesquisarFonteReal(o, [], [], muitoTempo);
-t("G1 web_fetch recusado → repete a MESMA rodada sem ferramenta, modo registrado, fonte aberta false",
-  __stub.chamadas.length === 3 && __stub.chamadas[1].ferramentaServidor.type === "web_fetch_20250910"
+t("G1 ferramenta recusada pela API → repete a MESMA rodada sem ferramenta, modo registrado, fonte aberta false",
+  __stub.chamadas.length === 3 && __stub.chamadas[1].ferramentaServidor.name === "web_search"
   && __stub.chamadas[2].ferramentaServidor === false && __stub.chamadas[2].etapa === "validacao/rodada-1"
   && r.validacao.libera === true && r.validacao.modo === "sem_ferramenta" && r.validacao.fonteAberta === false);
 t("G2 a mensagem sem ferramenta manda declarar que não abriu a fonte",
