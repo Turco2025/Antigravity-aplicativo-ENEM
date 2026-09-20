@@ -124,7 +124,7 @@ Teste: `verify_fontes_app.js` — 19 verificações; as seções B e C bis prova
 quatro marcas ligadas ao mesmo tempo nenhuma conferência bloqueia, e que nenhuma delas tem sequer um
 `return true` no corpo. `verify_gabarito_coerente.js` H1 passou a exigir o contrário do que exigia.
 
-## O agente validador entre a pesquisa e a elaboração — e o custo que o log mostrou (generate-question v74.21 → v74.22 · app v18.26, 20/09/2026)
+## O agente validador entre a pesquisa e a elaboração — e o custo que o log mostrou (generate-question v74.21 → v74.23 · app v18.27, 20/09/2026)
 
 Pedido do professor (20/09): um squad de quatro agentes — **pesquisador, validador, elaborador e
 auditor** — em que o elaborador só escreve depois que a fonte foi aprovada, com o prompt "AGENTE
@@ -353,6 +353,51 @@ função (`[fontes] auditor negou … fato vence opinião`), para acompanhamento
 Testes: seção **O** (7) em `verify_fontes_backend.ts` (135 no total) — a função pura em todos os
 casos de borda, o caso real (O3), conteúdo negado continua reprovando (O4), URL diferente (O5),
 página não localizada (O6); self-test `v7422_fatoVenceOpiniao`.
+
+### Sexto passo (20/09, v74.23 · app v18.27): "nunca deixar de gerar a questão" — insistência automática
+
+A v74.22 foi para a produção (versão 95) às 18h e o professor gerou 23 questões de Literatura na
+versão anterior, antes disso: **18 das 23** saíram marcadas pelo auditor — texto inventado além da
+fonte (10), `fonteExiste = false` por opinião (6), citação não conferida, fonte de blog. Decisão do
+professor, na sequência: *o erro nunca vira questão errada, e a falta de fonte nunca vira ausência de
+questão — o sistema corrige sozinho e insiste até entregar.* Três respostas dele fecharam o desenho:
+**3 pedidos por questão · último recurso = texto próprio · banco de fontes validadas: sim.**
+
+O que a v74.23 faz, na ordem em que acontece:
+
+1. **Banco de fontes validadas** (`fontes_validadas`, só da função). Antes de pesquisar, o laço
+   procura um dossiê já aprovado para o mesmo autor/obra/tema da disciplina (≥ 2 tokens em comum
+   entre o tema pedido e autor+obra, ou o mesmo tema normalizado). Achou → entra como dossiê
+   aprovado (`aprovado_banco`) sem pesquisa nem validação: custo zero de busca. Cada aprovação do
+   validador (plena ou restrita) é guardada (`upsert` por URL). Na leva de 20/09, três questões de
+   Graciliano e duas de Quinhentismo pagaram a mesma pesquisa repetidas vezes.
+2. **Três rodadas pesquisador ⇄ validador por chamada** (eram duas), enquanto houver 90 s. Cada
+   fonte reprovada vira `fonteEvitar` já na rodada seguinte (a conferência prévia reprova em código
+   quem voltar a ela: `fonte_evitada`), e volta ao app em `fontesDiag.fontesTentadas`.
+3. **Auditor reprovou a QUESTÃO, não a fonte → reelaboração com o mesmo dossiê.** O elaborador
+   recebe o motivo e os itens reprovados (`buildCorrecaoAuditoria`) e reescreve; visual, notação,
+   gabarito, objeto e auditoria rodam de novo. Até 2 vezes, com 45 s de folga. É o que resolve a
+   maior fatia da leva de hoje (10 de 18 eram texto inventado sobre fonte boa) — sem pagar pesquisa.
+4. **O app repete o pedido sozinho** (v18.27): 422 por fonte → novo pedido com `tentativa`,
+   `fontesEvitar` acumuladas e, no 3º, `ultimoRecurso: true`; questão que chegou reprovada pelo
+   auditor (depois das reelaborações do backend) → novo pedido também. O custo de cada tentativa
+   entra no relatório de uso. Falha de infraestrutura (546) não conta como tentativa de fonte.
+5. **Último recurso** (`buildBlocoTextoProprio`): esgotadas as tentativas sem fonte validada, a
+   questão sai como **situação-problema de autoria própria** — a situação hipotética que o Guia de
+   Elaboração e Revisão de Itens do INEP admite: texto-base do elaborador, `tipoUso: proprio`, fonte
+   vazia, proibido afirmar qualquer fato sobre autor, obra, data ou enredo. O auditor confere que nada
+   foi atribuído a terceiros. Fica marcada na ficha ("ÚLTIMO RECURSO…") para o professor decidir.
+   Nunca uma referência inventada.
+
+Log: colunas `tentativa`, `reelaboracoes`, `fonte_do_banco`, `ultimo_recurso`. Resposta:
+`fontesDiag.{tentativa, fontesTentadas, reelaboracoes, doBanco, ultimoRecurso}`.
+
+Custo esperado por questão limpa: US$ 0,12–0,25 (banco quente), teto ≈ US$ 0,60 numa questão que
+esgota as 3 tentativas com reelaborações. Rendimento esperado: 100% das questões entregues, a maior
+parte com fonte validada; a fração em último recurso é o número a acompanhar.
+
+Testes: cenários **D3, J1–J3, K1–K2** em `verify_validador_v7421.ts` (29); seção **P** (5) em
+`verify_fontes_backend.ts` (140); self-test `v7423_insistenciaAutomatica`.
 
 ### Custo esperado e o que ainda falta medir
 

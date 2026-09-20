@@ -181,7 +181,14 @@ ${permitidos.map((o, i) => `${i + 1}. ${o}`).join("\n")}
 Os demais objetos da área pertencem a OUTRAS disciplinas e estão PROIBIDOS aqui, por mais que o assunto pareça caber: pedir Artes e receber "Estudo do texto literário" entrega ao professor uma questão de Literatura no lugar da que ele pediu.${permitidos.length === 1 ? ` Com um objeto só, a variedade da leva vem do ASSUNTO e do CONTEXTO — nunca de trocar o objeto.` : ""}`;
 }
 
-/* v74.22 (20/09/2026) — FATO VENCE OPINIÃO na auditoria (existenciaProvadaPeloValidador):
+/* v74.23 (20/09/2026) — INSISTÊNCIA AUTOMÁTICA, decisão do professor: "nunca deixar de
+   gerar a questão". 3 rodadas pesquisador ⇄ validador por chamada (fontes reprovadas
+   viram fontesEvitar, também entre chamadas do app); auditor reprovou a questão →
+   reelaboração com o MESMO dossiê (até 2); último recurso = situação-problema de
+   autoria própria (Guia INEP), marcada; banco de fontes validadas (fontes_validadas)
+   consultado antes de pesquisar e alimentado por cada aprovação. App v18.27 repete o
+   pedido até 3 vezes sozinho.
+   v74.22 (20/09/2026) — FATO VENCE OPINIÃO na auditoria (existenciaProvadaPeloValidador):
    com dossiê aprovado, página localizada pelo validador e a mesma URL na questão, os
    itens de existência da ficha vêm do validador; o auditor (sem busca) segue soberano
    nos itens de conteúdo. Motivo: ensaio 5, id 1216 (Machado no Domínio Público).
@@ -879,13 +886,17 @@ COMO USAR — REGRA DE BUSCA, OBRIGATÓRIA:
 
 /* Quando o professor nomeia um autor/obra/movimento/acontecimento, o item 6 da
    regra manda achar obra REAL dele — nunca um texto que "pareça" dele. */
-function buildPesquisaFontePrompt(o: { area: string; disciplina: string; tema: string; eixoTematico?: string; recorte?: string; tentativaAnterior?: string; buscaRestritaAosAcervos?: boolean }): string {
+function buildPesquisaFontePrompt(o: { area: string; disciplina: string; tema: string; eixoTematico?: string; recorte?: string; tentativaAnterior?: string; buscaRestritaAosAcervos?: boolean; fontesEvitar?: string[] }): string {
   const assunto = (o.tema || "").trim() || (o.recorte || "").trim() || (o.eixoTematico || "").trim() || o.disciplina;
   const retry = String(o.tentativaAnterior || "").trim();
+  /* v74.23 — fontes já reprovadas (nesta chamada ou nas anteriores, via app):
+     o pesquisador não volta a elas — troca a obra, o documento ou a instituição. */
+  const evitar = Array.isArray(o.fontesEvitar) ? o.fontesEvitar.filter((f) => String(f || "").trim()).slice(0, MAX_FONTES_EVITAR) : [];
+  const blocoEvitar = evitar.length ? `\n🚫 FONTES JÁ REPROVADAS PELO VALIDADOR EM TENTATIVAS ANTERIORES — NÃO as use de novo, nem outra página do mesmo documento; procure OUTRA obra, OUTRO documento ou OUTRA instituição sobre o mesmo assunto:\n${evitar.map((f, i) => `  ${i + 1}. ${String(f).slice(0, 160)}`).join("\n")}\n` : "";
   return `ÁREA: ${o.area} · DISCIPLINA: ${o.disciplina}
 ASSUNTO PEDIDO PELO PROFESSOR: ${assunto}${o.eixoTematico && o.eixoTematico !== assunto ? `\nOBJETO DE CONHECIMENTO (Matriz do ENEM): ${o.eixoTematico}` : ""}${o.recorte && o.recorte !== assunto ? `\nRECORTE PEDIDO: ${o.recorte.slice(0, 300)}` : ""}
 ${buildAcervosPrioritarios(o.disciplina)}
-${o.buscaRestritaAosAcervos ? `\n🏛️ ESTA BUSCA JÁ ESTÁ RESTRITA, PELO SISTEMA, AOS DOMÍNIOS DOS CINCO ACERVOS DO PROFESSOR (v74.21: allowed_domains da web_search). NÃO use o operador site: — consulte direto pelo autor, pela obra ou pelo documento. Se nada utilizável vier, devolva "encontrou": false sem inventar: a próxima tentativa abre para as demais fontes confiáveis do item 1.\n` : ""}${retry ? `\n⚠️ SEGUNDA TENTATIVA. A primeira não deu fonte aprovada (${retry.slice(0, 360)}). O item 2 da regra manda, nesse caso, "procurar outra obra, outro documento ou outra referência real relacionada ao tema" — então procure em OUTRO lugar: troque a obra, troque o documento, troque a instituição. Se a primeira tentativa foi restrita aos acervos de prioridade e eles não tinham o material, procure AGORA fora deles, nas demais fontes confiáveis do item 1. Se a reprovação veio do VALIDADOR, corrija exatamente o que ele apontou. Não repita a busca anterior e não baixe o nível da exigência.\n` : ""}
+${o.buscaRestritaAosAcervos ? `\n🏛️ ESTA BUSCA JÁ ESTÁ RESTRITA, PELO SISTEMA, AOS DOMÍNIOS DOS CINCO ACERVOS DO PROFESSOR (v74.21: allowed_domains da web_search). NÃO use o operador site: — consulte direto pelo autor, pela obra ou pelo documento. Se nada utilizável vier, devolva "encontrou": false sem inventar: a próxima tentativa abre para as demais fontes confiáveis do item 1.\n` : ""}${blocoEvitar}${retry ? `\n⚠️ NOVA TENTATIVA. A anterior não deu fonte aprovada (${retry.slice(0, 360)}). O item 2 da regra manda, nesse caso, "procurar outra obra, outro documento ou outra referência real relacionada ao tema" — então procure em OUTRO lugar: troque a obra, troque o documento, troque a instituição. Se a primeira tentativa foi restrita aos acervos de prioridade e eles não tinham o material, procure AGORA fora deles, nas demais fontes confiáveis do item 1. Se a reprovação veio do VALIDADOR, corrija exatamente o que ele apontou. Não repita a busca anterior e não baixe o nível da exigência.\n` : ""}
 ANTES DE BUSCAR, identifique o que o assunto acima nomeia:
 · um AUTOR (pessoa)? Então a fonte TEM de ser uma obra real DESSE autor, e o trecho tem de sair dela. Um texto que apenas imite o estilo dele está proibido pelo item 6.
 · uma OBRA, livro, poema, conto, romance ou artigo? Confirme que existe, de quem é, e extraia dela.
@@ -973,9 +984,17 @@ type ModoValidador = "sem_ferramenta" | "web_fetch" | "busca_no_dominio";
    (ou foi aberta pelo fetch, no modo web_fetch). */
 const MODO_VALIDADOR: ModoValidador = "busca_no_dominio";
 const TETO_TOKENS_FETCH_VALIDADOR = 6000;     // ≈ US$ 0,012 a US$ 2/M: o máximo que uma página pode custar
-const RODADAS_VALIDACAO = 2;                  // pesquisa + validação, duas vezes no máximo
+/* v74.23 — decisão do professor (20/09): "nunca deixar de gerar a questão". O
+   laço pesquisador ⇄ validador roda até 3 rodadas por chamada (era 2), o app
+   repete a chamada até 3 vezes mandando as fontes já reprovadas (fontesEvitar),
+   e na última chamada pede o ÚLTIMO RECURSO (texto próprio — ver
+   buildBlocoTextoProprio). Quem limita é o tempo da função e o teto do app. */
+const RODADAS_VALIDACAO = 3;                  // pesquisa + validação, até três vezes por chamada
 const MS_MINIMO_PARA_VALIDAR = 70_000;        // abaixo disso o dossiê é tratado como NÃO validado
-const MS_MINIMO_PARA_SEGUNDA_RODADA = 90_000; // abaixo disso não se abre a rodada 2
+const MS_MINIMO_PARA_SEGUNDA_RODADA = 90_000; // abaixo disso não se abre uma NOVA rodada (2ª ou 3ª)
+const REELABORACOES_MAX = 2;                  // v74.23 — auditor reprovou a questão? reelabora com o MESMO dossiê
+const MS_MINIMO_PARA_REELABORAR = 45_000;     // elaborador (~25 s) + auditor (~8 s) + margem
+const MAX_FONTES_EVITAR = 12;                 // fontes reprovadas em chamadas anteriores, mandadas pelo app
 
 /* Sem allowed_domains, de propósito: no primeiro ensaio real (20/09) a API
    recusou o fetch da URL do dossiê com o domínio permitido igual ao host dela.
@@ -1116,7 +1135,7 @@ function buildValidacaoPrompt(
   const ultima = rodada >= RODADAS_VALIDACAO;
   return `DISCIPLINA: ${o.disciplina} · ÁREA: ${AREA_LABELS[o.area] || o.area}
 ASSUNTO PEDIDO PELO PROFESSOR: ${assunto}
-RODADA: ${rodada} de ${RODADAS_VALIDACAO}${ultima ? " — ÚLTIMA: reprovando, a questão NÃO será gerada. Isso não é motivo para afrouxar: é motivo para ser exato." : ""}${motivoAnterior ? `\nMOTIVO DA REPROVAÇÃO ANTERIOR: ${motivoAnterior.slice(0, 300)}` : ""}
+RODADA: ${rodada} de ${RODADAS_VALIDACAO}${ultima ? " — ÚLTIMA desta chamada: reprovando, o sistema procurará OUTRA fonte (a questão não sai desta). Isso não é motivo para afrouxar: é motivo para ser exato." : ""}${motivoAnterior ? `\nMOTIVO DA REPROVAÇÃO ANTERIOR: ${motivoAnterior.slice(0, 300)}` : ""}
 
 NÍVEL DO DOMÍNIO CALCULADO PELO SISTEMA: ${nivelDominio} (${hostDaUrl(String(d.url || "")) || "sem host"})
 FERRAMENTA NESTA CHAMADA: ${modo === "web_fetch"
@@ -1144,13 +1163,32 @@ Devolva o veredito pela ferramenta "entregar_validacao_fonte".`;
 
 /* CONFERÊNCIA PRÉVIA, EM CÓDIGO, ANTES DE GASTAR UMA CHAMADA. Cada motivo
    volta para o pesquisador na rodada seguinte. */
-function conferenciaPreviaDossie(d: any, buscas: { url: string; title: string }[]): { estado: string; motivo: string; nivel: NivelFonte; host: string } {
+/* v74.23 — uma fonte "a evitar" pode vir como URL ou como "AUTOR — obra". */
+function fonteEstaNaListaDeEvitar(d: any, evitar: string[]): string {
+  if (!Array.isArray(evitar) || !evitar.length) return "";
+  const url = normalizaUrl(String((d && (d.url || d.urlVerificacao)) || ""));
+  const obra = String((d && d.obra) || "").trim().toLowerCase();
+  for (const e of evitar) {
+    const t = String(e || "").trim();
+    if (!t) continue;
+    if (/^https?:\/\//i.test(t) || /^[a-z0-9.-]+\.[a-z]{2,}\//i.test(t)) {
+      const ne = normalizaUrl(t);
+      if (ne && url && (url === ne || url.startsWith(ne + "/") || ne.startsWith(url + "/"))) return t;
+    } else if (obra && t.toLowerCase().includes(obra) && obra.length >= 6) {
+      return t;
+    }
+  }
+  return "";
+}
+function conferenciaPreviaDossie(d: any, buscas: { url: string; title: string }[], evitar: string[] = []): { estado: string; motivo: string; nivel: NivelFonte; host: string } {
   const url = String((d && (d.url || d.urlVerificacao)) || "").trim();
   const host = hostDaUrl(url);
   const nivel = nivelDoDominio(url);
   const r = (estado: string, motivo: string) => ({ estado, motivo, nivel, host });
   if (!d || d.encontrou !== true || !String(d.trecho || "").trim()) return r("sem_material", "o pesquisador não devolveu material utilizável");
   if (!url || !host) return r("sem_url", "o dossiê veio sem a URL da fonte");
+  const jaReprovada = fonteEstaNaListaDeEvitar(d, evitar);
+  if (jaReprovada) return r("fonte_evitada", `esta fonte já foi reprovada numa tentativa anterior (${jaReprovada.slice(0, 100)}) — procure OUTRA obra, documento ou instituição`);
   /* A URL inteira, não só o host: no ensaio de 20/09 o pesquisador declarou
      ppgav.eba.ufba.br/pt-br/abaporu, uma página que a busca nunca devolveu, num
      host que ela devolveu — e passou pela conferência por host. Mesmo critério
@@ -1270,6 +1308,81 @@ async function validarDossie(
 }
 /* ═══════════ FIM DO BLOCO DO VALIDADOR (v74.21) ═══════════ */
 
+/* ═══════════ v74.23 — BANCO DE FONTES VALIDADAS (20/09/2026) ═══════════
+   Decisão do professor: cada dossiê que o validador aprova fica guardado
+   (tabela fontes_validadas). Antes de pesquisar, o laço consulta o banco: se
+   há fonte aprovada para o mesmo autor/obra/tema da disciplina — e ela não
+   está na lista de fontes a evitar —, ela entra como dossiê SEM gastar
+   pesquisa nem validação. Na leva de Literatura de 20/09, três questões de
+   Graciliano pagaram a mesma pesquisa três vezes. O banco é só da função
+   (service role; RLS sem política pública). Nunca derruba a geração: erro no
+   banco = banco ignorado. */
+const BANCO_FONTES_MINIMO_TOKENS = 2;   // tokens em comum entre o tema e autor+obra para reaproveitar
+function chaveTemaBanco(o: { tema?: string; recorte?: string; eixoTematico?: string }): string {
+  return String((o.tema || "").trim() || (o.recorte || "").trim() || (o.eixoTematico || "").trim()).toLowerCase().replace(/\s+/g, " ").slice(0, 200);
+}
+function pontuaFonteDoBanco(o: { tema?: string; recorte?: string; eixoTematico?: string }, row: any): number {
+  const chave = chaveTemaBanco(o);
+  if (chave && String(row.tema_chave || "") === chave) return 10;
+  const doTema = new Set(tokensDeFonte(`${o.tema || ""} ${o.recorte || ""}`));
+  const daFonte = tokensDeFonte(`${row.autor || ""} ${row.obra || ""} ${row.instituicao || ""}`);
+  return daFonte.filter((w) => doTema.has(w)).length;
+}
+async function consultarBancoFontes(o: { area: string; disciplina: string; tema: string; eixoTematico?: string; recorte?: string }, evitar: string[]): Promise<any | null> {
+  try {
+    const { data, error } = await supabase.from("fontes_validadas")
+      .select("id, tema_chave, autor, instituicao, obra, ano, referencia, url, trecho, trecho_literal, restrito, nivel, validacao, usos")
+      .eq("disciplina", o.disciplina).order("created_at", { ascending: false }).limit(80);
+    if (error || !Array.isArray(data) || !data.length) return null;
+    let melhor: any = null, melhorPontos = 0;
+    for (const row of data) {
+      if (fonteEstaNaListaDeEvitar({ url: row.url, obra: row.obra }, evitar)) continue;
+      const p = pontuaFonteDoBanco(o, row);
+      if (p > melhorPontos) { melhor = row; melhorPontos = p; }
+    }
+    if (!melhor || melhorPontos < BANCO_FONTES_MINIMO_TOKENS) return null;
+    const v = (melhor.validacao && typeof melhor.validacao === "object") ? melhor.validacao : {};
+    const d: any = {
+      encontrou: true, autor: String(melhor.autor || ""), instituicao: String(melhor.instituicao || ""), obra: String(melhor.obra || ""),
+      ano: String(melhor.ano || ""), referencia: String(melhor.referencia || ""), url: String(melhor.url || ""),
+      trecho: String(melhor.trecho || ""), trechoEhLiteral: melhor.trecho_literal === true, restritoAoConfirmado: melhor.restrito === true,
+      abriuAFonte: true, comoVerificou: "fonte reaproveitada do banco de fontes validadas",
+      doBanco: { id: melhor.id, pontos: melhorPontos, usos: Number(melhor.usos) || 0 },
+      rodadas: 0, fontesTentadas: [],
+      validacao: { ...v, estado: v.estado === "aprovado_restrito" ? "aprovado_restrito" : "aprovado_banco", libera: true, rodada: 0, fonteAberta: true, doBanco: true, nivel: String(melhor.nivel || v.nivel || "A") },
+    };
+    console.log(`[banco] fonte reaproveitada (#${melhor.id}, ${melhorPontos} ponto(s), ${d.doBanco.usos} uso(s)): ${d.referencia.slice(0, 100)}`);
+    supabase.from("fontes_validadas").update({ usos: (Number(melhor.usos) || 0) + 1, updated_at: new Date().toISOString() }).eq("id", melhor.id).then(() => {}, () => {});
+    return d;
+  } catch (e) {
+    console.warn(`[banco] consulta ignorada: ${String((e as any)?.message || e).slice(0, 120)}`);
+    return null;
+  }
+}
+async function guardarNoBancoFontes(o: { area: string; disciplina: string; tema: string; eixoTematico?: string; recorte?: string }, d: any): Promise<void> {
+  try {
+    if (!d || d.encontrou !== true || !d.validacao || d.validacao.libera !== true || d.doBanco) return;
+    const url = String(d.url || d.urlVerificacao || "").trim();
+    if (!url) return;
+    const v = d.validacao;
+    const linha = {
+      area: o.area, disciplina: o.disciplina, tema: String(o.tema || "").slice(0, 200), tema_chave: chaveTemaBanco(o),
+      autor: String(d.autor || "").slice(0, 200), instituicao: String(d.instituicao || "").slice(0, 200), obra: String(d.obra || "").slice(0, 300),
+      ano: String(d.ano || "").slice(0, 20), referencia: String(d.referencia || "").slice(0, 600), url: url.slice(0, 600),
+      trecho: String(d.trecho || "").slice(0, 2000), trecho_literal: d.trechoEhLiteral === true, restrito: d.restritoAoConfirmado === true,
+      nivel: String(v.nivel || "").slice(0, 2),
+      validacao: { estado: v.estado, nivel: v.nivel, suporte: v.suporte, confianca: v.confianca, natureza: v.natureza, afirmacoesComSuporte: v.afirmacoesComSuporte || [], afirmacoesSemSuporte: v.afirmacoesSemSuporte || [], observacoes: v.observacoes || "", comoVerificou: v.comoVerificou || "" },
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await supabase.from("fontes_validadas").upsert(linha, { onConflict: "url" });
+    if (error) console.warn(`[banco] não gravou (${String((error as any).message || error).slice(0, 120)})`);
+    else console.log(`[banco] fonte guardada: ${linha.referencia.slice(0, 100)}`);
+  } catch (e) {
+    console.warn(`[banco] gravação ignorada: ${String((e as any)?.message || e).slice(0, 120)}`);
+  }
+}
+/* ═══════════ FIM DO BANCO DE FONTES VALIDADAS ═══════════ */
+
 /* Uma chamada curta, com busca, ANTES da geração. Nunca derruba a geração. */
 /* v74.21 — O LAÇO GANHOU O VALIDADOR E MUDOU A ORDEM DOS ACERVOS.
    Medido nos logs de 20/09 (43 pesquisas): 65% das questões iam para a
@@ -1287,11 +1400,25 @@ async function validarDossie(
    um objeto com encontrou:false e bloqueado:true — e o handler NÃO gera a
    questão (regra do professor: SEM FONTE VERIFICADA = SEM QUESTÃO). */
 async function pesquisarFonteReal(
-  o: { area: string; disciplina: string; tema: string; eixoTematico?: string; recorte?: string },
+  o: { area: string; disciplina: string; tema: string; eixoTematico?: string; recorte?: string; fontesEvitar?: string[]; usarBanco?: boolean },
   usos: any[], buscas: { url: string; title: string }[],
   restanteMs: () => number = () => LIMITE_FUNCAO_MS,
 ): Promise<any | null> {
   if (!fontesReaisEstrito(o.area)) return null;
+  /* v74.23 — fontes a evitar (do app: reprovadas em chamadas anteriores) e as
+     tentadas nesta chamada (voltam ao app em fontesTentadas). */
+  const evitar: string[] = Array.isArray(o.fontesEvitar) ? o.fontesEvitar.map((f) => String(f || "").trim()).filter(Boolean).slice(0, MAX_FONTES_EVITAR) : [];
+  const tentadas: { url: string; autor: string; obra: string; referencia: string; motivo: string; rodada: number }[] = [];
+  const registraTentada = (d: any, motivo: string, rodada: number) => {
+    const url = String((d && (d.url || d.urlVerificacao)) || "").trim();
+    tentadas.push({ url, autor: String((d && (d.autor || d.instituicao)) || "").slice(0, 120), obra: String((d && d.obra) || "").slice(0, 160), referencia: String((d && d.referencia) || "").slice(0, 200), motivo: String(motivo || "").slice(0, 200), rodada });
+    if (url && !evitar.includes(url)) evitar.push(url);
+  };
+  /* v74.23 — banco de fontes validadas primeiro: custo zero. */
+  if (o.usarBanco !== false) {
+    const doBanco = await consultarBancoFontes(o, evitar);
+    if (doBanco) return doBanco;
+  }
   const sistema: SistemaPrompt = [{ type: "text", text: SISTEMA_PESQUISA_FONTE, cache_control: cacheControlAtual() }];
   const exigeAcervo = temAcervoPrioritario(o.disciplina);
   let motivoAnterior = "";
@@ -1309,7 +1436,7 @@ async function pesquisarFonteReal(
     let d: any = null;
     try {
       d = await callClaudeForJSON(
-        sistema, buildPesquisaFontePrompt({ ...o, tentativaAnterior: motivoAnterior, buscaRestritaAosAcervos: restrita }),
+        sistema, buildPesquisaFontePrompt({ ...o, tentativaAnterior: motivoAnterior, buscaRestritaAosAcervos: restrita, fontesEvitar: evitar }),
         ferramentaBusca, usos, FERRAMENTA_DOSSIE_FONTE, buscas, `pesquisa/tentativa-${tentativa}`, undefined, 70_000,
       );
     } catch (e) {
@@ -1337,10 +1464,11 @@ async function pesquisarFonteReal(
 
     /* v74.21 — VALIDAR ANTES DE ELABORAR. Primeiro em código (custo zero),
        depois o agente validador. Reprovado, o motivo volta para o pesquisador. */
-    const pre = conferenciaPreviaDossie(d, buscas);
+    const pre = conferenciaPreviaDossie(d, buscas, evitar);
     if (pre.estado !== "ok") {
       d.validacao = { estado: "reprovado", etapa: "conferencia_previa", libera: false, motivo: pre.motivo, rodada: tentativa, nivel: pre.nivel, fonteAberta: false };
       ultimaValidacao = d.validacao;
+      registraTentada(d, pre.motivo, tentativa);
       motivoAnterior = `o validador reprovou o dossiê anterior: ${pre.motivo}`;
       console.warn(`[validador] rodada ${tentativa} reprovada na conferência prévia: ${pre.motivo}`);
       continue;
@@ -1373,6 +1501,8 @@ async function pesquisarFonteReal(
     if (lib.libera) {
       console.log(`[validador] rodada ${tentativa} APROVADA · nível ${d.validacao.nivel} · suporte ${d.validacao.suporte} · confiança ${d.validacao.confianca} · fonte aberta ${d.abriuAFonte} · modo ${r.modo}`);
       d.rodadas = tentativa;
+      d.fontesTentadas = tentadas;
+      if (o.usarBanco !== false) await guardarNoBancoFontes(o, d);   // v74.23
       return d;
     }
     /* v74.21c — aprovação restrita ao confirmado (ver liberaRestritoAoConfirmado). */
@@ -1387,15 +1517,51 @@ async function pesquisarFonteReal(
       d.validacao.motivo = `aprovação restrita ao confirmado: ${lib.motivo}`;
       d.validacao.suporte = "direto";   // o que sobrou tem suporte direto — o resto foi descartado
       d.rodadas = tentativa;
+      d.fontesTentadas = tentadas;
       console.log(`[validador] rodada ${tentativa} APROVADA RESTRITA AO CONFIRMADO (${fatos.length} fatos; descartado: ${lib.motivo}) · nível ${d.validacao.nivel} · modo ${r.modo}`);
+      if (o.usarBanco !== false) await guardarNoBancoFontes(o, d);   // v74.23
       return d;
     }
+    registraTentada(d, lib.motivo, tentativa);
     motivoAnterior = `o validador reprovou o dossiê anterior (${lib.motivo})`
       + (d.validacao.correcoes.length ? `; correções pedidas: ${d.validacao.correcoes.join("; ").slice(0, 300)}` : "");
     console.warn(`[validador] rodada ${tentativa} REPROVADA: ${lib.motivo}`);
   }
-  console.warn(`[pesquisa] nenhuma fonte aprovada pelo validador em ${rodadas} rodada(s) — a questão não será gerada`);
-  return { encontrou: false, bloqueado: true, motivo: motivoAnterior || "nenhuma fonte real foi localizada e validada", validacao: ultimaValidacao, rodadas };
+  console.warn(`[pesquisa] nenhuma fonte aprovada pelo validador em ${rodadas} rodada(s) nesta chamada`);
+  return { encontrou: false, bloqueado: true, motivo: motivoAnterior || "nenhuma fonte real foi localizada e validada", validacao: ultimaValidacao, rodadas, fontesTentadas: tentadas };
+}
+
+/* v74.23 — ÚLTIMO RECURSO (decisão do professor, 20/09): "nunca deixar de gerar
+   a questão". Quando o app já repetiu o pedido o número máximo de vezes e
+   nenhuma fonte real foi validada, a questão sai como SITUAÇÃO-PROBLEMA DE
+   AUTORIA PRÓPRIA — a situação hipotética que o Guia de Elaboração de Itens do
+   INEP admite —, sem citar, atribuir ou datar nada de terceiros. Nunca uma
+   referência inventada. Fica marcada (fontesDiag.ultimoRecurso) para o
+   professor decidir se mantém. */
+function buildBlocoTextoProprio(info: { tentativa: number; motivo: string } | null | undefined): string {
+  if (!info) return "";
+  return `⚠️ ÚLTIMO RECURSO — NENHUMA FONTE REAL FOI VALIDADA PARA ESTE TEMA EM ${info.tentativa} TENTATIVA(S) DE PESQUISA (${String(info.motivo || "").slice(0, 200)}).
+Por decisão do professor a questão SAI MESMO ASSIM, mas como SITUAÇÃO-PROBLEMA DE AUTORIA PRÓPRIA, a "situação hipotética" que o Guia de Elaboração e Revisão de Itens do INEP admite. Regras desta modalidade, sem exceção:
+· O texto-base é SEU: um cenário, um diálogo, uma descrição, um pequeno texto redigido por você sobre o tema — sem aspas, sem "segundo", sem "de acordo com", sem atribuir frase ou ideia a pessoa, obra ou instituição.
+· "tipoUso": "proprio"; autor, instituicao, obra, ano, referencia e urlVerificacao VAZIOS; "conferidoNaFonte": false.
+· É PROIBIDO afirmar qualquer fato sobre autor, obra, movimento, data, enredo, característica de estilo ou acontecimento histórico atribuído a alguém — isso é o que a leva anterior fez e foi reprovado. Trabalhe o CONCEITO do currículo (o objeto de conhecimento) por meio do seu próprio texto: o candidato lê o que VOCÊ escreveu e aplica a habilidade.
+· Pode nomear o tema no comando (ex.: "o texto acima dialoga com procedimentos do Modernismo") sem afirmar nada factual sobre autores ou obras reais.
+· O auditor confere que NADA foi atribuído a terceiros; se atribuir, a questão é reprovada de novo.
+
+`;
+}
+
+/* v74.23 — REELABORAÇÃO COM O MESMO DOSSIÊ. O auditor reprovou a questão (não a
+   fonte): o elaborador recebe o motivo e reescreve, sem nova pesquisa. */
+function buildCorrecaoAuditoria(fontesDiag: any, n: number): string {
+  if (!fontesDiag || fontesDiag.estado !== "reprovado") return "";
+  const itens: string[] = Array.isArray(fontesDiag.itensReprovados) ? fontesDiag.itensReprovados : [];
+  return `
+
+🔁 REELABORAÇÃO ${n} DE ${REELABORACOES_MAX} — A VERSÃO ANTERIOR DESTA QUESTÃO FOI REPROVADA PELO AUDITOR DE FONTES.
+Motivo do auditor: ${String(fontesDiag.motivo || "").slice(0, 600)}${itens.length ? `
+Itens reprovados na ficha: ${itens.join(", ")}` : ""}
+A fonte do dossiê continua válida e é a MESMA. Reescreva a questão inteira ficando ESTRITAMENTE dentro do MATERIAL e da lista de AFIRMAÇÕES COM SUPORTE do dossiê: remova toda afirmação sobre a obra, o autor, a instituição, a data, o enredo ou o estilo que não esteja lá — no texto-base, no comando, nas alternativas, nas legendas, no gabarito e na resolução. Copie autor/obra/referência/url do dossiê sem alterar. Se o dossiê não sustentar a ideia central que você usou, TROQUE a ideia central por uma que ele sustente — não troque a fonte.`;
 }
 
 /* v74.19 — O ALVO REPETIDO ONDE A QUESTÃO É ESCRITA.
@@ -1417,6 +1583,7 @@ function buildUserPrompt(opts: {
   instrucoesVisual?: string; gabaritoAlvo?: string | null;
   eixoTematico?: string; temasEvitar?: string[]; recorte?: string;
   diversidade?: DiversidadeExtras; orientacoes?: string; dossie?: any;
+  textoProprio?: { tentativa: number; motivo: string } | null;   // v74.23 — último recurso
 }) {
   /* v74.17 — A MATRIZ E O RECURSO VISUAL VIAJAM AQUI, NÃO NO BLOCO CACHEADO.
      Os dois mudam de questão para questão e, dentro do bloco fixo, estragavam
@@ -1430,8 +1597,8 @@ function buildUserPrompt(opts: {
   /* v74.18 — sem dossiê é a geração que busca (ver buscaDaGeracao), e até aqui
      ela buscava sem a lista dos acervos do professor. Com dossiê não entra:
      seriam ~180 tokens por questão para uma etapa que nem vai buscar. */
-  const acervosDaGeracao = buildDossieFonte(opts.dossie) ? "" : buildAcervosPrioritarios(opts.disciplina);
-  return `${buildDossieFonte(opts.dossie)}Elabore UMA questão inédita, original, no padrão ENEM, com os seguintes parâmetros definidos pelo professor:
+  const acervosDaGeracao = (buildDossieFonte(opts.dossie) || opts.textoProprio) ? "" : buildAcervosPrioritarios(opts.disciplina);
+  return `${opts.textoProprio ? buildBlocoTextoProprio(opts.textoProprio) : buildDossieFonte(opts.dossie)}Elabore UMA questão inédita, original, no padrão ENEM, com os seguintes parâmetros definidos pelo professor:
 
 Área do conhecimento: ${AREA_LABELS[opts.area]}
 Disciplina: ${opts.disciplina}
@@ -2634,7 +2801,7 @@ async function checkDailyCap(): Promise<Response | null> {
   return null;
 }
 
-async function logGeneration(area: string, disciplina: string, tema: string, extra?: { recurso?: string; uso?: ReturnType<typeof resumoUso>; fonteUrl?: string; validacao?: any; bloqueado?: boolean; rodadas?: number }) {
+async function logGeneration(area: string, disciplina: string, tema: string, extra?: { recurso?: string; uso?: ReturnType<typeof resumoUso>; fonteUrl?: string; validacao?: any; bloqueado?: boolean; rodadas?: number; tentativa?: number; reelaboracoes?: number; fonteDoBanco?: boolean; ultimoRecurso?: boolean }) {
   try {
     const linha: Record<string, unknown> = { area, disciplina, tema: tema.slice(0, 200) };
     /* v74.21 — colunas do validador e das etapas. Vão num objeto separado: se a
@@ -2652,6 +2819,11 @@ async function logGeneration(area: string, disciplina: string, tema: string, ext
       novas.validacao_status = "sem_validacao";
     }
     if (extra?.uso && Array.isArray((extra.uso as any).porEtapa)) novas.etapas = (extra.uso as any).porEtapa;
+    // v74.23 — insistência automática
+    if (extra && typeof extra.tentativa === "number") novas.tentativa = extra.tentativa;
+    if (extra && typeof extra.reelaboracoes === "number") novas.reelaboracoes = extra.reelaboracoes;
+    if (extra && typeof extra.fonteDoBanco === "boolean") novas.fonte_do_banco = extra.fonteDoBanco;
+    if (extra && typeof extra.ultimoRecurso === "boolean") novas.ultimo_recurso = extra.ultimoRecurso;
     /* v74.18 — de onde saiu a fonte. Sem isto, medir o cumprimento da regra dos
        acervos exigia abrir os simulados questão por questão. */
     const host = hostDaUrl(String(extra?.fonteUrl || ""));
@@ -3619,6 +3791,7 @@ async function garantirFontesReais(
       .filter(([k, v]) => (k === "inventadoEmOutraParte" ? v === true : v === false))
       .map(([k]) => k);
     diag.estado = "reprovado";
+    diag.itensReprovados = falhos;   // v74.23 — a reelaboração recebe a lista
     diag.motivo = String(a.motivo || "").trim() || `itens reprovados na ficha: ${falhos.join(", ") || "veredito negativo do auditor"}`;
     data.fonteNaoVerificada = { motivo: diag.motivo, mensagem: MENSAGEM_FONTE_BLOQUEIO, etapa: "auditoria", itens: falhos };
     console.error(`[fontes] BLOQUEADA na auditoria: ${diag.motivo}`);
@@ -3754,6 +3927,8 @@ function selfTestResponse() {
     JSON.stringify([BUSCA_PESQUISADOR_ACERVOS, MODO_VALIDADOR, TETO_TOKENS_FETCH_VALIDADOR, RODADAS_VALIDACAO, MS_MINIMO_PARA_VALIDAR, MS_MINIMO_PARA_SEGUNDA_RODADA]),
     ferramentaBuscaNoDominioPara.toString(), liberaRestritoAoConfirmado.toString(), JSON.stringify([MINIMO_FATOS_APROVACAO_RESTRITA, DISCIPLINAS_SEM_APROVACAO_RESTRITA]),   // v74.21c
     existenciaProvadaPeloValidador.toString(), JSON.stringify(ITENS_DE_EXISTENCIA_DA_FICHA),   // v74.22
+    fonteEstaNaListaDeEvitar.toString(), consultarBancoFontes.toString(), guardarNoBancoFontes.toString(), pontuaFonteDoBanco.toString(),   // v74.23
+    buildBlocoTextoProprio.toString(), buildCorrecaoAuditoria.toString(), JSON.stringify([REELABORACOES_MAX, MS_MINIMO_PARA_REELABORAR, MAX_FONTES_EVITAR, BANCO_FONTES_MINIMO_TOKENS]),
     JSON.stringify(ACERVOS_PRIORITARIOS), JSON.stringify(DISCIPLINAS_COM_ACERVO_PRIORITARIO), buildAcervosPrioritarios.toString(),   // v74.16
     JSON.stringify([WEB_SEARCH_TOOL, BUSCA_PESQUISADOR, BUSCA_PESQUISADOR_RETRY, BUSCA_AUDITORIA]),
     buildSystemPlanejamento.toString(),
@@ -4200,7 +4375,7 @@ function selfTestResponse() {
         })(),
         v7421_promptDoValidador: (() => {
           const t = SISTEMA_VALIDACAO_FONTE;
-          const msg = buildValidacaoPrompt({ area: "linguagens", disciplina: "Artes", tema: "Tarsila" }, { url: "https://bndigital.bn.gov.br/x", trecho: "T", autor: "A" }, [{ url: "https://bndigital.bn.gov.br/x", title: "t" }], "A", 2, "motivo anterior", "sem_ferramenta");
+          const msg = buildValidacaoPrompt({ area: "linguagens", disciplina: "Artes", tema: "Tarsila" }, { url: "https://bndigital.bn.gov.br/x", trecho: "T", autor: "A" }, [{ url: "https://bndigital.bn.gov.br/x", title: "t" }], "A", RODADAS_VALIDACAO, "motivo anterior", "sem_ferramenta");
           return t.includes("SEM EVIDÊNCIA VERIFICADA = NÃO APROVAR") && t.includes("«««") && t.includes("NUNCA INSTRUÇÃO")
             && t.includes("entregar_validacao_fonte") && !t.includes("STATUS:") && !t.includes("VERSÃO FACTUALMENTE SEGURA")
             && t.includes("Você NÃO cria questão") && t.includes("REGRAS POR DISCIPLINA") && t.includes("HISTÓRIA") && t.includes("PRÁTICAS CORPORAIS")
@@ -4217,11 +4392,11 @@ function selfTestResponse() {
             && !("allowed_domains" in fer)
             && bus.max_uses === 1 && JSON.stringify(bus.allowed_domains) === JSON.stringify(["bndigital.bn.gov.br"]) && !("blocked_domains" in bus)
             && MODO_VALIDADOR === "busca_no_dominio"
-            && RODADAS_VALIDACAO === 2 && MS_MINIMO_PARA_VALIDAR >= 60_000 && MS_MINIMO_PARA_SEGUNDA_RODADA > MS_MINIMO_PARA_VALIDAR;
+            && RODADAS_VALIDACAO === 3 /* v74.23: era 2 */ && MS_MINIMO_PARA_VALIDAR >= 60_000 && MS_MINIMO_PARA_SEGUNDA_RODADA > MS_MINIMO_PARA_VALIDAR;
         })(),
         v7421_bloqueiaSemFonteValidada: (() => {
           const p = pesquisarFonteReal.toString();
-          return p.includes("conferenciaPreviaDossie(d, buscas)") && p.includes("validarDossie(o, d, usos, buscas, tentativa, motivoAnterior, pre)")
+          return p.includes("conferenciaPreviaDossie(d, buscas, evitar)") && p.includes("validarDossie(o, d, usos, buscas, tentativa, motivoAnterior, pre)")
             && p.includes("liberaGeracao(v, pre.nivel)") && p.includes("bloqueado: true") && p.includes("BUSCA_PESQUISADOR_ACERVOS")
             && p.includes("d.abriuAFonte = r.fonteAberta === true")
             && logGeneration.toString().includes("validacao_status") && logGeneration.toString().includes("regravando sem elas")
@@ -4252,6 +4427,30 @@ function selfTestResponse() {
             && SISTEMA_PESQUISA_FONTE.includes("COPIADA CARACTERE A CARACTERE")
             && SISTEMA_PESQUISA_FONTE.includes("PREFIRA \"FATOS CONFIRMADOS\" A TRECHO LITERAL LONGO")
             && aquecerCacheResponse.toString().includes("SISTEMA_VALIDACAO_FONTE");
+        })(),
+        /* v74.23 — INSISTÊNCIA AUTOMÁTICA (decisão do professor, 20/09): 3 rodadas
+           por chamada, fontes a evitar, reelaboração com o mesmo dossiê, último
+           recurso em texto próprio e banco de fontes validadas. */
+        v7423_insistenciaAutomatica: (() => {
+          const d: any = { encontrou: true, url: "https://www.dominiopublico.gov.br/download/texto/bv000215.pdf", obra: "Memórias Póstumas de Brás Cubas", trecho: "t", autor: "A", referencia: "R" };
+          const buscas = [{ url: d.url, title: "" }];
+          return RODADAS_VALIDACAO === 3 && REELABORACOES_MAX === 2
+            && conferenciaPreviaDossie(d, buscas, []).estado === "ok"
+            && conferenciaPreviaDossie(d, buscas, ["http://dominiopublico.gov.br/download/texto/bv000215.pdf/"]).estado === "fonte_evitada"
+            && conferenciaPreviaDossie(d, buscas, ["ASSIS, Machado de — Memórias Póstumas de Brás Cubas"]).estado === "fonte_evitada"
+            && conferenciaPreviaDossie(d, buscas, ["https://www.dominiopublico.gov.br/outra.pdf", "Vidas Secas"]).estado === "ok"
+            && buildPesquisaFontePrompt({ area: "linguagens", disciplina: "Literatura", tema: "x", fontesEvitar: ["https://a.org/b"] }).includes("FONTES JÁ REPROVADAS PELO VALIDADOR")
+            && !buildPesquisaFontePrompt({ area: "linguagens", disciplina: "Literatura", tema: "x" }).includes("FONTES JÁ REPROVADAS")
+            && buildBlocoTextoProprio({ tentativa: 3, motivo: "m" }).includes("ÚLTIMO RECURSO") && buildBlocoTextoProprio({ tentativa: 3, motivo: "m" }).includes('"tipoUso": "proprio"')
+            && buildBlocoTextoProprio(null) === ""
+            && buildCorrecaoAuditoria({ estado: "reprovado", motivo: "inventou a data", itensReprovados: ["comprovavelPelaFonte"] }, 1).includes("REELABORAÇÃO 1 DE 2")
+            && buildCorrecaoAuditoria({ estado: "aprovado" }, 1) === ""
+            && pontuaFonteDoBanco({ tema: "Machado de Assis - Memórias Póstumas de Brás Cubas" }, { autor: "Machado de Assis", obra: "Memórias Póstumas de Brás Cubas" }) >= 3
+            && pontuaFonteDoBanco({ tema: "Modernismo brasileiro da segunda fase" }, { autor: "Graciliano Ramos", obra: "Vidas Secas" }) === 0
+            && pontuaFonteDoBanco({ tema: "Vidas Secas" }, { tema_chave: "vidas secas", autor: "Graciliano Ramos", obra: "Vidas Secas" }) === 10
+            && pesquisarFonteReal.toString().includes("consultarBancoFontes(o, evitar)")
+            && pesquisarFonteReal.toString().includes("guardarNoBancoFontes(o, d)")
+            && buildUserPrompt.toString().includes("buildBlocoTextoProprio(opts.textoProprio)");
         })(),
         /* v74.22 — FATO VENCE OPINIÃO na auditoria: só com dossiê aprovado, página
            localizada pelo validador e a MESMA URL na questão; qualquer coisa
@@ -4404,8 +4603,8 @@ function selfTestResponse() {
             && bloco.includes("PRIMEIRA tentativa")
             && bloco.includes("O BACKEND CONFERE O DOMÍNIO DA FONTE")
             && restrita.includes("RESTRITA, PELO SISTEMA")
-            && !restrita.includes("SEGUNDA TENTATIVA")
-            && segunda.includes("SEGUNDA TENTATIVA")
+            && !restrita.includes("NOVA TENTATIVA")
+            && segunda.includes("NOVA TENTATIVA")   // v74.23: era "SEGUNDA TENTATIVA"
             && !segunda.includes("RESTRITA, PELO SISTEMA");
         })(),
         v7418_travaNoPesquisador: (() => {
@@ -4672,6 +4871,13 @@ ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferrame
     ? Array.from(new Set(v.map((t: unknown) => String(t || "").trim().slice(0, maxChars)).filter((t: string) => t))).slice(0, maxItens) as string[]
     : [];
   const temasEvitar: string[] = listaCurta(body.temasEvitar, 40, 120);
+  /* v74.23 — insistência automática (decisão do professor, 20/09): o app repete
+     o pedido até 3 vezes; manda o número da tentativa, as fontes já reprovadas
+     e, na última, pede o último recurso (texto próprio). */
+  const fontesEvitar: string[] = listaCurta(body.fontesEvitar, MAX_FONTES_EVITAR, 300);
+  const tentativaApp = Math.max(1, Math.min(9, Number(body.tentativa) || 1));
+  const ultimoRecursoPedido = body.ultimoRecurso === true;
+  const usarBanco = body.bancoFontes !== false;
   // v73 — diversidade de exemplos sem custo (reservas feitas pelo app):
   // subtópico oficial só sem tema; domínio de contexto em qualquer leva.
   const subtopico = tema ? "" : (body.subtopico || "").toString().trim().slice(0, 200);
@@ -4703,7 +4909,10 @@ ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferrame
     /* v74.10 — PESQUISA ANTES DE ESCREVER. Em Linguagens e Humanas o assunto é
        pesquisado primeiro e a questão nasce do material verificado. Fora dessas
        áreas, e quando nada é encontrado, dossie fica null e nada muda. */
-    const dossie = await pesquisarFonteReal({ area, disciplina, tema, eixoTematico, recorte }, usos, buscasWeb, () => LIMITE_FUNCAO_MS - (Date.now() - inicioReq));
+    let dossie = await pesquisarFonteReal({ area, disciplina, tema, eixoTematico, recorte, fontesEvitar, usarBanco }, usos, buscasWeb, () => LIMITE_FUNCAO_MS - (Date.now() - inicioReq));
+    const fontesTentadas = (dossie && Array.isArray(dossie.fontesTentadas)) ? dossie.fontesTentadas : [];
+    const fonteDoBanco = !!(dossie && dossie.doBanco);
+    let textoProprio: { tentativa: number; motivo: string } | null = null;
     /* v74.21 — SEM FONTE VALIDADA = SEM QUESTÃO (protocolo do professor, 20/09).
        Em Linguagens e Humanas o elaborador só é chamado com dossiê APROVADO pelo
        validador. Sem isso, a questão não é gerada: o custo até aqui vai para o
@@ -4712,19 +4921,27 @@ ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferrame
        decidia no fim, depois da chamada mais cara. */
     if (fontesReaisEstrito(area) && !(dossie && dossie.encontrou === true && dossie.validacao && dossie.validacao.libera === true)) {
       const motivo = String((dossie && (dossie.motivo || (dossie.validacao && dossie.validacao.motivo))) || "nenhuma fonte real foi localizada e validada").slice(0, 300);
-      const uso = resumoUso(usos);
-      await logGeneration(area, disciplina, tema, { recurso, uso, fonteUrl: "", validacao: dossie && dossie.validacao, bloqueado: true, rodadas: dossie && dossie.rodadas });
-      console.error(`[fontes] BLOQUEADA antes da geração: ${motivo}`);
-      return jsonResponse({
-        error: `${MENSAGEM_FONTE_BLOQUEIO} (motivo: ${motivo})`,
-        fonteNaoVerificada: { motivo, mensagem: MENSAGEM_FONTE_BLOQUEIO, etapa: "validador" },
-        uso,
-        fontesDiag: { aplicavel: true, estado: "bloqueado_antes_da_geracao", validacao: (dossie && dossie.validacao) || null, rodadas: (dossie && dossie.rodadas) || 0 },
-      }, 422);
+      if (!ultimoRecursoPedido) {
+        const uso = resumoUso(usos);
+        await logGeneration(area, disciplina, tema, { recurso, uso, fonteUrl: "", validacao: dossie && dossie.validacao, bloqueado: true, rodadas: dossie && dossie.rodadas, tentativa: tentativaApp, fonteDoBanco: false, ultimoRecurso: false });
+        console.error(`[fontes] BLOQUEADA antes da geração (tentativa ${tentativaApp} do app): ${motivo}`);
+        return jsonResponse({
+          error: `${MENSAGEM_FONTE_BLOQUEIO} (motivo: ${motivo})`,
+          fonteNaoVerificada: { motivo, mensagem: MENSAGEM_FONTE_BLOQUEIO, etapa: "validador" },
+          uso,
+          fontesDiag: { aplicavel: true, estado: "bloqueado_antes_da_geracao", validacao: (dossie && dossie.validacao) || null, rodadas: (dossie && dossie.rodadas) || 0, tentativa: tentativaApp, fontesTentadas },
+        }, 422);
+      }
+      /* v74.23 — ÚLTIMO RECURSO: o app esgotou as tentativas e pediu a questão
+         mesmo assim. Sai como situação-problema de autoria própria, marcada. */
+      textoProprio = { tentativa: tentativaApp, motivo };
+      dossie = null;
+      console.warn(`[fontes] ÚLTIMO RECURSO (tentativa ${tentativaApp} do app): texto próprio — ${motivo}`);
     }
-    const userMsg = buildUserPrompt({ area, disciplina, tema, dificuldade, recurso, competenciaNum, habilidadeCod, instrucoesVisual, gabaritoAlvo, eixoTematico, temasEvitar, recorte, diversidade, orientacoes, dossie });
+    const userMsg = buildUserPrompt({ area, disciplina, tema, dificuldade, recurso, competenciaNum, habilidadeCod, instrucoesVisual, gabaritoAlvo, eixoTematico, temasEvitar, recorte, diversidade, orientacoes, dossie, textoProprio });
     // v74.13 — com dossiê validado a geração não busca (ver buscaDaGeracao).
-    const webSearch = buscaDaGeracao(dossie, area, disciplina);
+    // v74.23 — no último recurso também não: não há fonte a procurar.
+    const webSearch = textoProprio ? false : buscaDaGeracao(dossie, area, disciplina);
     // v62: a ferramenta de entrega é específica do recurso pedido (com
     // imagem/gráfico/tabela, o campo "visual" é obrigatório e tipado).
     let data = await callClaudeForJSON(system, userMsg, webSearch, usos, ferramentaQuestaoPara(recurso, fontesReaisEstrito(area), disciplina), buscasWeb, "geracao");
@@ -4821,9 +5038,42 @@ ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferrame
     /* v74.11 — o objeto declarado tem de caber na disciplina pedida. */
     const objetoDiag = garantirObjetoDaDisciplina(data, area, disciplina);
 
-    const fontesDiag = await garantirFontesReais(
+    let fontesDiag = await garantirFontesReais(
       data, system, usos, LIMITE_FUNCAO_MS - (Date.now() - inicioReq), area, buscasWeb, dossie,
     );
+    /* v74.23 — REELABORAÇÃO AUTOMÁTICA. O auditor reprovou a QUESTÃO (a fonte
+       continua válida, ou é texto próprio): em vez de entregar marcada, o
+       elaborador reescreve com o motivo do auditor, e tudo o que roda depois
+       da elaboração roda de novo (visual, notação, gabarito, objeto, auditoria).
+       Até REELABORACOES_MAX vezes, enquanto houver tempo. */
+    let reelaboracoes = 0;
+    let objetoDiagFinal = objetoDiag;
+    while (fontesDiag && fontesDiag.estado === "reprovado" && reelaboracoes < REELABORACOES_MAX
+           && (LIMITE_FUNCAO_MS - (Date.now() - inicioReq)) > MS_MINIMO_PARA_REELABORAR) {
+      reelaboracoes++;
+      console.warn(`[fontes] reelaboração ${reelaboracoes}/${REELABORACOES_MAX} — ${String(fontesDiag.motivo || "").slice(0, 160)}`);
+      let nova = await callClaudeForJSON(system, userMsg + buildCorrecaoAuditoria(fontesDiag, reelaboracoes), false, usos, ferramentaQuestaoPara(recurso, fontesReaisEstrito(area), disciplina), buscasWeb, `geracao/reelaboracao-${reelaboracoes}`);
+      nova = normalizarCamposEstruturados(nova);
+      if (!nova || typeof nova !== "object") break;
+      nova.visual = normalizarVisual(nova.visual, recurso);
+      const vd2 = await garantirVisual(nova, { area, disciplina, recurso, tema, instrucoesVisual }, usos);
+      visualDiag.refeito += vd2.refeito; visualDiag.conforme = vd2.conforme; visualDiag.motivo = vd2.motivo; visualDiag.entregueTipo = vd2.entregueTipo; visualDiag.promptChars = vd2.promptChars;
+      nova = normalizarNotacaoMatematica(normalizarNotacaoQuimica(nova, area, disciplina), disciplina);
+      const gd2 = await garantirGabaritoCoerente(nova, system, usos, LIMITE_FUNCAO_MS - (Date.now() - inicioReq));
+      const od2 = garantirObjetoDaDisciplina(nova, area, disciplina);
+      const fd2 = await garantirFontesReais(nova, system, usos, LIMITE_FUNCAO_MS - (Date.now() - inicioReq), area, buscasWeb, dossie);
+      data = nova;
+      Object.assign(gabaritoDiag, gd2);
+      objetoDiagFinal = od2;
+      fontesDiag = fd2;
+    }
+    fontesDiag = fontesDiag || {};
+    fontesDiag.reelaboracoes = reelaboracoes;
+    fontesDiag.tentativa = tentativaApp;
+    fontesDiag.fontesTentadas = fontesTentadas;
+    fontesDiag.doBanco = fonteDoBanco;
+    if (textoProprio) fontesDiag.ultimoRecurso = textoProprio;
+    if (reelaboracoes) console.log(`[fontes] após ${reelaboracoes} reelaboração(ões): ${fontesDiag.estado}`);
 
     const diversidadeDiag = {
       eixoTematico: eixoTematico || null,
@@ -4847,8 +5097,9 @@ ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferrame
     await logGeneration(area, disciplina, tema, {
       recurso, uso,
       fonteUrl: data && typeof data === "object" && data.fonte ? String(data.fonte.urlVerificacao || "") : "",
-      validacao: dossie && dossie.validacao ? dossie.validacao : undefined,   // v74.21
+      validacao: dossie && dossie.validacao ? dossie.validacao : (textoProprio ? { estado: "texto_proprio" } : undefined),   // v74.21 / v74.23
       rodadas: dossie && dossie.rodadas ? dossie.rodadas : undefined,
+      tentativa: tentativaApp, reelaboracoes, fonteDoBanco, ultimoRecurso: !!textoProprio,   // v74.23
     });
     // v70/v71: redes de segurança da notação — química (lista fechada de
     // fórmulas; em todas as áreas desde a v71) e depois matemática (expoentes,
@@ -4860,7 +5111,7 @@ ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferrame
     notacaoDiag.residuoFinal = temResiduoNotacao(data, area);
     if (notacaoDiag.residuoFinal) console.warn(`[notação] resíduo ASCII na questão entregue (${disciplina}: "${String(data?.tema || "").slice(0, 60)}") — ` + JSON.stringify(notacaoDiag.notacao?.residuosDepois ?? notacaoDiag));
     else if (notacaoDiag.residuoAntesDoRevisor) console.log(`[notação] resíduo corrigido pelo revisor (${notacaoDiag.notacao?.tentativas ?? "?"} tentativa(s))`);
-    return jsonResponse({ question: corrigirQuebrasLiterais(data), uso, visualDiag, diversidadeDiag, notacaoDiag, gabaritoDiag, fontesDiag, objetoDiag });
+    return jsonResponse({ question: corrigirQuebrasLiterais(data), uso, visualDiag, diversidadeDiag, notacaoDiag, gabaritoDiag, fontesDiag, objetoDiag: objetoDiagFinal });
   } catch (err) {
     return jsonResponse({ error: `Erro ao gerar questão: ${String((err as any)?.message || err)}` }, 502);
   }

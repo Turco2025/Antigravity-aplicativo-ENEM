@@ -2697,6 +2697,25 @@ async function generateQuestion(q){
   try{
     const MAX_TENTATIVAS = 3;
     let tentativa = 0;
+    /* v18.27 — INSISTÊNCIA AUTOMÁTICA (backend v74.23; decisão do professor, 20/09):
+       "nunca deixar de gerar a questão". Quando o backend bloqueia por falta de
+       fonte validada (422), o app repete o pedido sozinho — até MAX_TENTATIVAS_FONTE
+       pedidos por questão — mandando as fontes já reprovadas (fontesEvitar) para
+       o pesquisador trocar de obra/documento; no último pedido pede o ÚLTIMO
+       RECURSO (situação-problema de autoria própria, marcada). O mesmo vale para a
+       questão que chega gerada mas reprovada pelo auditor: em vez de sair com o
+       aviso, é pedida de novo. O custo de cada tentativa entra no relatório. */
+    const MAX_TENTATIVAS_FONTE = 3;
+    let tentativaFonte = 0;
+    const fontesEvitar = [];
+    const acumulaFontesEvitar = function(diag){
+      const lista = diag && Array.isArray(diag.fontesTentadas) ? diag.fontesTentadas : [];
+      lista.forEach(function(f){
+        const chave = (f && f.url) ? String(f.url) : (f && (f.autor || f.obra) ? String(f.autor || "") + " — " + String(f.obra || "") : "");
+        if(chave && fontesEvitar.indexOf(chave) < 0 && fontesEvitar.length < 12) fontesEvitar.push(chave);
+      });
+    };
+    q.tentativasFonte = 0;
     /* O checkbox "chkValidacao" controla a única validação real que existe
        no backend: a revisão matemática independente (review-math-question,
        uma 2ª chamada à IA, só para Matemática). O backend lê
@@ -2707,6 +2726,10 @@ async function generateQuestion(q){
     let resp, rawBody, payload;
     while(true){
       tentativa++;
+      tentativaFonte++;
+      q.tentativasFonte = tentativaFonte;
+      q.statusDetalhe = tentativaFonte > 1 ? `tentativa ${tentativaFonte} de ${MAX_TENTATIVAS_FONTE} — ` + (tentativaFonte >= MAX_TENTATIVAS_FONTE ? "último recurso: texto próprio sobre o tema" : "procurando outra fonte") : "";
+      if(tentativaFonte > 1) updateQuestionCard(q, state.questions.indexOf(q));
       resp = await fetch(QUESTION_BACKEND_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
@@ -2750,6 +2773,10 @@ async function generateQuestion(q){
           // lista custaria ~600 caracteres em cada questão.
           dominiosEvitar: Array.isArray(q.contextosEvitar) && q.contextosEvitar.length ? dominiosEvitarPara(q) : [],
           contextosEvitar: Array.isArray(q.contextosEvitar) ? q.contextosEvitar : [],
+          // v18.27 — insistência automática (backend v74.23)
+          tentativa: tentativaFonte,
+          fontesEvitar: fontesEvitar,
+          ultimoRecurso: tentativaFonte >= MAX_TENTATIVAS_FONTE,
         }),
       });
       rawBody = await resp.text();
@@ -2759,11 +2786,35 @@ async function generateQuestion(q){
       if(isResourceLimit && tentativa < MAX_TENTATIVAS){
         // Falha transitória de recursos do servidor (plano free do Supabase sob carga).
         // Tenta de novo com espera crescente antes de desistir.
+        tentativaFonte--;   // v18.27: falha de infraestrutura não conta como tentativa de fonte
         await new Promise(function(r){ setTimeout(r, 1500 * tentativa); });
+        continue;
+      }
+      /* v18.27 — bloqueio por fonte (422): o custo entra no relatório, as fontes
+         tentadas vão para a lista a evitar e o pedido é repetido sozinho. */
+      const bloqueioFonte = resp.status === 422 && payload.fontesDiag && payload.fontesDiag.estado === "bloqueado_antes_da_geracao";
+      if(bloqueioFonte && tentativaFonte < MAX_TENTATIVAS_FONTE){
+        if(payload.uso) somaUso(payload.uso);
+        acumulaFontesEvitar(payload.fontesDiag);
+        diagImagem(q, "fonte_bloqueada", `tentativa ${tentativaFonte}: ${String(payload.error || "").slice(0, 300)} · ${fontesEvitar.length} fonte(s) a evitar`);
+        continue;
+      }
+      /* v18.27 — questão gerada, mas reprovada pelo auditor de fontes: também é
+         pedida de novo (o backend já reelaborou até 2× com o mesmo dossiê). */
+      const reprovadaNaAuditoria = resp.ok && payload.question && payload.question.fonteNaoVerificada
+        && !(payload.fontesDiag && payload.fontesDiag.ultimoRecurso);
+      if(reprovadaNaAuditoria && tentativaFonte < MAX_TENTATIVAS_FONTE){
+        if(payload.uso) somaUso(payload.uso);
+        acumulaFontesEvitar(payload.fontesDiag);
+        const f = payload.question.fonte || {};
+        const chave = f.urlVerificacao ? String(f.urlVerificacao) : (f.autor || f.obra ? String(f.autor || "") + " — " + String(f.obra || "") : "");
+        if(chave && fontesEvitar.indexOf(chave) < 0) fontesEvitar.push(chave);
+        diagImagem(q, "auditoria_reprovou", `tentativa ${tentativaFonte}: ${String(payload.question.fonteNaoVerificada.motivo || "").slice(0, 300)} · pedindo de novo com outra fonte`);
         continue;
       }
       break;
     }
+    q.statusDetalhe = "";
     if(!resp.ok || payload.error){
       const msg = payload.error || rawBody.slice(0, 300) || `Erro HTTP ${resp.status} ao gerar a questão.`;
       throw new Error(msg);
@@ -2786,6 +2837,15 @@ async function generateQuestion(q){
        (vai junto com o simulado arquivado) para aparecer na auditoria local do
        card — só na tela; PDF, impressão, HTML e DOCX não mudam. */
     q.validacaoFonte = payload.fontesDiag && payload.fontesDiag.validacao ? payload.fontesDiag.validacao : null;
+    /* v18.27 — insistência automática: quantas tentativas, reelaborações, se a
+       fonte veio do banco e se foi último recurso (texto próprio). Só tela. */
+    q.insistencia = payload.fontesDiag ? {
+      tentativas: tentativaFonte,
+      reelaboracoes: Number(payload.fontesDiag.reelaboracoes) || 0,
+      doBanco: payload.fontesDiag.doBanco === true,
+      ultimoRecurso: payload.fontesDiag.ultimoRecurso || null,
+      fontesDescartadas: fontesEvitar.length,
+    } : null;
     // Rede de segurança: a letra planejada tem de ser mesmo a correta.
     q.gabaritoStatus = aplicaGabaritoAlvo(q.data, gabaritoAlvoDe(state.questions.indexOf(q)));
     /* v18.9 — a letra planejada nunca prevalece sobre a resposta certa: quando
@@ -4197,6 +4257,21 @@ function auditaQuestaoLocal(q){
     aviso(MENSAGEM_FONTE_BLOQUEIO + (d.fonteNaoVerificada.motivo ? " (motivo: " + d.fonteNaoVerificada.motivo + ")" : ""));
   }
 
+  /* v18.27 — insistência automática (backend v74.23). */
+  if(q.insistencia && typeof q.insistencia === "object"){
+    const i = q.insistencia;
+    if(i.ultimoRecurso){
+      aviso("ÚLTIMO RECURSO: nenhuma fonte real foi validada em " + String(i.ultimoRecurso.tentativa || i.tentativas) + " tentativa(s)" +
+            (i.ultimoRecurso.motivo ? " (" + String(i.ultimoRecurso.motivo).slice(0, 160) + ")" : "") +
+            ". A questão saiu como situação-problema de autoria própria (situação hipotética do Guia do INEP), sem citar autor, obra ou referência. Confira se quer mantê-la.");
+    } else if(i.tentativas > 1 || i.reelaboracoes > 0 || i.doBanco){
+      info("Insistência automática: " + (i.tentativas > 1 ? i.tentativas + " pedidos" : "1 pedido") +
+           (i.fontesDescartadas ? " · " + i.fontesDescartadas + " fonte(s) descartada(s)" : "") +
+           (i.reelaboracoes ? " · reelaborada " + i.reelaboracoes + "× após o auditor" : "") +
+           (i.doBanco ? " · fonte reaproveitada do banco de fontes validadas" : "") + ".");
+    }
+  }
+
   /* v18.25 — o veredito do agente validador (backend v74.21), quando houve.
      Aprovado vira observação com nível da fonte, suporte, confiança e se a
      página foi de fato aberta (isso é o backend quem sabe, não o modelo). */
@@ -4435,7 +4510,7 @@ function renderQuestionCard(q, idx){
     inner.appendChild(s);
   } else if(q.status === "generating" || q.status === "validating"){
     const s = document.createElement("div"); s.className = "status-line";
-    s.innerHTML = `<div class="spinner"></div> O agente está elaborando (e revisando pedagogicamente) esta questão...`;
+    s.innerHTML = `<div class="spinner"></div> O agente está elaborando (e revisando pedagogicamente) esta questão...` + (q.statusDetalhe ? ` <span class="muted">(${escapeHtml(q.statusDetalhe)})</span>` : "");
     inner.appendChild(s);
   } else if(q.status === "error"){
     const s = document.createElement("div"); s.className = "status-line";

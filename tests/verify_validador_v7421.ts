@@ -31,7 +31,7 @@ const mAcervos = fonte.match(/const ACERVOS_PRIORITARIOS: \{ nome: string; url: 
 
 // O bloco do validador inteiro + pesquisarFonteReal, como estão no arquivo de produção.
 const blocoValidador = fatiar("/* ═══════════ v74.21 — AGENTE VALIDADOR DE FONTES E EVIDÊNCIAS", "/* ═══════════ FIM DO BLOCO DO VALIDADOR");
-const pesquisar = fatiar("async function pesquisarFonteReal(", "/* v74.19 — O ALVO REPETIDO ONDE A QUESTÃO É ESCRITA.");
+const pesquisar = fatiar("async function pesquisarFonteReal(", "/* v74.23 — ÚLTIMO RECURSO");
 // níveis por domínio + consulta combinada + DISCIPLINAS_COM_ACERVO_PRIORITARIO + buildAcervosPrioritarios + buildPesquisaFontePrompt + buildDossieFonte, reais
 const dominios = fatiar("const ORDEM_NIVEL = ", "\n/* ═══════════ v74.21 — AGENTE VALIDADOR");
 const acervosFns = fatiar("function hostDaUrl(", "const DOMINIOS_VETADOS");                          // hostDaUrl, ehDominioDeAcervo, acervoFoiConsultado
@@ -46,6 +46,10 @@ function fontesReaisEstrito(area: string) { return AREAS_FONTES_REAIS_ESTRITO.in
 function cacheControlAtual() { return { type: "ephemeral" }; }
 const SISTEMA_PESQUISA_FONTE = "sistema do pesquisador";
 const FERRAMENTA_DOSSIE_FONTE = { name: "entregar_dossie_fonte" };
+/* v74.23 — dublê do banco de fontes validadas: devolve o que o teste puser em __banco.resposta e registra o que foi guardado */
+export const __banco: any = { resposta: null, consultas: [] as any[], guardados: [] as any[] };
+async function consultarBancoFontes(o: any, evitar: string[]) { __banco.consultas.push({ o, evitar: [...evitar] }); return __banco.resposta; }
+async function guardarNoBancoFontes(o: any, d: any) { __banco.guardados.push({ o, d }); }
 const ACERVOS_PRIORITARIOS: { nome: string; url: string; dominio: string }[] = ${mAcervos[1]};
 const DOMINIOS_ACERVO_PRIORITARIO: string[] = Array.from(new Set(ACERVOS_PRIORITARIOS.map((a) => a.dominio)));
 ${recortaConstArray("DOMINIOS_VETADOS")}
@@ -72,12 +76,12 @@ async function callClaudeForJSON(_s: any, userMsg: string, ferramentaServidor: a
   if (fetches && Array.isArray(passo.fetches)) fetches.push(...passo.fetches);
   return passo.resposta;
 }
-export { pesquisarFonteReal, liberaGeracao, liberaRestritoAoConfirmado, conferenciaPreviaDossie, MODO_VALIDADOR, DOMINIOS_VETADOS, RODADAS_VALIDACAO, MS_MINIMO_PARA_VALIDAR, MS_MINIMO_PARA_SEGUNDA_RODADA };
+export { pesquisarFonteReal, liberaGeracao, liberaRestritoAoConfirmado, conferenciaPreviaDossie, MODO_VALIDADOR, DOMINIOS_VETADOS, RODADAS_VALIDACAO, MS_MINIMO_PARA_VALIDAR, MS_MINIMO_PARA_SEGUNDA_RODADA, REELABORACOES_MAX };
 `;
 const tmp = await Deno.makeTempDir();
 await Deno.writeTextFile(`${tmp}/mod.ts`, modulo);
 const M: any = await import("file://" + `${tmp}/mod.ts`);
-const { pesquisarFonteReal, __stub, MODO_VALIDADOR } = M;
+const { pesquisarFonteReal, __stub, __banco, MODO_VALIDADOR } = M;
 
 let ok = 0, bad = 0;
 const t = (n: string, c: boolean, extra = "") => { if (c) { ok++; console.log("PASS " + n); } else { bad++; console.log("FAIL " + n + (extra ? "\n     " + extra : "")); } };
@@ -144,17 +148,26 @@ t("C3 aprovado na rodada 2: dossiê volta com rodadas = 2, nível B (Itaú Cultu
   r.encontrou === true && r.validacao.libera === true && r.rodadas === 2 && r.validacao.nivel === "B" && r.foraDoAcervo && r.foraDoAcervo.dominio === "enciclopedia.itaucultural.org.br");
 t("C4 quatro chamadas no total (2 pesquisas + 2 validações)", __stub.chamadas.length === 4);
 
-/* D — duas reprovações → bloqueado */
+/* D — três reprovações → bloqueado (v74.23: eram duas rodadas; agora três, e as fontes tentadas voltam) */
+const URL_TERCEIRA = "https://www.scielo.br/j/terceira";
 roteiro(
   { resposta: dossieBom(), buscas: [{ url: URL_ACERVO, title: "BN" }] },
   { resposta: vReprovado },
   { resposta: dossieBom(URL_FORA), buscas: [{ url: URL_FORA, title: "" }] },
   { resposta: { ...vReprovado, motivo: "citação não localizada", trechoLiteralConfere: "nao_confere" } },
+  { resposta: dossieBom(URL_TERCEIRA), buscas: [{ url: URL_TERCEIRA, title: "" }] },
+  { resposta: { ...vReprovado, motivo: "autoria não confirmada" } },
 );
 r = await pesquisarFonteReal(o, [], [], muitoTempo);
-t("D1 sem fonte aprovada em duas rodadas, volta encontrou:false + bloqueado:true com o último motivo",
-  r && r.encontrou === false && r.bloqueado === true && r.rodadas === 2
-  && String(r.motivo).includes("o validador reprovou o dossiê anterior") && r.validacao && r.validacao.libera === false);
+t("D1 sem fonte aprovada em TRÊS rodadas, volta encontrou:false + bloqueado:true com o último motivo e as três fontes tentadas",
+  r && r.encontrou === false && r.bloqueado === true && r.rodadas === 3 && __stub.chamadas.length === 6
+  && String(r.motivo).includes("autoria não confirmada") && r.validacao && r.validacao.libera === false
+  && Array.isArray(r.fontesTentadas) && r.fontesTentadas.length === 3 && r.fontesTentadas[0].url === URL_ACERVO && r.fontesTentadas[2].url === URL_TERCEIRA
+  && r.fontesTentadas[1].motivo === "citação não localizada");
+t("D3 a rodada 3 recebe a lista das fontes já reprovadas nesta chamada (não volta a elas)",
+  __stub.chamadas[4].etapa === "pesquisa/tentativa-3" && __stub.chamadas[4].userMsg.includes("FONTES JÁ REPROVADAS PELO VALIDADOR")
+  && __stub.chamadas[4].userMsg.includes(URL_ACERVO) && __stub.chamadas[4].userMsg.includes(URL_FORA)
+  && !__stub.chamadas[0].userMsg.includes("FONTES JÁ REPROVADAS"));
 t("D2 um objeto bloqueado NÃO passa por dossiê válido (encontrou !== true)", !(r.encontrou === true));
 
 /* E — conferência prévia reprova sem chamar o validador */
@@ -218,10 +231,50 @@ roteiro(
   { resposta: vParcialI, buscas: [{ url: "https://bndigital.bn.gov.br/outra-pagina", title: "" }] },   // página NÃO localizada
   { resposta: dossieBom(URL_FORA), buscas: [{ url: URL_FORA, title: "" }] },
   { resposta: { ...vParcialI, afirmacoesComSuporte: ["a", "b"] }, buscas: [{ url: URL_FORA, title: "" }] },   // só 2 fatos
+  { resposta: { ...dossieBom(URL_TERCEIRA), encontrou: false }, buscas: [] },   // rodada 3 (v74.23) sem fonte
 );
 r = await pesquisarFonteReal({ area: "humanas", disciplina: "História", tema: "Revolta da Vacina" }, [], [], muitoTempo);
-t("I3 sem página localizada, ou com menos de 3 fatos, a restrita NÃO libera — segue para a rodada 2 e bloqueia",
-  __stub.chamadas.length === 4 && r.encontrou === false && r.bloqueado === true);
+t("I3 sem página localizada, ou com menos de 3 fatos, a restrita NÃO libera — segue para as rodadas 2 e 3 e bloqueia",
+  __stub.chamadas.length === 5 && r.encontrou === false && r.bloqueado === true && r.rodadas === 3);
+
+/* J — v74.23: banco de fontes validadas */
+__banco.resposta = { encontrou: true, autor: "Machado de Assis", obra: "Memórias Póstumas", referencia: "R", url: "https://www.dominiopublico.gov.br/x", trecho: "t", doBanco: { id: 7, pontos: 4, usos: 2 }, rodadas: 0, fontesTentadas: [], validacao: { libera: true, estado: "aprovado_banco", nivel: "A", fonteAberta: true, doBanco: true } };
+__banco.consultas = []; __banco.guardados = [];
+roteiro();
+r = await pesquisarFonteReal({ area: "linguagens", disciplina: "Literatura", tema: "Machado de Assis" }, [], [], muitoTempo);
+t("J1 fonte no banco: volta como dossiê aprovado SEM nenhuma chamada à IA (pesquisa e validação poupadas)",
+  __stub.chamadas.length === 0 && r.encontrou === true && r.validacao.libera === true && r.validacao.estado === "aprovado_banco" && r.doBanco && r.doBanco.id === 7
+  && __banco.consultas.length === 1);
+__banco.resposta = null; __banco.consultas = []; __banco.guardados = [];
+roteiro(
+  { resposta: dossieBom(), buscas: [{ url: URL_ACERVO, title: "" }] },
+  { resposta: vAprovado, buscas: [{ url: URL_ACERVO, title: "" }] },
+);
+r = await pesquisarFonteReal(o, [], [], muitoTempo);
+t("J2 sem fonte no banco, pesquisa normal; a fonte aprovada é GUARDADA no banco",
+  __stub.chamadas.length === 2 && r.validacao.libera === true && __banco.guardados.length === 1 && __banco.guardados[0].d.url === URL_ACERVO);
+roteiro(
+  { resposta: dossieBom(), buscas: [{ url: URL_ACERVO, title: "" }] },
+  { resposta: vAprovado, buscas: [{ url: URL_ACERVO, title: "" }] },
+);
+__banco.consultas = [];
+r = await pesquisarFonteReal({ ...o, usarBanco: false }, [], [], muitoTempo);
+t("J3 usarBanco:false desliga a consulta ao banco", __banco.consultas.length === 0 && r.validacao.libera === true);
+
+/* K — v74.23: fontes a evitar vindas do app (chamadas anteriores) */
+__banco.consultas = [];
+roteiro(
+  { resposta: dossieBom(), buscas: [{ url: URL_ACERVO, title: "" }] },           // a fonte que o app mandou evitar
+  { resposta: dossieBom(URL_FORA), buscas: [{ url: URL_FORA, title: "" }] },
+  { resposta: { ...vAprovado, nivelFonte: "B" }, buscas: [{ url: URL_FORA, title: "" }] },
+);
+r = await pesquisarFonteReal({ ...o, fontesEvitar: [URL_ACERVO] }, [], [], muitoTempo);
+t("K1 fonte da lista do app é reprovada na conferência prévia (fonte_evitada), sem gastar o validador, e a rodada 2 acha outra",
+  __stub.chamadas.length === 3 && __stub.chamadas[1].etapa === "pesquisa/tentativa-2"
+  && __stub.chamadas[1].userMsg.includes("já foi reprovada numa tentativa anterior") && r.validacao.libera === true && r.rodadas === 2);
+t("K2 o prompt da rodada 1 já traz a lista do app, e a consulta ao banco recebe a mesma lista",
+  __stub.chamadas[0].userMsg.includes("FONTES JÁ REPROVADAS PELO VALIDADOR") && __stub.chamadas[0].userMsg.includes(URL_ACERVO)
+  && __banco.consultas.length === 1 && __banco.consultas[0].evitar.includes(URL_ACERVO));
 
 /* H — fora do escopo */
 roteiro();
