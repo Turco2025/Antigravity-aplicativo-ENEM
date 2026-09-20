@@ -124,7 +124,7 @@ Teste: `verify_fontes_app.js` — 19 verificações; as seções B e C bis prova
 quatro marcas ligadas ao mesmo tempo nenhuma conferência bloqueia, e que nenhuma delas tem sequer um
 `return true` no corpo. `verify_gabarito_coerente.js` H1 passou a exigir o contrário do que exigia.
 
-## O agente validador entre a pesquisa e a elaboração — e o custo que o log mostrou (generate-question v74.21 · app v18.25, 20/09/2026)
+## O agente validador entre a pesquisa e a elaboração — e o custo que o log mostrou (generate-question v74.21 → v74.22 · app v18.26, 20/09/2026)
 
 Pedido do professor (20/09): um squad de quatro agentes — **pesquisador, validador, elaborador e
 auditor** — em que o elaborador só escreve depois que a fonte foi aprovada, com o prompt "AGENTE
@@ -316,6 +316,43 @@ citação literal" quando for o caso. Log: `validacao_status = aprovado_restrito
 
 Testes: seção **N** (8) em `verify_fontes_backend.ts` (128 no total); cenário **I** (3) em
 `verify_validador_v7421.ts` (23); self-test `v7421c_aprovacaoRestrita`.
+
+### Quinto ensaio (20/09, commit `deeff936`, v74.21c): a História saiu — e o auditor derrubou o Machado por opinião (v74.22)
+
+As mesmas três questões, cache frio (os testes por SQL não passam pelo marca-passo do app):
+
+| Questão | Pesquisador → Validador | Elaborador / Auditor | Resultado | US$ |
+|---|---|---|---|---|
+| História — Revolta da Vacina | rodada 1 reprovada · rodada 2: **Fiocruz (Casa de Oswaldo Cruz)**, nível A, página localizada, aprovação **plena** | gerada · auditor aprovou | **entregue, limpa** | 0,347 |
+| Artes — Abaporu | 2 rodadas reprovadas: o pesquisador "citou literalmente" em português uma página do **MALBA que está em espanhol**; autoria do texto curatorial não confirmada | — | bloqueada antes da geração (correto: a restrita exige autor confirmado) | 0,206 |
+| Literatura — Machado | rodada 1 reprovada (referência Nova Aguilar 1994 não verificável) · rodada 2: **Domínio Público**, nível A, **página localizada pela busca**, aprovação plena | gerada · auditor respondeu **`fonteExiste = false`** | gerada e reprovada na auditoria | 0,351 |
+
+O item 2 fez efeito: a História saiu **sem** precisar da aprovação restrita — a URL exata e os
+"fatos primeiro" deram, na 2ª tentativa, um dossiê que o validador aprovou por inteiro. O modo
+`aprovado_restrito` não foi acionado em nenhuma das três; ficou de reserva.
+
+A Literatura expôs uma **contradição interna do squad**: com dossiê, o auditor **não tem busca**
+(v74.13 — era a segunda maior fatia do custo). Ele não tem como saber se uma página existe; só pode
+opinar. O validador, antes da geração, **localizou a página** pela busca do servidor
+(`fonteAberta = true`) e aprovou. O auditor respondeu que a fonte não existe, sem motivo, e a
+questão de US$ 0,35 foi para o lixo — não por erro de fonte, mas por um agente sem instrumento
+desconfiando do que outro agente, com instrumento, comprovou.
+
+**v74.22 — fato vence opinião** (`existenciaProvadaPeloValidador`). Quando o dossiê tem validação
+aprovada com página localizada **e** a questão declara **exatamente a URL do dossiê** (normalizada),
+os seis itens de **existência** da ficha — `autorExiste, obraExiste, obraPertenceAoAutor, fonteExiste,
+instituicaoExiste, referenciaLocalizavelEConfirmada` — vêm do validador. O auditor segue soberano
+nos itens de **conteúdo** — `trechoConferidoNaFonte, parafraseFielAFonte, nadaFoiInventado,
+questaoDentroDasAfirmacoes, comprovavelPelaFonte, nenhumaFraseAtribuidaIndevidamente,
+usoIdentificadoCorretamente, inventadoEmOutraParte` — que é onde ele pega o elaborador extrapolando
+(o Abaporu do quarto ensaio continuaria reprovado). Se a questão trocar a fonte (URL diferente),
+se o validador não localizou a página ou se o dossiê não bate (`conferenciaDossie ≠ ok`), nada
+muda: o auditor decide como antes. A divergência fica em `fontesDiag.fichaDivergente` e no log da
+função (`[fontes] auditor negou … fato vence opinião`), para acompanhamento.
+
+Testes: seção **O** (7) em `verify_fontes_backend.ts` (135 no total) — a função pura em todos os
+casos de borda, o caso real (O3), conteúdo negado continua reprovando (O4), URL diferente (O5),
+página não localizada (O6); self-test `v7422_fatoVenceOpiniao`.
 
 ### Custo esperado e o que ainda falta medir
 

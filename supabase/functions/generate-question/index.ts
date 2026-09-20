@@ -181,7 +181,11 @@ ${permitidos.map((o, i) => `${i + 1}. ${o}`).join("\n")}
 Os demais objetos da área pertencem a OUTRAS disciplinas e estão PROIBIDOS aqui, por mais que o assunto pareça caber: pedir Artes e receber "Estudo do texto literário" entrega ao professor uma questão de Literatura no lugar da que ele pediu.${permitidos.length === 1 ? ` Com um objeto só, a variedade da leva vem do ASSUNTO e do CONTEXTO — nunca de trocar o objeto.` : ""}`;
 }
 
-/* v74.21 (20/09/2026) — AGENTE VALIDADOR DE FONTES entre a pesquisa e a
+/* v74.22 (20/09/2026) — FATO VENCE OPINIÃO na auditoria (existenciaProvadaPeloValidador):
+   com dossiê aprovado, página localizada pelo validador e a mesma URL na questão, os
+   itens de existência da ficha vêm do validador; o auditor (sem busca) segue soberano
+   nos itens de conteúdo. Motivo: ensaio 5, id 1216 (Machado no Domínio Público).
+   v74.21 (20/09/2026) — AGENTE VALIDADOR DE FONTES entre a pesquisa e a
    elaboração, trava em código, lista negra de domínios (blocked_domains em toda
    web_search), primeira tentativa restrita aos acervos pelo servidor
    (allowed_domains), duração por etapa no log e bloqueio da questão sem fonte
@@ -3484,6 +3488,29 @@ COMO ISSO SE APLICA A VOCÊ, AGORA:
 · Autoria institucional é legítima e é o padrão da ABNT em acervo, museu, órgão público, enciclopédia e agência de notícias. Fonte sem autor assinado, com a entidade no campo "instituicao", é autoria válida — não exija nome de pessoa.
 · Não afirme que verificou algo que não verificou. Se um item não puder ser confirmado, ele é false.`;
 
+/* v74.22 — FATO VENCE OPINIÃO. Com dossiê, o auditor NÃO tem busca (v74.13):
+   ele não consegue saber se uma página existe — só opinar. O validador, antes
+   da geração, LOCALIZOU a página pela busca do servidor (fonteAberta = true).
+   Quando a questão declara exatamente a URL desse dossiê, os itens de
+   EXISTÊNCIA da ficha (autor, obra, pertence ao autor, fonte, instituição,
+   referência localizável) vêm do validador — uma opinião negativa sem busca
+   não derruba uma evidência. O auditor segue soberano nos itens de CONTEÚDO
+   (trecho conferido, paráfrase fiel, nada inventado, questão dentro das
+   afirmações, comprovável pela fonte): é ali que ele pega o elaborador
+   extrapolando. URL diferente da do dossiê → nada muda, o auditor decide.
+   Ensaio 5 (id 1216, Machado no Domínio Público): validador localizou a página
+   e aprovou; auditor respondeu fonteExiste = false; US$ 0,35 no lixo. */
+const ITENS_DE_EXISTENCIA_DA_FICHA = ["autorExiste", "obraExiste", "obraPertenceAoAutor", "fonteExiste", "instituicaoExiste", "referenciaLocalizavelEConfirmada"];
+function existenciaProvadaPeloValidador(dossie: any, fonteDaQuestao: any, estadoDossie: string): boolean {
+  if (!dossie || dossie.encontrou !== true) return false;
+  const v = dossie.validacao;
+  if (!v || v.libera !== true || v.fonteAberta !== true) return false;
+  if (estadoDossie !== "ok") return false;   // fonte trocada, própria ou indeterminada → o auditor decide
+  const urlDossie = normalizaUrl(String(dossie.url || dossie.urlVerificacao || ""));
+  const urlQuestao = normalizaUrl(String((fonteDaQuestao && fonteDaQuestao.urlVerificacao) || ""));
+  return !!urlDossie && urlDossie === urlQuestao;
+}
+
 /* Roda a validação e, reprovando, MARCA a questão para bloqueio. Não repara:
    a regra 8 manda interromper a questão afetada e pedir a fonte ao professor. */
 async function garantirFontesReais(
@@ -3569,6 +3596,18 @@ async function garantirFontesReais(
     diag.ficha = {} as any;
     for (const k of POSITIVOS) diag.ficha[k] = (a as any)[k] === true;
     diag.ficha.inventadoEmOutraParte = a.inventadoEmOutraParte === true;
+    /* v74.22 — fato vence opinião: existência provada pelo validador (página
+       localizada pela busca, mesma URL) não cai por opinião do auditor sem busca.
+       A divergência fica registrada (diag e log) para acompanhamento. */
+    diag.existenciaPeloValidador = existenciaProvadaPeloValidador(dossiePrevio, data && data.fonte, doss.estado);
+    if (diag.existenciaPeloValidador) {
+      const divergentes = ITENS_DE_EXISTENCIA_DA_FICHA.filter((k) => diag.ficha[k] === false);
+      if (divergentes.length) {
+        diag.fichaDivergente = divergentes;
+        for (const k of divergentes) diag.ficha[k] = true;
+        console.warn(`[fontes] auditor negou ${divergentes.join(", ")} para a fonte que o validador LOCALIZOU (${String(dossiePrevio.url || "").slice(0, 100)}) — fato vence opinião; itens de conteúdo seguem com o auditor`);
+      }
+    }
     const todosOsItensOk = POSITIVOS.every((k) => diag.ficha[k] === true);
     // O veredito do auditor não passa por cima da ficha: qualquer item falso reprova.
     if (a.aprovado === true && todosOsItensOk && !diag.ficha.inventadoEmOutraParte) {
@@ -3714,6 +3753,7 @@ function selfTestResponse() {
     buildBlocoValidacaoDossie.toString(), buildAfirmacoesValidadasParaAuditoria.toString(), JSON.stringify(FERRAMENTA_AUDITORIA_FONTE),
     JSON.stringify([BUSCA_PESQUISADOR_ACERVOS, MODO_VALIDADOR, TETO_TOKENS_FETCH_VALIDADOR, RODADAS_VALIDACAO, MS_MINIMO_PARA_VALIDAR, MS_MINIMO_PARA_SEGUNDA_RODADA]),
     ferramentaBuscaNoDominioPara.toString(), liberaRestritoAoConfirmado.toString(), JSON.stringify([MINIMO_FATOS_APROVACAO_RESTRITA, DISCIPLINAS_SEM_APROVACAO_RESTRITA]),   // v74.21c
+    existenciaProvadaPeloValidador.toString(), JSON.stringify(ITENS_DE_EXISTENCIA_DA_FICHA),   // v74.22
     JSON.stringify(ACERVOS_PRIORITARIOS), JSON.stringify(DISCIPLINAS_COM_ACERVO_PRIORITARIO), buildAcervosPrioritarios.toString(),   // v74.16
     JSON.stringify([WEB_SEARCH_TOOL, BUSCA_PESQUISADOR, BUSCA_PESQUISADOR_RETRY, BUSCA_AUDITORIA]),
     buildSystemPlanejamento.toString(),
@@ -4212,6 +4252,27 @@ function selfTestResponse() {
             && SISTEMA_PESQUISA_FONTE.includes("COPIADA CARACTERE A CARACTERE")
             && SISTEMA_PESQUISA_FONTE.includes("PREFIRA \"FATOS CONFIRMADOS\" A TRECHO LITERAL LONGO")
             && aquecerCacheResponse.toString().includes("SISTEMA_VALIDACAO_FONTE");
+        })(),
+        /* v74.22 — FATO VENCE OPINIÃO na auditoria: só com dossiê aprovado, página
+           localizada pelo validador e a MESMA URL na questão; qualquer coisa
+           diferente devolve a decisão ao auditor. Os seis itens são só os de
+           existência — os de conteúdo não entram. */
+        v7422_fatoVenceOpiniao: (() => {
+          const d: any = { encontrou: true, url: "https://www.dominiopublico.gov.br/download/texto/bv000215.pdf", validacao: { libera: true, fonteAberta: true } };
+          const f: any = { urlVerificacao: "http://dominiopublico.gov.br/download/texto/bv000215.pdf/" };
+          return existenciaProvadaPeloValidador(d, f, "ok") === true
+            && existenciaProvadaPeloValidador(d, f, "fonte_trocada") === false
+            && existenciaProvadaPeloValidador(d, f, "proprio") === false
+            && existenciaProvadaPeloValidador(d, { urlVerificacao: "https://dominiopublico.gov.br/outro.pdf" }, "ok") === false
+            && existenciaProvadaPeloValidador(d, { urlVerificacao: "" }, "ok") === false
+            && existenciaProvadaPeloValidador({ ...d, validacao: { libera: true, fonteAberta: false } }, f, "ok") === false
+            && existenciaProvadaPeloValidador({ ...d, validacao: { libera: false, fonteAberta: true } }, f, "ok") === false
+            && existenciaProvadaPeloValidador({ ...d, encontrou: false }, f, "ok") === false
+            && existenciaProvadaPeloValidador(null, f, "ok") === false
+            && ITENS_DE_EXISTENCIA_DA_FICHA.length === 6
+            && !ITENS_DE_EXISTENCIA_DA_FICHA.some((k) => ["trechoConferidoNaFonte", "parafraseFielAFonte", "nadaFoiInventado", "questaoDentroDasAfirmacoes", "comprovavelPelaFonte", "nenhumaFraseAtribuidaIndevidamente", "usoIdentificadoCorretamente"].includes(k))
+            && garantirFontesReais.toString().includes("existenciaProvadaPeloValidador(dossiePrevio, data && data.fonte, doss.estado)")
+            && garantirFontesReais.toString().includes("diag.fichaDivergente = divergentes");
         })(),
         /* v74.20 — A CALIBRAÇÃO PASSOU A SAIR SÓ DAS QUATRO PROVAS RECENTES
            (2022-2025), por decisão do professor, e 2021 ficou fora porque o PDF

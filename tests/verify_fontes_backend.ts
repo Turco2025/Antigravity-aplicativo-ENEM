@@ -185,6 +185,7 @@ export { DOMINIOS_VETADOS, DOMINIOS_NIVEL_A, DOMINIOS_NIVEL_B, ehDominioVetado, 
          liberaGeracao, liberaRestritoAoConfirmado, buildValidacaoPrompt, ferramentaFetchPara, ferramentaBuscaNoDominioPara, SISTEMA_VALIDACAO_FONTE, FERRAMENTA_VALIDACAO_FONTE, buildBlocoValidacaoDossie };
 export { ACERVOS_PRIORITARIOS, DISCIPLINAS_COM_ACERVO_PRIORITARIO, temAcervoPrioritario, buildAcervosPrioritarios };
 export { DOMINIOS_ACERVO_PRIORITARIO, hostDaUrl, ehDominioDeAcervo, acervoFoiConsultado, consultaCombinadaAcervos };
+export { existenciaProvadaPeloValidador, ITENS_DE_EXISTENCIA_DA_FICHA };
 export { conferenciaFontes, conferenciaDossie, tokensDeFonte, normalizaUrl, buildAuditoriaFontesPrompt,
          garantirFontesReais, FERRAMENTA_AUDITORIA_FONTE, MENSAGEM_FONTE_BLOQUEIO, fontesReaisEstrito,
          buscaDaGeracao, buildDossieFonte,
@@ -203,6 +204,7 @@ const { conferenciaFontes, conferenciaDossie, normalizaUrl, buildAuditoriaFontes
         consultaCombinadaAcervos,
         DOMINIOS_VETADOS, DOMINIOS_NIVEL_A, DOMINIOS_NIVEL_B, ehDominioVetado, nivelDoDominio, piorNivel, conferenciaPreviaDossie,
         liberaGeracao, liberaRestritoAoConfirmado, buildValidacaoPrompt, ferramentaFetchPara, ferramentaBuscaNoDominioPara, SISTEMA_VALIDACAO_FONTE, FERRAMENTA_VALIDACAO_FONTE, buildBlocoValidacaoDossie,
+        existenciaProvadaPeloValidador, ITENS_DE_EXISTENCIA_DA_FICHA,
         __stub } = M;
 
 let ok = 0, bad = 0;
@@ -780,6 +782,62 @@ t("N7 o pesquisador é instruído a copiar a URL exata, preferir fatos confirmad
   && fonte.includes("Não misture uma edição impressa que você não abriu")
   && fonte.includes("copiada EXATAMENTE (subdomínio e caminho inteiros)"));
 t("N8 o aquecimento do cache passa a cobrir o validador", fonte.includes('await tentar("validacao", [{ type: "text", text: SISTEMA_VALIDACAO_FONTE'));
+
+/* ─────────────── O. v74.22 — fato vence opinião na auditoria (ensaio 5, id 1216) ─────────────── */
+const dossV: any = {
+  ...doss, url: "https://www.dominiopublico.gov.br/download/texto/bv000215.pdf",
+  validacao: { libera: true, estado: "aprovado", fonteAberta: true, nivel: "A", suporte: "direto", confianca: "alta", afirmacoesComSuporte: ["inscrito em 2016"], afirmacoesSemSuporte: [] },
+};
+const buscasV = [{ url: "https://www.dominiopublico.gov.br/download/texto/bv000215.pdf", title: "Domínio Público" }];
+const fonteV = (u: string) => fonteBoa({ autor: "", instituicao: "IPHAN", obra: "Conjunto Moderno da Pampulha", referencia: doss.referencia, urlVerificacao: u });
+t("O1 a função pura só reconhece existência provada com dossiê aprovado, página localizada, dossiê 'ok' e a MESMA URL (normalizada)",
+  existenciaProvadaPeloValidador(dossV, { urlVerificacao: "http://dominiopublico.gov.br/download/texto/bv000215.pdf/" }, "ok") === true
+  && existenciaProvadaPeloValidador(dossV, { urlVerificacao: "https://www.dominiopublico.gov.br/download/texto/bv000215.pdf" }, "fonte_trocada") === false
+  && existenciaProvadaPeloValidador(dossV, { urlVerificacao: "https://www.dominiopublico.gov.br/download/texto/bv000215.pdf" }, "proprio") === false
+  && existenciaProvadaPeloValidador(dossV, { urlVerificacao: "https://www.dominiopublico.gov.br/outro.pdf" }, "ok") === false
+  && existenciaProvadaPeloValidador(dossV, { urlVerificacao: "" }, "ok") === false
+  && existenciaProvadaPeloValidador({ ...dossV, validacao: { ...dossV.validacao, fonteAberta: false } }, { urlVerificacao: dossV.url }, "ok") === false
+  && existenciaProvadaPeloValidador({ ...dossV, validacao: { ...dossV.validacao, libera: false } }, { urlVerificacao: dossV.url }, "ok") === false
+  && existenciaProvadaPeloValidador({ ...dossV, encontrou: false }, { urlVerificacao: dossV.url }, "ok") === false
+  && existenciaProvadaPeloValidador(null, { urlVerificacao: dossV.url }, "ok") === false);
+t("O2 os itens tomados do validador são SÓ os seis de existência — nenhum de conteúdo",
+  ITENS_DE_EXISTENCIA_DA_FICHA.length === 6
+  && ["autorExiste", "obraExiste", "obraPertenceAoAutor", "fonteExiste", "instituicaoExiste", "referenciaLocalizavelEConfirmada"].every((k) => ITENS_DE_EXISTENCIA_DA_FICHA.includes(k))
+  && !ITENS_DE_EXISTENCIA_DA_FICHA.some((k) => ["trechoConferidoNaFonte", "parafraseFielAFonte", "nadaFoiInventado", "questaoDentroDasAfirmacoes", "comprovavelPelaFonte", "nenhumaFraseAtribuidaIndevidamente", "usoIdentificadoCorretamente", "inventadoEmOutraParte"].includes(k)));
+// O caso real: validador localizou a página e aprovou; auditor (sem busca) disse fonteExiste = false.
+__stub.resposta = fichaBoa({ fonteExiste: false, referenciaLocalizavelEConfirmada: false, questaoDentroDasAfirmacoes: true, aprovado: true }); __stub.erro = null; __stub.chamadas = 0;
+const qO3: any = questao(fonteV(dossV.url));
+const dO3 = await roda(qO3, "linguagens", 120_000, buscasV, dossV);
+t("O3 auditor nega a existência de uma fonte que o validador LOCALIZOU → fato vence opinião: aprovada, divergência registrada",
+  dO3.estado === "aprovado" && dO3.existenciaPeloValidador === true
+  && JSON.stringify(dO3.fichaDivergente) === JSON.stringify(["fonteExiste", "referenciaLocalizavelEConfirmada"])
+  && dO3.ficha.fonteExiste === true && !qO3.fonteNaoVerificada,
+  JSON.stringify({ estado: dO3.estado, div: dO3.fichaDivergente, motivo: dO3.motivo }));
+// Conteúdo continua com o auditor: nada inventado = false reprova mesmo com existência provada.
+__stub.resposta = fichaBoa({ fonteExiste: false, nadaFoiInventado: false, questaoDentroDasAfirmacoes: true, aprovado: true });
+const qO4: any = questao(fonteV(dossV.url));
+const dO4 = await roda(qO4, "linguagens", 120_000, buscasV, dossV);
+t("O4 item de CONTEÚDO negado pelo auditor continua reprovando, mesmo com a existência provada",
+  dO4.estado === "reprovado" && dO4.existenciaPeloValidador === true && dO4.ficha.nadaFoiInventado === false
+  && qO4.fonteNaoVerificada && qO4.fonteNaoVerificada.itens.includes("nadaFoiInventado") && !qO4.fonteNaoVerificada.itens.includes("fonteExiste"),
+  JSON.stringify({ estado: dO4.estado, itens: qO4.fonteNaoVerificada && qO4.fonteNaoVerificada.itens }));
+// URL diferente da do dossiê → o auditor decide, como antes.
+__stub.resposta = fichaBoa({ fonteExiste: false, questaoDentroDasAfirmacoes: true, aprovado: true });
+const outraUrl = "https://portal.iphan.gov.br/pampulha";
+const qO5: any = questao(fonteV(outraUrl));
+const dO5 = await roda(qO5, "linguagens", 120_000, [{ url: outraUrl, title: "x" }], dossV);
+t("O5 questão com URL diferente da do dossiê: o auditor continua soberano (fonteExiste = false reprova)",
+  dO5.estado === "reprovado" && dO5.existenciaPeloValidador === false && !dO5.fichaDivergente
+  && qO5.fonteNaoVerificada && qO5.fonteNaoVerificada.itens.includes("fonteExiste"),
+  JSON.stringify({ estado: dO5.estado, ex: dO5.existenciaPeloValidador }));
+// Sem página localizada pelo validador (fonteAberta = false) → o auditor decide.
+__stub.resposta = fichaBoa({ fonteExiste: false, questaoDentroDasAfirmacoes: true, aprovado: true });
+const qO6: any = questao(fonteV(dossV.url));
+const dO6 = await roda(qO6, "linguagens", 120_000, buscasV, { ...dossV, validacao: { ...dossV.validacao, fonteAberta: false } });
+t("O6 validador que NÃO localizou a página não prova existência: o auditor decide",
+  dO6.estado === "reprovado" && dO6.existenciaPeloValidador === false);
+t("O7 o handler registra a divergência no log da função (acompanhamento)",
+  fonte.includes("fato vence opinião; itens de conteúdo seguem com o auditor") && fonte.includes("diag.fichaDivergente = divergentes"));
 
 console.log(`\n${ok} verificações passaram, ${bad} falharam.`);
 if (bad) Deno.exit(1);
