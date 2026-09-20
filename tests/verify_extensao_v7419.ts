@@ -84,8 +84,8 @@ t("C4 texto-base e comando também ganham teto",
   src.includes("maxLength: t.texto") && src.includes("maxLength: t.comando"));
 t("C5 a descrição da alternativa repete que dificuldade não muda o número",
   src.includes("O nível de dificuldade não altera este número"));
-t("C6 as duas chamadas de geração passam a disciplina",
-  (src.match(/ferramentaQuestaoPara\(recurso, fontesReaisEstrito\(area\), disciplina\)/g) || []).length === 2);
+t("C6 as chamadas de geração passam a disciplina (rascunho, retentativa e, desde a v74.23, a reelaboração)",
+  (src.match(/ferramentaQuestaoPara\(recurso, fontesReaisEstrito\(area\), disciplina\)/g) || []).length === 3);
 
 /* ---------- D. o alvo no prompt do usuário ---------- */
 const alvoFn = recorta("buildAlvoExtensao");

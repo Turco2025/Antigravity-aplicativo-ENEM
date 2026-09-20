@@ -181,7 +181,13 @@ ${permitidos.map((o, i) => `${i + 1}. ${o}`).join("\n")}
 Os demais objetos da área pertencem a OUTRAS disciplinas e estão PROIBIDOS aqui, por mais que o assunto pareça caber: pedir Artes e receber "Estudo do texto literário" entrega ao professor uma questão de Literatura no lugar da que ele pediu.${permitidos.length === 1 ? ` Com um objeto só, a variedade da leva vem do ASSUNTO e do CONTEXTO — nunca de trocar o objeto.` : ""}`;
 }
 
-/* v74.23 (20/09/2026) — INSISTÊNCIA AUTOMÁTICA, decisão do professor: "nunca deixar de
+/* v74.24 (20/09/2026) — MODERAÇÃO DO GERADOR DE IMAGENS: 5 de 23 imagens da leva de
+   Literatura recusadas pelo "safety system" da OpenAI (crianças fotorrealistas, morte,
+   violência), e o app repetia o MESMO prompt 3×. Regra preventiva no protocolo de imagem
+   (recurso_instrucoes.ts) + rota regenerarVisual com restricaoSeguranca (1: sem crianças,
+   sem violência explícita; 2: sem figuras humanas, estilo infográfico). generate-image v32
+   devolve code "moderation_blocked" (422) sem repetir; app v18.28 pede prompt novo.
+   v74.23 (20/09/2026) — INSISTÊNCIA AUTOMÁTICA, decisão do professor: "nunca deixar de
    gerar a questão". 3 rodadas pesquisador ⇄ validador por chamada (fontes reprovadas
    viram fontesEvitar, também entre chamadas do app); auditor reprovou a questão →
    reelaboração com o MESMO dossiê (até 2); último recurso = situação-problema de
@@ -1620,6 +1626,25 @@ ${buildGabaritoAlvo(opts.gabaritoAlvo || null)}${buildOrientacoesProfessor(opts.
 Entregue a questão chamando a ferramenta "entregar_questao", no formato descrito no prompt do sistema.`;
 }
 
+/* v74.24 — A IMAGEM ANTERIOR FOI RECUSADA PELA MODERAÇÃO DO GERADOR (OpenAI
+   "safety system"). O app pede um NOVO promptImagem em vez de repetir o mesmo.
+   Nível 1: mesma cena, sem o que a moderação barra (crianças fotorrealistas,
+   violência/morte explícitas). Nível 2: sem figuras humanas, estilo ilustração
+   técnica/infográfico — a última cartada antes de a questão ficar sem imagem. */
+function buildRestricaoSegurancaVisual(nivel?: number): string {
+  const n = Number(nivel) || 0;
+  if (n <= 0) return "";
+  return `
+🛡️ A ESPECIFICAÇÃO ANTERIOR DESTA IMAGEM FOI RECUSADA PELO SISTEMA DE SEGURANÇA DO GERADOR DE IMAGENS (${n === 1 ? "1ª recusa" : `${n}ª recusa`}). Reescreva-a por inteiro, mantendo o conteúdo pedagógico e a REGRA ABSOLUTA DE ASSUNTO, com estas restrições OBRIGATÓRIAS:
+· NENHUMA criança ou adolescente — em nenhum estilo. Se a cena precisar delas, use silhuetas distantes de costas, ou objetos que as representem (carteira escolar, caderno, brinquedo).
+· Pessoas só como ADULTOS${n >= 2 ? " — e, nesta tentativa, NENHUMA FIGURA HUMANA: represente a situação por objetos, ambiente, paisagem, mapas ou diagramas" : ", preferindo planos afastados, silhuetas ou figuras de costas"}.
+· Violência, morte, sofrimento, doença, nudez, sangue, armas, drogas, escravidão e castigo: SUGERIDOS por símbolos, objetos, ambiente ou consequência — nunca mostrados.
+· Nada de rostos de pessoas reais, marcas, logotipos, texto além dos rótulos.${n >= 2 ? `
+· ESTILO desta tentativa: ilustração técnica ou infográfico tridimensional limpo ("clean 3D infographic illustration, soft studio lighting"), em vez de fotorrealismo cinematográfico — a Camada 2 (rótulos, setas, números) permanece integral.` : ""}
+· Na seção 8 (NEGATIVE CONSTRAINTS) acrescente, em inglês: "no children, no minors, no realistic depiction of violence, death, injury or nudity, no real people".
+`;
+}
+
 // Prompt usado quando o professor/aluno pede para refazer SÓ o recurso visual de uma
 // questão já pronta (botão "Refazer" na tela) — mantém texto-base, comando, alternativas,
 // gabarito e resolução comentada intactos, e pede ao modelo apenas uma nova versão do
@@ -1627,7 +1652,7 @@ Entregue a questão chamando a ferramenta "entregar_questao", no formato descrit
 function buildVisualRedoPrompt(opts: {
   tema: string; disciplina: string; recurso: string; textoBase: string; comando: string;
   alternativas: Record<string, string>; gabarito: string; resolucaoComentada: string;
-  instrucoesVisual?: string; motivoFaltante?: string;
+  instrucoesVisual?: string; motivoFaltante?: string; restricaoSeguranca?: number;
 }) {
   /* v62: quando o recurso visual FALTOU na entrega (ou veio trocado), o pedido
      não é "refazer uma variação" — é produzir, agora, o recurso obrigatório
@@ -1648,7 +1673,7 @@ Gabarito: ${opts.gabarito}
 Resolução comentada: ${opts.resolucaoComentada}
 
 ${instrucoesImagem(opts.recurso, opts.disciplina)}
-${opts.instrucoesVisual
+${buildRestricaoSegurancaVisual(opts.restricaoSeguranca)}${opts.instrucoesVisual
     ? `\nInstruções adicionais do professor para esta nova versão do recurso visual (siga-as com prioridade): ${opts.instrucoesVisual}\n`
     : opts.motivoFaltante
       ? `\nO recurso visual é o PRIMEIRO desta questão (não há versão anterior a variar): produza-o completo, no formato instruído acima.\n`
@@ -3937,6 +3962,7 @@ function selfTestResponse() {
     existenciaProvadaPeloValidador.toString(), JSON.stringify(ITENS_DE_EXISTENCIA_DA_FICHA),   // v74.22
     fonteEstaNaListaDeEvitar.toString(), consultarBancoFontes.toString(), guardarNoBancoFontes.toString(), pontuaFonteDoBanco.toString(),   // v74.23
     buildBlocoTextoProprio.toString(), buildCorrecaoAuditoria.toString(), JSON.stringify([REELABORACOES_MAX, MS_MINIMO_PARA_REELABORAR, MAX_FONTES_EVITAR, BANCO_FONTES_MINIMO_TOKENS]),
+    buildRestricaoSegurancaVisual.toString(),   // v74.24
     JSON.stringify(ACERVOS_PRIORITARIOS), JSON.stringify(DISCIPLINAS_COM_ACERVO_PRIORITARIO), buildAcervosPrioritarios.toString(),   // v74.16
     JSON.stringify([WEB_SEARCH_TOOL, BUSCA_PESQUISADOR, BUSCA_PESQUISADOR_RETRY, BUSCA_AUDITORIA]),
     buildSystemPlanejamento.toString(),
@@ -4436,6 +4462,17 @@ function selfTestResponse() {
             && SISTEMA_PESQUISA_FONTE.includes("PREFIRA \"FATOS CONFIRMADOS\" A TRECHO LITERAL LONGO")
             && aquecerCacheResponse.toString().includes("SISTEMA_VALIDACAO_FONTE");
         })(),
+        /* v74.24 — moderação do gerador de imagens: regra preventiva no protocolo
+           e reescrita segura (níveis 1 e 2) na rota regenerarVisual. */
+        v7424_moderacaoImagem: (() => {
+          const proto = instrucoesImagem("imagem", "Literatura");
+          return proto.includes("PASSAGEM PELA MODERAÇÃO DO GERADOR DE IMAGENS") && proto.includes("NUNCA crianças ou adolescentes em estilo fotorrealista")
+            && buildRestricaoSegurancaVisual(0) === "" && buildRestricaoSegurancaVisual(1).includes("1ª recusa")
+            && buildRestricaoSegurancaVisual(1).includes("NENHUMA criança") && !buildRestricaoSegurancaVisual(1).includes("NENHUMA FIGURA HUMANA")
+            && buildRestricaoSegurancaVisual(2).includes("NENHUMA FIGURA HUMANA") && buildRestricaoSegurancaVisual(2).includes("clean 3D infographic")
+            && buildVisualRedoPrompt({ tema: "t", disciplina: "Literatura", recurso: "imagem", textoBase: "", comando: "", alternativas: {}, gabarito: "A", resolucaoComentada: "", restricaoSeguranca: 1 }).includes("no children, no minors")
+            && !buildVisualRedoPrompt({ tema: "t", disciplina: "Literatura", recurso: "imagem", textoBase: "", comando: "", alternativas: {}, gabarito: "A", resolucaoComentada: "" }).includes("RECUSADA PELO SISTEMA DE SEGURANÇA");
+        })(),
         /* v74.23 — INSISTÊNCIA AUTOMÁTICA (decisão do professor, 20/09): 3 rodadas
            por chamada, fontes a evitar, reelaboração com o mesmo dossiê, último
            recurso em texto próprio e banco de fontes validadas. */
@@ -4837,7 +4874,10 @@ ATENÇÃO — sua resposta anterior não pôde ser usada: o argumento da ferrame
     try {
       // v69: sistema enxuto — a imagem não precisa do modelo pedagógico inteiro.
       const system = buildSystemVisual(area);
-      const userMsg = buildVisualRedoPrompt({ tema, disciplina, recurso, textoBase, comando, alternativas, gabarito, resolucaoComentada, instrucoesVisual });
+      // v74.24 — reescrita segura depois de recusa da moderação (nível 1 ou 2)
+      const restricaoSeguranca = Math.max(0, Math.min(2, Number(body.restricaoSeguranca) || 0));
+      if (restricaoSeguranca) console.warn(`[visual] refazer "${tema}" (${disciplina}) com restrição de segurança nível ${restricaoSeguranca}`);
+      const userMsg = buildVisualRedoPrompt({ tema, disciplina, recurso, textoBase, comando, alternativas, gabarito, resolucaoComentada, instrucoesVisual, restricaoSeguranca });
       const data = await callClaudeForJSON(system, userMsg, false, usos, ferramentaVisualPara(recurso), undefined, "visual");
       if (!data || !data.visual) {
         return jsonResponse({ error: "O modelo não retornou um novo recurso visual válido." }, 502);

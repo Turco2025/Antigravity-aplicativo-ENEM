@@ -193,6 +193,22 @@ Deno.serve(async (req: Request) => {
           if (tentativa === 3) return jsonResponse({ error: `Falha ao gerar imagem na OpenAI (${ultimoErro})` }, 502);
           continue;
         }
+        /* v32 (20/09/2026) — RECUSA DA MODERAÇÃO. Cinco imagens de uma leva de
+           Literatura voltaram com "Your request was rejected by the safety
+           system" (crianças em fotorrealismo, cenas de morte/violência), e o
+           app repetia o MESMO prompt três vezes. Aqui a recusa vira um código
+           próprio (422 + code "moderation_blocked"), sem repetir: quem
+           resolve é o app, pedindo ao generate-question um prompt reescrito
+           com restrição de segurança (regenerarVisual + restricaoSeguranca). */
+        const moderacao = res.status === 400 && /safety system|moderation_blocked|content_policy|rejected by|safety/i.test(errText);
+        if (moderacao) {
+          console.warn(`[imagem] recusada pela moderação da OpenAI (prompt ${prompt.length} chars): ${errText.slice(0, 200).replace(/\s+/g, " ")}`);
+          return jsonResponse({
+            error: "A imagem foi recusada pelo sistema de segurança do gerador de imagens. O aplicativo vai pedir uma nova especificação, sem o que a moderação barra.",
+            code: "moderation_blocked",
+            detalhe: errText.slice(0, 300),
+          }, 422);
+        }
         // 429 e 5xx passam; 400 é erro de pedido e não melhora tentando de novo.
         const vaiMelhorar = res.status === 429 || res.status >= 500;
         ultimoErro = `status ${res.status}: ${errText.slice(0, 400)}`;

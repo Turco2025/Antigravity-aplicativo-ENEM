@@ -944,6 +944,12 @@ function diagImagem(q, etapa, detalhe){
 // ajuda) ou quando as tentativas acabam. Devolve { dataUrl, uso, tentativas }.
 async function gerarImagemComRetentativas(promptText, q){
   let ultimoErro = null;
+  /* v18.28 — RECUSA DA MODERAÇÃO (generate-image v32 devolve code "moderation_blocked").
+     Repetir o mesmo prompt não adianta — foi o que deixou 5 questões de 23 sem
+     imagem em 20/09. Em vez disso o app pede ao backend um NOVO promptImagem com
+     restrição de segurança: nível 1 (sem crianças, sem violência explícita) e,
+     se recusar de novo, nível 2 (sem figuras humanas, estilo infográfico). */
+  let nivelSeguranca = 0;
   for(let tentativa = 1; tentativa <= IMG_MAX_TENTATIVAS; tentativa++){
     diagImagem(q, "imagem_tentativa", `${tentativa}/${IMG_MAX_TENTATIVAS} · prompt ${imgTextoDeEspecificacao(promptText, 0).length} chars`);
     try{
@@ -958,6 +964,18 @@ async function gerarImagemComRetentativas(promptText, q){
       // Sem login não há o que repetir: o backend recusa toda tentativa igual.
       const naoAutorizado = /HTTP 40[13]\b|fazer login/i.test(msg);
       if(semEspecificacao || naoAutorizado) break;
+      if(err && err.code === "moderation_blocked" && tentativa < IMG_MAX_TENTATIVAS){
+        nivelSeguranca = Math.min(2, nivelSeguranca + 1);
+        diagImagem(q, "imagem_moderacao", `tentativa ${tentativa} recusada pela moderação · pedindo prompt novo com restrição de segurança nível ${nivelSeguranca}`);
+        try{
+          await refazerVisualPeloBackend(q, { restricaoSeguranca: nivelSeguranca });
+          promptText = montaPromptImagem(q.data.visual, q.data);
+          diagImagem(q, "imagem_prompt_seguro", `nível ${nivelSeguranca} · prompt ${imgTextoDeEspecificacao(promptText, 0).length} chars`);
+        }catch(e2){
+          diagImagem(q, "imagem_prompt_seguro_erro", e2 && e2.message || String(e2));
+        }
+        continue;   // sem espera: o prompt mudou
+      }
       if(tentativa < IMG_MAX_TENTATIVAS) await new Promise(r => setTimeout(r, IMG_ESPERA_ENTRE_TENTATIVAS_MS * tentativa));
     }
   }
@@ -983,7 +1001,10 @@ async function generateImageViaBackend(promptText){
   let data = {};
   try{ data = await res.json(); }catch(e){ /* resposta não-JSON */ }
   if(!res.ok || data.error){
-    throw new Error(data.error || `Erro HTTP ${res.status} ao gerar imagem.`);
+    const e = new Error(data.error || `Erro HTTP ${res.status} ao gerar imagem.`);
+    // v18.28 — a recusa da moderação vem com código próprio (generate-image v32)
+    if(data.code) e.code = data.code;
+    throw e;
   }
   if(!data.imageDataUrl){
     throw new Error("O backend não retornou a imagem.");
@@ -2932,7 +2953,8 @@ function recursoLabelArtigo(recurso){
 // texto-base/comando/alternativas/gabarito/resolução já escritos — a mesma
 // rota do botão "Refazer", usada aqui automaticamente quando a questão chegou
 // sem o recurso pedido. Substitui q.data.visual em caso de sucesso.
-async function refazerVisualPeloBackend(q){
+async function refazerVisualPeloBackend(q, opcoes){
+  opcoes = opcoes || {};
   const resp = await fetch(QUESTION_BACKEND_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
@@ -2950,6 +2972,8 @@ async function refazerVisualPeloBackend(q){
       gabarito: q.data.gabarito || "",
       resolucaoComentada: q.data.resolucaoComentada || "",
       instrucoesVisual: q.instrucoesVisual || "",
+      // v18.28 — reescrita segura depois de recusa da moderação (backend v74.24)
+      restricaoSeguranca: Number(opcoes.restricaoSeguranca) || 0,
     }),
   });
   const rawBody = await resp.text();
@@ -2990,7 +3014,11 @@ function garanteImagemDaQuestao(q){
   const pedido = gerarImagemComRetentativas(promptText, q);
   imagensEmAndamento.set(visual, pedido);
   const promessa = pedido.then(({ dataUrl }) => {
-    visual.imagemDataUrl = dataUrl;
+    /* v18.28 — o prompt seguro pode ter substituído q.data.visual; a imagem
+       vai para o visual ATUAL da questão (e também para o antigo, por segurança). */
+    const atual = q.data && q.data.visual && q.data.visual.tipo === "imagem" ? q.data.visual : visual;
+    atual.imagemDataUrl = dataUrl;
+    if(atual !== visual) visual.imagemDataUrl = dataUrl;
     q.status = "done";
     q.errorMsg = "";
     diagImagem(q, "imagem_vinculada", `gravada em visual.imagemDataUrl da questão ${state.questions.indexOf(q) + 1} (tema "${q.data.tema || q.tema || ""}")`);

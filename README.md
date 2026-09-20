@@ -124,7 +124,7 @@ Teste: `verify_fontes_app.js` — 19 verificações; as seções B e C bis prova
 quatro marcas ligadas ao mesmo tempo nenhuma conferência bloqueia, e que nenhuma delas tem sequer um
 `return true` no corpo. `verify_gabarito_coerente.js` H1 passou a exigir o contrário do que exigia.
 
-## O agente validador entre a pesquisa e a elaboração — e o custo que o log mostrou (generate-question v74.21 → v74.23 · app v18.27, 20/09/2026)
+## O agente validador entre a pesquisa e a elaboração — e o custo que o log mostrou (generate-question v74.21 → v74.24 · app v18.28, 20/09/2026)
 
 Pedido do professor (20/09): um squad de quatro agentes — **pesquisador, validador, elaborador e
 auditor** — em que o elaborador só escreve depois que a fonte foi aprovada, com o prompt "AGENTE
@@ -408,6 +408,32 @@ fonte.
 
 Testes: cenários **D3, J1–J3 (J1b), K1–K2** em `verify_validador_v7421.ts` (30); seção **P** (6) em
 `verify_fontes_backend.ts` (141); self-test `v7423_insistenciaAutomatica`.
+
+### Sétimo passo (20/09, v74.24 · generate-image v32 · app v18.28): as imagens recusadas pela moderação
+
+Na leva de Literatura de 20/09, **5 de 23 questões saíram sem imagem**. Não era carga nem o worker
+morrendo: o simulado arquivado guarda as três tentativas da questão 14 (Graciliano), todas com a
+mesma resposta da OpenAI — *"Your request was rejected by the safety system"* (HTTP 400, ~17 s). O
+prompt era inofensivo (família atravessando a caatinga), mas pedia **"two child figures" em
+"ultra-realistic 4K photorealistic"**: o `gpt-image-2` é rígido com crianças fotorrealistas. As
+outras quatro (Castro Alves, Álvares de Azevedo, Gregório de Matos, Gonçalves Dias) batem com
+violência, morte e sátira. E o app repetia **o mesmo prompt** três vezes.
+
+Três mudanças, autorizadas pelo professor:
+
+1. **`generate-image` v32** — recusa da moderação vira `422 + code "moderation_blocked"`, sem
+   repetir o mesmo prompt (e com `console.warn` no log, que antes não existia para esse caso).
+2. **App v18.28** — ao receber `moderation_blocked`, pede ao backend um **novo `promptImagem`**
+   (`regenerarVisual` + `restricaoSeguranca`): nível 1 = mesma cena sem crianças e sem violência
+   explícita; nível 2 = sem figuras humanas, estilo infográfico 3D. Continuam 3 tentativas, mas
+   cada uma com um prompt diferente. A imagem gerada vai para o `visual` atual da questão.
+3. **Protocolo de imagem** (`recurso_instrucoes.ts`, seção 7) — regra preventiva "PASSAGEM PELA
+   MODERAÇÃO": pessoas como adultos ou silhuetas, nunca crianças em fotorrealismo; violência,
+   morte, nudez, armas sugeridos por símbolos e consequências, nunca mostrados; sem rostos reais
+   nem marcas. Regra de estilo do prompt de imagem — não toca a questão, a Matriz nem o INEP.
+
+Custo: zero quando a imagem passa de primeira; na recusa, uma chamada curta de reescrita (≈ US$ 0,01)
+no lugar de duas imagens recusadas. Self-test `v7424_moderacaoImagem`.
 
 ### Custo esperado e o que ainda falta medir
 
