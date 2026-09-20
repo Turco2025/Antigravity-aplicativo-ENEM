@@ -2,3 +2,4 @@ _to_delete/
 _lockjunk/
 _lockjunk2/
 tests/saida/
+__pycache__/

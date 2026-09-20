@@ -4774,25 +4774,31 @@ function bloqueiaSeObjetoForaDoRecorte(doneQuestions){
     "o objeto de conhecimento declarado está fora do recorte da disciplina escolhida.");
 }
 
-/* Faixas reais medidas nas provas do ENEM 2015-2025 (mesmos números do backend,
-   em references/calibracao_extensao.md): [p25, p75, média] por parte. Aqui só
-   geram AVISO — extensão é questão de estilo, não de verdade, e travar por ela
-   reprovaria questão correta. */
+/* Faixas reais das provas do ENEM (os mesmos números do backend): [p25, p75,
+   média] por parte. Aqui só geram AVISO — extensão é questão de estilo, não de
+   verdade, e travar por ela reprovaria questão correta. */
+/* v18.24 — a faixa das ALTERNATIVAS passou a sair só das quatro provas recentes
+   (2022, 2023, 2024 e 2025), por decisão do professor; 2021 ficou fora porque o
+   PDF tem a fonte quebrada e extrai lixo. Medição em tests/medir_provas_reais.py:
+   497 questões no subconjunto limpo, 2.485 alternativas. "avisoMedia" é o p90 da
+   MÉDIA das cinco — é acima dele que o aviso de extensão sai, e ele reprova 10%
+   das questões reais em vez dos 20% do p75 anterior. "texto" e "comando" seguem
+   como estavam: o extrator ainda não os separa com confiança. */
 const CALIBRACAO_APP = {
-  "Língua Portuguesa": { texto: [608,1201,902], comando: [82,180,138], item: [44,70,58] },
-  "Literatura": { texto: [608,1122,868], comando: [82,164,118], item: [45,67,57] },
-  "Artes": { texto: [384,798,610], comando: [107,189,143], item: [48,70,61] },
-  "Práticas Corporais": { texto: [799,1134,962], comando: [83,128,106], item: [35,73,59] },
-  "Educação Física": { texto: [799,1134,962], comando: [83,128,106], item: [35,73,59] },
-  "Língua Estrangeira (Inglês/Espanhol)": { texto: [409,1073,761], comando: [77,179,129], item: [37,60,50] },
-  "História": { texto: [469,757,620], comando: [84,130,104], item: [33,53,45] },
-  "Geografia": { texto: [398,737,554], comando: [76,126,101], item: [29,43,37] },
-  "Filosofia": { texto: [477,671,596], comando: [78,118,95], item: [31,51,41] },
-  "Sociologia": { texto: [497,780,625], comando: [76,123,107], item: [28,49,40] },
-  "Biologia": { texto: [374,634,527], comando: [41,102,93], item: [13,49,34] },
-  "Física": { texto: [476,805,648], comando: [47,122,109], item: [5,40,25] },
-  "Química": { texto: [483,780,641], comando: [56,110,104], item: [7,41,26] },
-  "Matemática": { texto: [420,725,586], comando: [47,134,142], item: [3,10,9] },
+  "Língua Portuguesa": { texto: [608,1201,902], comando: [82,180,138], item: [46,69,58], avisoMedia: 80 },
+  "Literatura": { texto: [608,1122,868], comando: [82,164,118], item: [46,69,58], avisoMedia: 80 },
+  "Artes": { texto: [384,798,610], comando: [107,189,143], item: [46,69,58], avisoMedia: 80 },
+  "Práticas Corporais": { texto: [799,1134,962], comando: [83,128,106], item: [46,69,58], avisoMedia: 80 },
+  "Educação Física": { texto: [799,1134,962], comando: [83,128,106], item: [46,69,58], avisoMedia: 80 },
+  "Língua Estrangeira (Inglês/Espanhol)": { texto: [409,1073,761], comando: [77,179,129], item: [42,63,53], avisoMedia: 70 },
+  "História": { texto: [469,757,620], comando: [84,130,104], item: [28,46,38], avisoMedia: 61 },
+  "Geografia": { texto: [398,737,554], comando: [76,126,101], item: [28,46,38], avisoMedia: 61 },
+  "Filosofia": { texto: [477,671,596], comando: [78,118,95], item: [28,46,38], avisoMedia: 61 },
+  "Sociologia": { texto: [497,780,625], comando: [76,123,107], item: [28,46,38], avisoMedia: 61 },
+  "Biologia": { texto: [374,634,527], comando: [41,102,93], item: [12,46,33], avisoMedia: 59 },
+  "Física": { texto: [476,805,648], comando: [47,122,109], item: [8,41,27], avisoMedia: 59 },
+  "Química": { texto: [483,780,641], comando: [56,110,104], item: [8,41,27], avisoMedia: 59 },
+  "Matemática": { texto: [420,725,586], comando: [47,134,142], item: [3,10,10], avisoMedia: 18 },
 };
 
 function bloqueiaSeFonteNaoVerificada(doneQuestions){
@@ -4992,19 +4998,16 @@ function auditaQuestaoLocal(q){
     const fora = [];
     if(tb > cal.texto[1]) fora.push("texto-base com " + tb + " caracteres (faixa real: " + cal.texto[0] + "–" + cal.texto[1] + ", média " + cal.texto[2] + ")");
     if(cm > cal.comando[1]) fora.push("comando com " + cm + " (faixa " + cal.comando[0] + "–" + cal.comando[1] + ")");
-    /* v18.23 — O AVISO PASSOU A SER O p90 REAL, NÃO O p75.
-       Medição das provas oficiais 2015-2025 (326 questões completas, 1.700
-       alternativas, extraídas dos PDFs do INEP): a média das cinco fica acima
-       do p75 em 20% das questões REAIS — um p75 deixa 25% acima por definição,
-       então o aviso estava reprovando uma em cada cinco questões do próprio
-       ENEM. O p90 medido da média é ~1,3 vez o p75 (Linguagens 88/67,
-       Humanas 68/47, Natureza 60/43), e é esse o teto agora: o aviso passa a
-       significar "mais longa que 90% das questões reais". Texto-base e comando
-       seguem no p75 — não medi o p90 deles e não mexo no que não medi. */
-    const tetoItem = Math.round(cal.item[1] * 1.3);
+    /* v18.24 — o teto do aviso é o p90 MEDIDO da média das cinco, guardado em
+       "avisoMedia", e não mais uma conta em cima do p75. Nas quatro provas
+       recentes: 80 em Linguagens, 70 na língua estrangeira, 61 em Humanas,
+       59 em Natureza e 18 em Matemática. Com o p75 o aviso reprovava 20% das
+       questões REAIS do ENEM — um p75 deixa 25% acima por definição. Com o p90,
+       10%. Texto-base e comando seguem no p75: não medi o p90 deles. */
+    const tetoItem = cal.avisoMedia || Math.round(cal.item[1] * 1.3);
     if(im > tetoItem) fora.push("alternativas com " + im + " em média (faixa real " + cal.item[0] + "–" + cal.item[1] + ", média " + cal.item[2] + "; o aviso sai acima de " + tetoItem + ")");
     if(fora.length) info("Mais longa que o padrão real do ENEM em " + d.disciplina + ": " + fora.join("; ") +
-                         ". Medido em provas de 2015 a 2025 — o candidato tem três minutos por questão.");
+                         ". Medido nas quatro provas recentes do ENEM (2022-2025) — o candidato tem três minutos por questão.");
   }
 
   const confAud = conferenciaGabarito(d);
@@ -5081,16 +5084,17 @@ function auditaQuestaoLocal(q){
        verdadeira. Nas 20 questões reais o resultado é o mesmo com "e" ou com "ou". */
     if(g > 40 && segunda && (g > 1.25 * segunda || (g - segunda) >= 25)){
       aviso(`A alternativa correta (${confAud.letra}) é a mais longa da questão: ${g} caracteres contra ${segunda} da segunda maior. O Guia do Inep pede paridade entre as cinco — do jeito que está, o tamanho pode entregar a resposta. Use "Regenerar".`);
-    /* v18.23 — 1,30 REPROVAVA O PRÓPRIO ENEM. Medido nas provas oficiais
-       2015-2025, com o mesmo filtro deste ramo (menor > 40 caracteres): a razão
-       maior/menor tem p50 1,24 · p75 1,37 · p90 1,47 · p95 1,59, e 37,3% das
-       questões REAIS passam de 1,30. As questões que este app gera já são mais
-       uniformes que as reais (p90 de 1,30 em História a 1,36 em Artes). O
-       limiar vai para 1,50, entre o p90 e o p95 do exame: avisa no que o ENEM
-       de fato considera desigual, e cala no que é normal. O prompt continua
-       pedindo 1,25 — alvo apertado, alarme largo. */
-    } else if(menor > 40 && maior > 1.50 * menor){
-      info(`Alternativas com extensões desiguais (de ${menor} a ${maior} caracteres, razão ${(maior/menor).toFixed(2)}) — nas provas reais do ENEM o p90 é 1,47. O Guia do Inep pede paridade técnica entre as cinco.`);
+    /* v18.24 — 1,30 REPROVAVA O PRÓPRIO ENEM, e 1,50 ainda apertava. Medido nas
+       QUATRO PROVAS RECENTES (2022-2025), subconjunto limpo, com o mesmo filtro
+       deste ramo (menor > 40 caracteres): p50 1,25 · p75 1,41 · p90 1,57 ·
+       p95 1,63. Acima de 1,30 estão 41% das questões REAIS; acima de 1,50,
+       ainda 15%. O limiar vai para 1,60, logo acima do p90: avisa nos ~8% que o
+       ENEM de fato considera desiguais e cala no que é normal. As questões que
+       este app gera já são mais uniformes que as reais (p90 de 1,30 em História
+       a 1,36 em Artes). O prompt continua pedindo 1,25 — alvo apertado, alarme
+       largo. */
+    } else if(menor > 40 && maior > 1.60 * menor){
+      info(`Alternativas com extensões desiguais (de ${menor} a ${maior} caracteres, razão ${(maior/menor).toFixed(2)}) — nas quatro provas recentes do ENEM o p90 é 1,57. O Guia do Inep pede paridade técnica entre as cinco.`);
     }
   }
 

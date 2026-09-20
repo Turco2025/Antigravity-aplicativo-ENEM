@@ -181,28 +181,62 @@ ${permitidos.map((o, i) => `${i + 1}. ${o}`).join("\n")}
 Os demais objetos da área pertencem a OUTRAS disciplinas e estão PROIBIDOS aqui, por mais que o assunto pareça caber: pedir Artes e receber "Estudo do texto literário" entrega ao professor uma questão de Literatura no lugar da que ele pediu.${permitidos.length === 1 ? ` Com um objeto só, a variedade da leva vem do ASSUNTO e do CONTEXTO — nunca de trocar o objeto.` : ""}`;
 }
 
-const CALIBRACAO_EXTENSAO: Record<string, { n: number; texto: [number, number, number]; comando: [number, number, number]; item: [number, number, number] }> = {
-  "Língua Portuguesa": { n: 213, texto: [608, 1201, 902], comando: [82, 180, 138], item: [44, 70, 58] },
-  "Literatura": { n: 105, texto: [608, 1122, 868], comando: [82, 164, 118], item: [45, 67, 57] },
-  "Artes": { n: 50, texto: [384, 798, 610], comando: [107, 189, 143], item: [48, 70, 61] },
+/* v74.20 — A CALIBRAÇÃO DAS ALTERNATIVAS PASSOU A SER MEDIDA SÓ NAS QUATRO
+   PROVAS RECENTES (2022, 2023, 2024 e 2025), por decisão do professor.
+   Medição com tests/medir_provas_reais.py sobre os PDFs oficiais do INEP:
+   572 questões completas, das quais 497 no subconjunto LIMPO (as cinco
+   alternativas terminando em pontuação — 87%), 2.485 alternativas.
+
+   2021 FICOU DE FORA: o PDF daquele ano tem a codificação de fonte quebrada e
+   o texto extrai como lixo (59% de ruído contra 3-8% dos demais), produzindo
+   números sem sentido (alternativa média de 126 caracteres em Linguagens).
+   Não é defeito do extrator; exigiria OCR.
+
+   O QUE A MEDIÇÃO DÁ, por grupo (p25 / média / p75 da alternativa):
+     Linguagens sem língua estrangeira   46 / 58 / 69
+     Língua estrangeira (questões 1-5)   42 / 53 / 63
+     Humanas                             28 / 38 / 46
+     Natureza (alternativa de TEXTO)     12 / 33 / 46
+     Natureza (alternativa NUMÉRICA)      4 /  7 /  7
+     Matemática                           3 / 10 / 10
+   E a média das cinco tem p90 de 80 (Linguagens), 70 (LEM), 61 (Humanas),
+   59 (Natureza) e 18 (Matemática) — é o campo "avisoMedia", usado pelo aviso
+   da auditoria local.
+
+   POR QUE POR GRUPO E NÃO POR DISCIPLINA: a prova do ENEM não rotula
+   disciplina. Dá para isolar a língua estrangeira (posições 1 a 5) e as áreas
+   (blocos de 45 questões); dentro delas, não. Os números por disciplina que
+   estavam aqui vinham de uma medição que não é reproduzível, então cada
+   disciplina passa a receber o número do grupo a que pertence — e Biologia,
+   cujas alternativas são de texto, recebe a faixa textual de Natureza.
+
+   "texto" e "comando" continuam como estavam: o extrator ainda não separa
+   texto-base de comando com confiança, e medir os dois juntos misturaria as
+   referências bibliográficas. Ficam pendentes, declaradamente. */
+const CALIBRACAO_EXTENSAO: Record<string, { n: number; texto: [number, number, number]; comando: [number, number, number]; item: [number, number, number]; avisoMedia: number }> = {
+  "Língua Portuguesa": { n: 122, texto: [608, 1201, 902], comando: [82, 180, 138], item: [46, 69, 58], avisoMedia: 80 },
+  "Literatura": { n: 122, texto: [608, 1122, 868], comando: [82, 164, 118], item: [46, 69, 58], avisoMedia: 80 },
+  "Artes": { n: 122, texto: [384, 798, 610], comando: [107, 189, 143], item: [46, 69, 58], avisoMedia: 80 },
   /* v74.7 — "Práticas Corporais" é o nome do objeto de conhecimento no Anexo da
      Matriz de Referência ("Estudo das práticas corporais"); "Educação Física" não
-     aparece nenhuma vez na Matriz nem no Guia do Inep. Os números são os mesmos:
-     medição das 32 questões reais desse recorte nas provas de 2015-2025. A chave
+     aparece nenhuma vez na Matriz nem no Guia do Inep. A faixa das alternativas
+     é a do bloco de Linguagens, como nas demais disciplinas da área (v74.20); a
+     prova não separa as questões de práticas corporais das outras, elas vêm
+     misturadas entre as posições 6 e 45. A chave
      antiga continua aqui SÓ para os simulados já arquivados com o rótulo velho —
      sem ela, "Educação Física" cairia na busca por substring e pegaria a
      calibração de "Física" (Ciências da Natureza). */
-  "Práticas Corporais": { n: 32, texto: [799, 1134, 962], comando: [83, 128, 106], item: [35, 73, 59] },
-  "Educação Física": { n: 32, texto: [799, 1134, 962], comando: [83, 128, 106], item: [35, 73, 59] },
-  "Língua Estrangeira (Inglês/Espanhol)": { n: 100, texto: [409, 1073, 761], comando: [77, 179, 129], item: [37, 60, 50] },
-  "História": { n: 132, texto: [469, 757, 620], comando: [84, 130, 104], item: [33, 53, 45] },
-  "Geografia": { n: 152, texto: [398, 737, 554], comando: [76, 126, 101], item: [29, 43, 37] },
-  "Filosofia": { n: 80, texto: [477, 671, 596], comando: [78, 118, 95], item: [31, 51, 41] },
-  "Sociologia": { n: 86, texto: [497, 780, 625], comando: [76, 123, 107], item: [28, 49, 40] },
-  "Biologia": { n: 163, texto: [374, 634, 527], comando: [41, 102, 93], item: [13, 49, 34] },
-  "Física": { n: 154, texto: [476, 805, 648], comando: [47, 122, 109], item: [5, 40, 25] },
-  "Química": { n: 133, texto: [483, 780, 641], comando: [56, 110, 104], item: [7, 41, 26] },
-  "Matemática": { n: 450, texto: [420, 725, 586], comando: [47, 134, 142], item: [3, 10, 9] },
+  "Práticas Corporais": { n: 122, texto: [799, 1134, 962], comando: [83, 128, 106], item: [46, 69, 58], avisoMedia: 80 },
+  "Educação Física": { n: 122, texto: [799, 1134, 962], comando: [83, 128, 106], item: [46, 69, 58], avisoMedia: 80 },
+  "Língua Estrangeira (Inglês/Espanhol)": { n: 15, texto: [409, 1073, 761], comando: [77, 179, 129], item: [42, 63, 53], avisoMedia: 70 },
+  "História": { n: 146, texto: [469, 757, 620], comando: [84, 130, 104], item: [28, 46, 38], avisoMedia: 61 },
+  "Geografia": { n: 146, texto: [398, 737, 554], comando: [76, 126, 101], item: [28, 46, 38], avisoMedia: 61 },
+  "Filosofia": { n: 146, texto: [477, 671, 596], comando: [78, 118, 95], item: [28, 46, 38], avisoMedia: 61 },
+  "Sociologia": { n: 146, texto: [497, 780, 625], comando: [76, 123, 107], item: [28, 46, 38], avisoMedia: 61 },
+  "Biologia": { n: 115, texto: [374, 634, 527], comando: [41, 102, 93], item: [12, 46, 33], avisoMedia: 59 },
+  "Física": { n: 115, texto: [476, 805, 648], comando: [47, 122, 109], item: [8, 41, 27], avisoMedia: 59 },
+  "Química": { n: 115, texto: [483, 780, 641], comando: [56, 110, 104], item: [8, 41, 27], avisoMedia: 59 },
+  "Matemática": { n: 99, texto: [420, 725, 586], comando: [47, 134, 142], item: [3, 10, 10], avisoMedia: 18 },
 };
 
 function findCalibracaoKey(disciplina: string): string | null {
@@ -228,11 +262,11 @@ function buildCalibracaoExtensao(disciplina: string): string {
   const [iP25, iP75, iMean] = cal.item;
   return `
 
-📏 CALIBRAÇÃO DE EXTENSÃO (baseada na contagem real de caracteres de ${cal.n} questões de "${key}" nas provas do ENEM 2015-2025):
+📏 CALIBRAÇÃO DE EXTENSÃO (contagem real de caracteres nas quatro provas recentes do ENEM — 2022, 2023, 2024 e 2025 —, sobre ${cal.n} questões do bloco a que "${key}" pertence):
 - Texto-suporte (campo "textoBase"): mire em torno de ${tMean} caracteres; a maioria das questões reais desta disciplina fica entre ${tP25} e ${tP75} caracteres.
 - Comando (campo "comando"): mire em torno de ${cMean} caracteres; faixa típica real: ${cP25}–${cP75} caracteres.
 - Cada alternativa (A-E): mire em torno de ${iMean} caracteres cada; faixa típica real: ${iP25}–${iP75} caracteres (alternativas numéricas curtas são normais quando ${iMean} for baixo).
-ESTES NÚMEROS SÃO TETO, NÃO SUGESTÃO. Medição da leva de 18/09/2026 (20 questões de Artes): o texto-suporte saiu com 1022 caracteres em média contra 610 das provas reais (+68%), e a alternativa média saiu com 103 contra 61 (+69%) — NENHUMA das 100 alternativas caiu dentro da faixa real. Questão desse tamanho não se parece com questão do ENEM: o candidato tem três minutos por item.
+ESTES NÚMEROS SÃO TETO, NÃO SUGESTÃO. Medição das questões já geradas por este app: a alternativa saiu com 104 caracteres em Artes, 116 em História e 125 em Biologia, contra 58, 38 e 39 das provas recentes — o dobro. Questão desse tamanho não se parece com questão do ENEM: o candidato tem três minutos por item.
 Antes de entregar, CONTE e ajuste:
 · "textoBase" acima de ${tP75} caracteres: corte. O texto-suporte apresenta a situação e para — contexto histórico, biografia do autor e juízo de valor sobram e devem sair.
 · cada alternativa acima de ${iP75} caracteres: reescreva mais curta. Alternativa do ENEM é uma oração, não um parágrafo; se as cinco estão longas, o problema é o recorte, não a redação.
@@ -3092,6 +3126,7 @@ function selfTestResponse() {
     consultaCombinadaAcervos.toString(), pesquisarFonteReal.toString(), logGeneration.toString(),
     buildRegraAlternativas.toString(), tetosDaDisciplina.toString(), buildAlvoExtensao.toString(),   // v74.19
     JSON.stringify(ferramentaQuestaoPara("nenhum", false, "Artes")),
+    JSON.stringify(CALIBRACAO_EXTENSAO), buildCalibracaoExtensao.toString(),   // v74.20
     JSON.stringify(ACERVOS_PRIORITARIOS), JSON.stringify(DISCIPLINAS_COM_ACERVO_PRIORITARIO), buildAcervosPrioritarios.toString(),   // v74.16
     JSON.stringify([WEB_SEARCH_TOOL, BUSCA_PESQUISADOR, BUSCA_PESQUISADOR_RETRY, BUSCA_AUDITORIA]),
     buildSystemPlanejamento.toString(),
@@ -3465,6 +3500,33 @@ function selfTestResponse() {
         v7415_marcaPassoExiste: typeof aquecerCacheResponse === "function"
           && aquecerCacheResponse.toString().includes("CACHE_1H")
           && aquecerCacheResponse.toString().includes("16"),
+        /* v74.20 — A CALIBRAÇÃO PASSOU A SAIR SÓ DAS QUATRO PROVAS RECENTES
+           (2022-2025), por decisão do professor, e 2021 ficou fora porque o PDF
+           daquele ano tem a fonte quebrada. Prova que a tabela carrega os
+           números medidos e o teto do aviso (avisoMedia = p90 da média das
+           cinco), e que disciplinas do mesmo bloco compartilham a mesma faixa. */
+        v7420_calibracaoDasProvasRecentes: (() => {
+          const c = CALIBRACAO_EXTENSAO;
+          const ling = ["Língua Portuguesa", "Literatura", "Artes", "Práticas Corporais"];
+          const hum = ["História", "Geografia", "Filosofia", "Sociologia"];
+          const mesma = (ds: string[]) => ds.every((d) => JSON.stringify(c[d].item) === JSON.stringify(c[ds[0]].item)
+            && c[d].avisoMedia === c[ds[0]].avisoMedia);
+          return mesma(ling) && mesma(hum)
+            && JSON.stringify(c["Artes"].item) === JSON.stringify([46, 69, 58]) && c["Artes"].avisoMedia === 80
+            && JSON.stringify(c["História"].item) === JSON.stringify([28, 46, 38]) && c["História"].avisoMedia === 61
+            && JSON.stringify(c["Biologia"].item) === JSON.stringify([12, 46, 33]) && c["Biologia"].avisoMedia === 59
+            && JSON.stringify(c["Física"].item) === JSON.stringify([8, 41, 27])
+            && JSON.stringify(c["Língua Estrangeira (Inglês/Espanhol)"].item) === JSON.stringify([42, 63, 53])
+            && JSON.stringify(c["Matemática"].item) === JSON.stringify([3, 10, 10]) && c["Matemática"].avisoMedia === 18
+            && Object.keys(c).every((d) => typeof c[d].avisoMedia === "number" && c[d].avisoMedia > 0);
+        })(),
+        v7420_promptCitaAsProvasCertas: (() => {
+          const t = buildCalibracaoExtensao("Artes");
+          return t.includes("2022, 2023, 2024 e 2025")
+            && !t.includes("2015-2025")
+            && t.includes("mire em torno de 58 caracteres cada")
+            && t.includes("46–69 caracteres");
+        })(),
         /* v74.19 — EXTENSÃO NO PADRÃO DO ENEM. Prova que o alvo de tamanho
            deixou de ser a necessidade da alternativa correta e passou a ser a
            calibração medida nas provas reais, que a dificuldade está declarada
@@ -3489,15 +3551,15 @@ function selfTestResponse() {
         v7419_tetosPorDisciplina: (() => {
           const a = tetosDaDisciplina("Artes");
           const m = tetosDaDisciplina("Matemática");
-          return !!a && a.item === 70 && a.alvoItem === 61 && a.texto === 798 && a.comando === 189
-            && !!m && m.item === 45 && m.alvoItem === 9
+          return !!a && a.item === 69 && a.alvoItem === 58 && a.texto === 798 && a.comando === 189
+            && !!m && m.item === 45 && m.alvoItem === 10
             && tetosDaDisciplina("") === null && tetosDaDisciplina("Disciplina Inexistente") === null;
         })(),
         v7419_tetoNoSchema: (() => {
           const f = ferramentaQuestaoPara("nenhum", false, "Artes").input_schema.properties;
           const sem = ferramentaQuestaoPara("nenhum", false, "").input_schema.properties;
           const alts = f.alternativas.properties;
-          return ["A", "B", "C", "D", "E"].every((L) => alts[L].maxLength === 70 && String(alts[L].description).includes("~61"))
+          return ["A", "B", "C", "D", "E"].every((L) => alts[L].maxLength === 69 && String(alts[L].description).includes("~58"))
             && f.textoBase.maxLength === 798 && f.comando.maxLength === 189
             && String(alts.A.description).includes("dificuldade não altera")
             && sem.textoBase.maxLength === undefined && sem.alternativas.properties.A.maxLength === undefined;
@@ -3506,7 +3568,7 @@ function selfTestResponse() {
           const u = buildUserPrompt({ area: "linguagens", disciplina: "Artes", tema: "Tarsila do Amaral", dificuldade: "Difícil", recurso: "nenhum", competenciaNum: null, habilidadeCod: null });
           const fora = buildUserPrompt({ area: "linguagens", disciplina: "Disciplina Inexistente", tema: "t", dificuldade: "Médio", recurso: "nenhum", competenciaNum: null, habilidadeCod: null });
           return u.includes("EXTENSÃO DESTA QUESTÃO")
-            && u.includes("cada alternativa ~61 caracteres, teto 70")
+            && u.includes("cada alternativa ~58 caracteres, teto 69")
             && u.includes('O nível "Difícil" NÃO altera nenhum destes números')
             && u.indexOf("EXTENSÃO DESTA QUESTÃO") < u.indexOf("Entregue a questão chamando a ferramenta")
             && !fora.includes("EXTENSÃO DESTA QUESTÃO");

@@ -10,10 +10,12 @@
      D. e no prompt do usuário, onde a questão é escrita
      E. a calibração continua batendo com a medição das provas oficiais
 
-   Medição que motivou tudo (src: tests/medir_provas_reais.py sobre os PDFs do
-   INEP 2015-2025): alternativa real 56 caracteres em Linguagens e 38 em
-   Humanas; o app gerava 104 em Artes, 116 em História e 125 em Biologia, e a
-   de nível "difícil" saía 26% maior que a "fácil".
+   Medição que motivou tudo (tests/medir_provas_reais.py sobre os PDFs oficiais
+   do INEP, quatro provas recentes — 2022 a 2025): a alternativa real tem 58
+   caracteres em Linguagens e 38 em Humanas; o app gerava 104 em Artes, 116 em
+   História e 125 em Biologia, e a de nível "difícil" saía 26% maior que a
+   "fácil". Conferência cruzada com um extrator independente, nas provas de
+   2022-2023: Linguagens 46/59/70 contra 47/59/70, Humanas idêntico.
 
    Uso:
      deno run -A tests/verify_extensao_v7419.ts supabase/functions/generate-question/index.ts  */
@@ -101,9 +103,19 @@ t("D5 disciplina sem calibração não ganha bloco nenhum", alvoFn.includes('if 
 const m = src.match(/const CALIBRACAO_EXTENSAO[\s\S]*?\n\};/);
 const tabela = m ? m[0] : "";
 t("E1 a tabela continua no arquivo", tabela.length > 500);
-for (const [disc, item] of [["Artes", "[48, 70, 61]"], ["História", "[33, 53, 45]"], ["Biologia", "[13, 49, 34]"]] as [string, string][]) {
-  t(`E2 ${disc} mantém a faixa medida ${item}`, tabela.includes(`"${disc}"`) && tabela.includes(`item: ${item}`));
+/* v74.20: a faixa das alternativas passou a sair só das provas de 2022 a 2025
+   (2021 fora — PDF com fonte quebrada), por grupo e não por disciplina. */
+for (const [disc, item] of [["Artes", "[46, 69, 58]"], ["História", "[28, 46, 38]"],
+                            ["Biologia", "[12, 46, 33]"], ["Matemática", "[3, 10, 10]"]] as [string, string][]) {
+  t(`E2 ${disc} com a faixa das provas recentes ${item}`, tabela.includes(`"${disc}"`) && tabela.includes(`item: ${item}`));
 }
+// item: [number, number, number] da assinatura não conta — só as linhas com números
+t("E2b toda disciplina tem o teto do aviso (p90 da média das cinco)",
+  (tabela.match(/avisoMedia: \d+/g) || []).length === 14
+  && (tabela.match(/item: \[\d/g) || []).length === 14,
+  `avisoMedia=${(tabela.match(/avisoMedia: \d+/g) || []).length} item=${(tabela.match(/item: \[\d/g) || []).length}`);
+t("E2c o prompt cita as quatro provas recentes, não 2015-2025",
+  src.includes("2022, 2023, 2024 e 2025") && !/nas provas do ENEM 2015-2025/.test(src));
 t("E3 o medidor das provas reais está versionado",
   (() => { try { return Deno.statSync("tests/medir_provas_reais.py").size > 2000; } catch { return false; } })());
 t("E4 o autoteste de produção cobre a v74.19",

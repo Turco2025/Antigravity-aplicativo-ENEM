@@ -124,7 +124,88 @@ Teste: `verify_fontes_app.js` — 19 verificações; as seções B e C bis prova
 quatro marcas ligadas ao mesmo tempo nenhuma conferência bloqueia, e que nenhuma delas tem sequer um
 `return true` no corpo. `verify_gabarito_coerente.js` H1 passou a exigir o contrário do que exigia.
 
+## A calibração passou a sair só das quatro provas recentes (v74.20 · app v18.24, 19/09/2026)
+
+Decisão do professor: **só contam 2022, 2023, 2024 e 2025**. E há um erro meu a registrar antes.
+
+### O erro
+
+A seção anterior afirma que a medição saiu de "1.700 alternativas, provas de 2015 a 2025". **Não
+saiu.** O extrator só sabia ler um dos dois formatos de caderno do INEP — de 2022 em diante a letra
+circulada sai sozinha numa linha e é repetida na seguinte; antes disso vem `A texto da alternativa`,
+e 2019 ainda escreve "Questão 08" em caixa mista. Resultado: **só 2022 e 2023 entraram**; os outros
+nove anos contribuíram com zero questões, em silêncio, sem erro nenhum. Eu tinha validado o extrator
+contra viés e contra truncamento, mas não conferi a cobertura por ano.
+
+**2021 continua fora, agora por outro motivo:** o PDF daquele ano tem a codificação de fonte
+quebrada e o texto extrai como lixo — 59% das alternativas sem pontuação final, contra 3-8% dos
+demais anos, e média de 126 caracteres em Linguagens contra 58. Só OCR resolveria.
+
+### A medição que vale
+
+`tests/medir_provas_reais.py`, reescrito: lê os dois formatos, separa as duas colunas da página pelo
+corredor de espaços antes de ler, filtra rodapé e cromo de página, e só estatística o **subconjunto
+limpo** — as questões em que as cinco alternativas terminam em pontuação (87% delas). Se essa taxa
+cair, o extrator regrediu.
+
+2022–2025 · 572 questões completas · 497 limpas · 2.485 alternativas:
+
+| Grupo | p25 | média | p75 | p90 da média das cinco |
+|---|---|---|---|---|
+| Linguagens (sem língua estrangeira) | 46 | **58** | 69 | 80 |
+| Língua estrangeira (questões 1–5) | 42 | **53** | 63 | 70 |
+| Humanas | 28 | **38** | 46 | 61 |
+| Natureza | 8 | **27** | 41 | 59 |
+| — só alternativa de texto | 12 | **33** | 46 | |
+| Matemática | 3 | **10** | 10 | 18 |
+
+Paridade (maior/menor, menor > 40): p50 **1,25** · p75 **1,41** · p90 **1,57** · p95 1,63. A correta
+é a mais longa em 16,5%; passa de 1,25× a segunda maior em 2,3%; de +25 caracteres em 0,4%.
+
+### Por grupo, não por disciplina
+
+A prova do ENEM **não rotula disciplina**. Dá para isolar a língua estrangeira (questões 1 a 5) e as
+áreas (blocos de 45 questões); o que está dentro delas, não. Os números por disciplina que estavam na
+tabela vinham de uma medição que não é reproduzível, então cada disciplina passou a receber a faixa
+do grupo a que pertence — e Biologia, cujas alternativas são de texto, recebe a faixa textual de
+Natureza. `texto` e `comando` ficaram como estavam: o extrator ainda não separa texto-base de comando
+com confiança, e isso está declarado no código.
+
+### O que mudou na prática
+
+| Disciplina | item antes | item agora |
+|---|---|---|
+| Artes · Língua Portuguesa · Literatura · Práticas Corporais | 48/70/61 · 44/70/58 · 45/67/57 · 35/73/59 | **46/69/58** |
+| Língua Estrangeira | 37/60/50 | **42/63/53** |
+| História · Geografia · Filosofia · Sociologia | 33/53/45 · 29/43/37 · 31/51/41 · 28/49/40 | **28/46/38** |
+| Biologia | 13/49/34 | **12/46/33** |
+| Física · Química | 5/40/25 · 7/41/26 | **8/41/27** |
+| Matemática | 3/10/9 | **3/10/10** |
+
+São ajustes pequenos — a tabela antiga já estava perto. O maior movimento é História (45 → 38).
+
+**Os dois limiares da auditoria local:**
+
+- "mais longa que o padrão" passou a usar o campo novo **`avisoMedia`** (o p90 medido da média das
+  cinco: 80 · 70 · 61 · 59 · 18), em vez de uma conta em cima do p75. Com o p75 o aviso reprovava 20%
+  das questões REAIS; com o p90, 10%.
+- "extensões desiguais" foi de 1,50 para **1,60**, logo acima do p90 medido (1,57). Acima de 1,30
+  estão 41% das questões reais e acima de 1,50 ainda 15% — os dois limiares anteriores apertavam
+  demais. O prompt continua pedindo 1,25: alvo apertado, alarme largo.
+- "a correta é a mais longa" segue intacta: dispara em ~2,3% das questões oficiais.
+
+Testes: `verify_extensao_v7419.ts` foi para **30** (seção E refeita para a faixa nova e para o
+`avisoMedia`), `verify_paridade_alternativas.js` para **15** (casos sintéticos recalibrados em 1,60).
+No `?selftest=1`: `v7420_calibracaoDasProvasRecentes` e `v7420_promptCitaAsProvasCertas`.
+
 ## Extensão no padrão do ENEM (generate-question v74.19 · app v18.23, 19/09/2026)
+
+> **Correção (v74.20):** os números de calibração citados nesta seção — e qualquer
+> menção a "provas de 2015 a 2025" em seções anteriores deste README — vieram de um
+> extrator que, sem avisar, só conseguia ler os cadernos de 2022 e 2023. A medição
+> válida está na seção acima, restrita a 2022–2025. O diagnóstico desta seção (o
+> alvo ancorado na alternativa correta, a dificuldade virando volume) continua
+> valendo: as questões geradas estavam acima de qualquer versão da faixa.
 
 Medição feita nos **PDFs oficiais do INEP, 2015–2025** (cadernos Azul), com `tests/medir_provas_reais.py`:
 1.700 alternativas, 326 questões completas, 314 com gabarito. O extrator foi validado antes — 0% de

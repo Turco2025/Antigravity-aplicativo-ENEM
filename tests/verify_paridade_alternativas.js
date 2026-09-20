@@ -33,14 +33,15 @@ const txt = n => 'a'.repeat(n);
 const sinteticos = [
   { nome: 'curtas com razão alta (30 a 48) — não deve apontar nada', alt: { A: txt(30), B: txt(34), C: txt(38), D: txt(42), E: txt(48) }, gab: 'E', esperado: null },
   { nome: 'correta 30% maior que a segunda — aviso', alt: { A: txt(150), B: txt(160), C: txt(170), D: txt(180), E: txt(240) }, gab: 'E', esperado: 'aviso' },
-  /* v18.23 — o limiar da observação de paridade subiu de 1,30 para 1,50, medido
-     nas provas oficiais 2015-2025 (mesmo filtro, menor > 40): p50 1,24 · p75 1,37 ·
-     p90 1,47 · p95 1,59, e 1,30 reprovava 37,3% das questões REAIS. Os casos
-     abaixo passaram a refletir isso: 1,32 é normal no ENEM e não deve apontar nada. */
+  /* v18.24 — o limiar da observação de paridade está em 1,60, medido nas QUATRO
+     PROVAS RECENTES (2022-2025, subconjunto limpo, menor > 40): p50 1,25 ·
+     p75 1,41 · p90 1,57 · p95 1,63. Acima de 1,30 estão 41% das questões REAIS
+     e acima de 1,50 ainda 15% — por isso 1,30 e 1,50 eram apertados demais. */
   { nome: 'correta 10% acima da segunda, conjunto 1,32x — normal no ENEM real, nada', alt: { A: txt(150), B: txt(160), C: txt(170), D: txt(180), E: txt(198) }, gab: 'E', esperado: null },
   { nome: 'correta 10% acima da segunda, conjunto 1,22x — nada', alt: { A: txt(162), B: txt(170), C: txt(175), D: txt(180), E: txt(198) }, gab: 'E', esperado: null },
-  { nome: 'conjunto 1,55x sem favorecer o gabarito — acima do p95 real, sai a observação', alt: { A: txt(240), B: txt(160), C: txt(155), D: txt(158), E: txt(162) }, gab: 'C', esperado: 'info' },
-  { nome: 'conjunto 1,45x sem favorecer o gabarito — ainda dentro do ENEM real, nada', alt: { A: txt(232), B: txt(170), C: txt(160), D: txt(165), E: txt(168) }, gab: 'C', esperado: null },
+  { nome: 'conjunto 1,74x sem favorecer o gabarito — acima do p90 real (1,57), sai a observação', alt: { A: txt(270), B: txt(160), C: txt(155), D: txt(158), E: txt(162) }, gab: 'C', esperado: 'info' },
+  { nome: 'conjunto 1,55x sem favorecer o gabarito — ainda dentro do ENEM real, nada', alt: { A: txt(240), B: txt(160), C: txt(155), D: txt(158), E: txt(162) }, gab: 'C', esperado: null },
+  { nome: 'conjunto 1,45x sem favorecer o gabarito — normal no ENEM, nada', alt: { A: txt(232), B: txt(170), C: txt(160), D: txt(165), E: txt(168) }, gab: 'C', esperado: null },
   { nome: 'cinco iguais — nada', alt: { A: txt(120), B: txt(120), C: txt(120), D: txt(120), E: txt(120) }, gab: 'B', esperado: null },
   // regime longo: a correta passa de todos os distratores por 96 caracteres, mas só 1,24x —
   // com "e" entre razão e margem isso escapava das duas checagens (achado da revisão)
