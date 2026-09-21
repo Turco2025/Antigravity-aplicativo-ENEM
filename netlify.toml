@@ -1,15 +1,4 @@
-# Publicação contínua a partir do GitHub.
-#
-# O site do Netlify nasceu de um arrasta-e-solta de zip ("deploy_source": "drop"),
-# e por isso nunca escutou o repositório: atualizar o GitHub não publicava nada.
-# Depois de ligar o repositório em Site configuration → Build & deploy, este
-# arquivo diz ao Netlify o que fazer a cada push na branch main.
-#
-# O aplicativo é um único arquivo já compilado (index.html, gerado por
-# src/combine.py a partir de src/app.js + src/fonts.js). Não há dependências para
-# instalar nem empacotador para rodar: o "build" apenas separa o arquivo que vai
-# ao ar dentro de dist/, para que o código-fonte (src/, supabase/) não seja
-# publicado junto com ele.
+# Publicação contínua a partir do GitHub ou CLI Netlify.
 [build]
-  command = "mkdir -p dist && cp index.html dist/index.html"
+  command = "python -c \"import shutil, os; os.makedirs('dist', exist_ok=True); shutil.copy('index.html', 'dist/index.html')\""
   publish = "dist"

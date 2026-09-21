@@ -3,3 +3,6 @@ _lockjunk/
 _lockjunk2/
 tests/saida/
 __pycache__/
+
+# Local Netlify folder
+.netlify
