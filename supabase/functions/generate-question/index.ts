@@ -36,7 +36,7 @@ const CORS_HEADERS = {
 // nunca é exposta ao navegador nem a quem chama esta função.
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") || "gemini-2.5-flash";
+const GEMINI_MODEL = "gemini-3.6-flash";
 /* MODELO FIXO EM "claude-sonnet-5" PARA TODA E QUALQUER CHAMADA DESTA FUNÇÃO.
    Isto é intencional e definitivo: por decisão de custo, o professor exige
    EXCLUSIVAMENTE o Claude Sonnet 5 — nunca Claude Sonnet 4.6 nem qualquer
@@ -1916,37 +1916,34 @@ async function callClaude(system: SistemaPrompt, userMsg: string, maxTokens: num
           ? system.map((s: any) => typeof s === "string" ? s : s.text || "").join("\n\n")
           : String(system || "");
 
-        const modelosG = [GEMINI_MODEL, "gemini-3.6-flash"];
-        for (const modG of modelosG) {
-          const gUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modG}:generateContent?key=${GEMINI_API_KEY}`;
-          const gResp = await fetch(gUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              system_instruction: { parts: [{ text: systemText }] },
-              contents: [{ role: "user", parts: [{ text: userMsg }] }],
-              generationConfig: {
-                temperature: 0.3,
-                maxOutputTokens: maxTokens,
-                responseMimeType: "application/json"
-              }
-            }),
-            signal: controller.signal
-          });
+        const gUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`;
+        const gResp = await fetch(gUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: systemText }] },
+            contents: [{ role: "user", parts: [{ text: userMsg }] }],
+            generationConfig: {
+              temperature: 0.3,
+              maxOutputTokens: maxTokens,
+              responseMimeType: "application/json"
+            }
+          }),
+          signal: controller.signal
+        });
 
-          if (gResp.ok) {
-            const gData = await gResp.json();
-            const gText = gData?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-            clearTimeout(watchdog);
-            return {
-              text: gText,
-              truncated: false,
-              usage: gData?.usageMetadata || {},
-              ferramentaJSON: gText,
-              buscas: [],
-              fetches: []
-            };
-          }
+        if (gResp.ok) {
+          const gData = await gResp.json();
+          const gText = gData?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+          clearTimeout(watchdog);
+          return {
+            text: gText,
+            truncated: false,
+            usage: gData?.usageMetadata || {},
+            ferramentaJSON: gText,
+            buscas: [],
+            fetches: []
+          };
         }
       }
 
