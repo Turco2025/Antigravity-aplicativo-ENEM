@@ -35,6 +35,8 @@ const CORS_HEADERS = {
 // Chave da Anthropic (Claude), guardada em segurança do lado do servidor —
 // nunca é exposta ao navegador nem a quem chama esta função.
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
+const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") || "gemini-3.6-flash";
 /* MODELO FIXO EM "claude-sonnet-5" PARA TODA E QUALQUER CHAMADA DESTA FUNÇÃO.
    Isto é intencional e definitivo: por decisão de custo, o professor exige
    EXCLUSIVAMENTE o Claude Sonnet 5 — nunca Claude Sonnet 4.6 nem qualquer
@@ -1909,6 +1911,42 @@ async function callClaude(system: SistemaPrompt, userMsg: string, maxTokens: num
        Pesquisador e validador passam tetos próprios (60–70 s). */
     const watchdog = setTimeout(() => controller.abort(), Math.max(5_000, timeoutMs));
     try {
+      if (GEMINI_API_KEY) {
+        const systemText = Array.isArray(system)
+          ? system.map((s: any) => typeof s === "string" ? s : s.text || "").join("\n\n")
+          : String(system || "");
+
+        const gUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+        const gResp = await fetch(gUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: systemText }] },
+            contents: [{ role: "user", parts: [{ text: userMsg }] }],
+            generationConfig: {
+              temperature: 0.3,
+              maxOutputTokens: maxTokens,
+              responseMimeType: "application/json"
+            }
+          }),
+          signal: controller.signal
+        });
+
+        if (gResp.ok) {
+          const gData = await gResp.json();
+          const gText = gData?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+          clearTimeout(watchdog);
+          return {
+            text: gText,
+            truncated: false,
+            usage: gData?.usageMetadata || {},
+            ferramentaJSON: gText,
+            buscas: [],
+            fetches: []
+          };
+        }
+      }
+
       const resp = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: {

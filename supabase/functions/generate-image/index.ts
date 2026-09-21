@@ -7,8 +7,8 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-// Usa a API oficial da OpenAI (Image API, "ChatGPT Images").
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
 /* MODELO FIXO EM "GPT-Image-2" (snapshot datado), QUALIDADE FIXA EM "low"
    — decisão do professor em 09/09/2026. Histórico: no lançamento do ChatGPT
    Images 2.5 (08/09/2026) a função chegou a ser fixada no gpt-image-2.5-flare
@@ -73,10 +73,10 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: "É necessário fazer login para gerar imagens." }, 401);
   }
 
-  if (!OPENAI_API_KEY) {
+  if (!OPENAI_API_KEY && !GEMINI_API_KEY) {
     return jsonResponse({
       error:
-        "Backend não configurado: falta a variável de ambiente OPENAI_API_KEY nos secrets deste projeto Supabase.",
+        "Backend não configurado: falta a variável de ambiente GEMINI_API_KEY ou OPENAI_API_KEY nos secrets deste projeto Supabase.",
     }, 500);
   }
 
@@ -162,6 +162,48 @@ Deno.serve(async (req: Request) => {
        um limite de 240 s por tentativa e até 3 tentativas, com espera crescente
        entre elas, no mesmo padrão da função de questões.                      */
     const inicio = Date.now();
+    if (GEMINI_API_KEY) {
+      try {
+        const gRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:generateImages?key=${GEMINI_API_KEY}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt,
+            config: {
+              numberOfImages: 1,
+              outputMimeType: outputFormatPedido === "jpeg" ? "image/jpeg" : "image/png",
+              aspectRatio: "1:1"
+            }
+          })
+        });
+        if (gRes.ok) {
+          const gData = await gRes.json();
+          const imgB64 = gData?.generatedImages?.[0]?.image?.imageBytes;
+          if (imgB64) {
+            const outputFormat = outputFormatPedido || "png";
+            const imageDataUrl = `data:image/${outputFormat};base64,${imgB64}`;
+            const segundos = Math.round((Date.now() - inicio) / 1000);
+            return jsonResponse({
+              imageDataUrl,
+              uso: {
+                modelo: "imagen-3.0-generate-002",
+                qualidade: quality,
+                tamanho: size,
+                formato: outputFormat,
+                segundos,
+                tokensEntrada: prompt.length,
+                tokensSaida: Math.round(imgB64.length * 3 / 4),
+                custoUSD: 0.005,
+                bytesImagem: Math.round(imgB64.length * 3 / 4),
+              },
+            });
+          }
+        }
+      } catch (gErr) {
+        console.warn("[imagem] Erro no Gemini Imagen 3:", gErr);
+      }
+    }
+
     let data: any = null;
     let ultimoErro = "";
     let modeloUsado = IMAGE_MODEL;
