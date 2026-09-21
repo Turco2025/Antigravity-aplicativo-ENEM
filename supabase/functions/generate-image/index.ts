@@ -163,44 +163,43 @@ Deno.serve(async (req: Request) => {
        entre elas, no mesmo padrão da função de questões.                      */
     const inicio = Date.now();
     if (GEMINI_API_KEY) {
-      try {
-        const gRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:generateImages?key=${GEMINI_API_KEY}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            prompt,
-            config: {
-              numberOfImages: 1,
-              outputMimeType: outputFormatPedido === "jpeg" ? "image/jpeg" : "image/png",
-              aspectRatio: "1:1"
+      const modelosImagem = ["nano-banana-pro-preview", "imagen-3.0-generate-002"];
+      for (const modImg of modelosImagem) {
+        try {
+          const gRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modImg}:generateContent?key=${GEMINI_API_KEY}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: `Generate a high quality visual illustration for an educational exam question based on this prompt: ${prompt}` }] }]
+            })
+          });
+          if (gRes.ok) {
+            const gData = await gRes.json();
+            const part = gData?.candidates?.[0]?.content?.parts?.[0];
+            const imgB64 = part?.inlineData?.data || part?.text;
+            if (imgB64) {
+              const outputFormat = outputFormatPedido || "png";
+              const imageDataUrl = imgB64.startsWith("data:") ? imgB64 : `data:image/${outputFormat};base64,${imgB64}`;
+              const segundos = Math.round((Date.now() - inicio) / 1000);
+              return jsonResponse({
+                imageDataUrl,
+                uso: {
+                  modelo: modImg,
+                  qualidade: quality,
+                  tamanho: size,
+                  formato: outputFormat,
+                  segundos,
+                  tokensEntrada: prompt.length,
+                  tokensSaida: Math.round((imgB64.length || 0) * 3 / 4),
+                  custoUSD: 0.002,
+                  bytesImagem: Math.round((imgB64.length || 0) * 3 / 4),
+                },
+              });
             }
-          })
-        });
-        if (gRes.ok) {
-          const gData = await gRes.json();
-          const imgB64 = gData?.generatedImages?.[0]?.image?.imageBytes;
-          if (imgB64) {
-            const outputFormat = outputFormatPedido || "png";
-            const imageDataUrl = `data:image/${outputFormat};base64,${imgB64}`;
-            const segundos = Math.round((Date.now() - inicio) / 1000);
-            return jsonResponse({
-              imageDataUrl,
-              uso: {
-                modelo: "imagen-3.0-generate-002",
-                qualidade: quality,
-                tamanho: size,
-                formato: outputFormat,
-                segundos,
-                tokensEntrada: prompt.length,
-                tokensSaida: Math.round(imgB64.length * 3 / 4),
-                custoUSD: 0.005,
-                bytesImagem: Math.round(imgB64.length * 3 / 4),
-              },
-            });
           }
+        } catch (gErr) {
+          console.warn(`[imagem] Erro no ${modImg}:`, gErr);
         }
-      } catch (gErr) {
-        console.warn("[imagem] Erro no Gemini Imagen 3:", gErr);
       }
     }
 
