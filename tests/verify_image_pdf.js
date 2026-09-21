@@ -13,7 +13,7 @@ const TINY_PNG_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42m
   page.on('pageerror', err => consoleErrors.push('pageerror: ' + err.message));
 
   let imageCallCount = 0;
-  await page.route('https://gkceyrkdmnhgqimmrsre.supabase.co/functions/v1/generate-image', async route => {
+  await page.route('https://tcmwbokhdwfhihndgxll.supabase.co/functions/v1/generate-image', async route => {
     imageCallCount++;
     await new Promise(r => setTimeout(r, 300)); // simulate latency
     await route.fulfill({
