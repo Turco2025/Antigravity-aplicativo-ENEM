@@ -987,7 +987,11 @@ async function fazerCadastro(){
   const btn = document.getElementById("btnCadastroSubmit");
   btn.disabled = true;
   try{
-    const { data, error } = await supabaseClient.auth.signUp({ email, password: senha });
+    const { data, error } = await supabaseClient.auth.signUp({
+      email,
+      password: senha,
+      options: { emailRedirectTo: window.location.origin }
+    });
     if(error) throw error;
     if(data.session){
       closeModal("authModal");
