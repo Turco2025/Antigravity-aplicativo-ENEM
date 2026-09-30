@@ -217,7 +217,7 @@ async function fazerLoginGoogle(){
   try{
     await supabaseClient.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: window.location.origin + window.location.pathname },
+      options: { redirectTo: window.location.origin },
     });
   }catch(err){
     mostraErroAuth(traduzErroAuth(err));
