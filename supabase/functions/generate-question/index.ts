@@ -32,23 +32,11 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-// Chave da Anthropic (Claude), guardada em segurança do lado do servidor —
+// Chave do Google Gemini, guardada em segurança do lado do servidor —
 // nunca é exposta ao navegador nem a quem chama esta função.
-const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
 const GEMINI_MODEL = "gemini-3.6-flash";
-/* MODELO FIXO EM "claude-sonnet-5" PARA TODA E QUALQUER CHAMADA DESTA FUNÇÃO.
-   Isto é intencional e definitivo: por decisão de custo, o professor exige
-   EXCLUSIVAMENTE o Claude Sonnet 5 — nunca Claude Sonnet 4.6 nem qualquer
-   outro modelo — mesmo que isso signifique abrir mão de capacidade do 4.6.
-   A variável de ambiente ANTHROPIC_MODEL NÃO é mais lida: mesmo que ela
-   exista nos secrets deste projeto Supabase com outro valor (por exemplo
-   apontando para Sonnet 4.6), esse valor é ignorado de propósito, para que
-   nenhuma configuração externa consiga trocar o modelo sem editar este
-   arquivo. Para usar outro modelo no futuro, o pedido tem que ser explícito
-   e o valor tem que ser trocado aqui, nunca por env var, header ou parâmetro
-   de request. */
-const MODEL = "claude-sonnet-5";
+const MODEL = "gemini-3.6-flash";
 // SEM TETO DIÁRIO (decisão do professor): ausente, 0 ou negativo = ilimitado.
 // Para reativar um limite depois, basta definir MAX_DAILY_QUESTIONS com um número
 // positivo nos secrets do projeto Supabase — não é preciso reimplantar a função.
@@ -1903,20 +1891,24 @@ type SistemaPrompt = string | Array<{ type: "text"; text: string; cache_control?
 type FerramentaServidor = false | { type: string; name: string; max_uses: number; allowed_domains?: string[]; blocked_domains?: string[]; max_content_tokens?: number };
 type FetchRegistro = { url: string; ok: boolean; erro: string };
 async function callClaude(system: SistemaPrompt, userMsg: string, maxTokens: number, enableWebSearch: FerramentaServidor = false, ferramenta: any = null, timeoutMs = 240_000): Promise<{ text: string; truncated: boolean; usage: any; ferramentaJSON: string; buscas: { url: string; title: string }[]; fetches: FetchRegistro[] }> {
+  if (!GEMINI_API_KEY) {
+    throw new Error("Backend não configurado: falta a variável de ambiente GEMINI_API_KEY nos secrets deste projeto Supabase.");
+  }
+
+  const systemText = Array.isArray(system)
+    ? system.map((s: any) => typeof s === "string" ? s : s.text || "").join("\n\n")
+    : String(system || "");
+
+  const modelosG = ["gemini-3.6-flash", "gemini-2.5-flash"];
   let lastErr: any;
+
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const controller = new AbortController();
-    /* v74.21 — o teto padrão (240 s) passa da vida da Edge Function (150 s):
-       uma chamada pendurada matava a função sem log nem registro de custo.
-       Pesquisador e validador passam tetos próprios (60–70 s). */
     const watchdog = setTimeout(() => controller.abort(), Math.max(5_000, timeoutMs));
-    try {
-      if (GEMINI_API_KEY) {
-        const systemText = Array.isArray(system)
-          ? system.map((s: any) => typeof s === "string" ? s : s.text || "").join("\n\n")
-          : String(system || "");
 
-        const gUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`;
+    for (const modG of modelosG) {
+      try {
+        const gUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modG}:generateContent?key=${GEMINI_API_KEY}`;
         const gResp = await fetch(gUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1934,177 +1926,53 @@ async function callClaude(system: SistemaPrompt, userMsg: string, maxTokens: num
 
         if (gResp.ok) {
           const gData = await gResp.json();
-          const gText = gData?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+          const candidate = gData?.candidates?.[0];
+          const gText = candidate?.content?.parts?.[0]?.text || "";
+          const buscas: { url: string; title: string }[] = [];
+          if (candidate?.groundingMetadata?.groundingChunks) {
+            for (const chunk of candidate.groundingMetadata.groundingChunks) {
+              if (chunk.web?.uri) {
+                buscas.push({ url: chunk.web.uri, title: chunk.web.title || "" });
+              }
+            }
+          }
           clearTimeout(watchdog);
           return {
             text: gText,
-            truncated: false,
-            usage: gData?.usageMetadata || {},
+            truncated: candidate?.finishReason === "MAX_TOKENS",
+            usage: {
+              input_tokens: gData?.usageMetadata?.promptTokenCount || 0,
+              output_tokens: gData?.usageMetadata?.candidatesTokenCount || 0,
+            },
             ferramentaJSON: gText,
-            buscas: [],
+            buscas,
             fetches: []
           };
-        }
-      }
-
-      const resp = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-api-key": ANTHROPIC_API_KEY!,
-          "anthropic-version": "2023-06-01",
-          /* v74.21 — a ferramenta web_fetch (validador) é beta e exige este
-             cabeçalho; ele só vai quando ELA é a ferramenta de servidor da
-             chamada, para não mudar nada nas demais. */
-          ...(enableWebSearch && String(enableWebSearch.type || "").startsWith("web_fetch") ? { "anthropic-beta": "web-fetch-2025-09-10" } : {}),
-        },
-        body: JSON.stringify({
-          model: MODEL,
-          max_tokens: maxTokens,
-          /* CACHE DE PROMPT. O prompt do sistema (modelo universal + contexto da
-             área + objetos de conhecimento + notação química) passa de 25 mil
-             caracteres e é IDÊNTICO em todas as questões da mesma área — e ainda
-             se repete na chamada de revisão. Marcado assim, a Anthropic guarda o
-             processamento dele por alguns minutos: da segunda chamada em diante
-             ele é lido do cache, a uma fração do preço e sem ser reprocessado.
-             A resposta devolve os números de cache no campo "uso", para que dê
-             para conferir que está valendo em vez de supor. */
-          /* Na v61 o sistema pode vir como LISTA de blocos, cada um com seu
-             cache_control (até 4 pontos de cache por chamada): bloco 1 = modelo
-             universal + contexto da área; bloco 2 = instruções fixas desta
-             configuração (ver buildBlocoFixo). Uma string simples continua
-             aceita e vira um bloco único, como sempre foi. */
-          system: Array.isArray(system) ? system : [{ type: "text", text: system, cache_control: cacheControlAtual() }],
-          messages: [{ role: "user", content: userMsg }],
-          thinking: { type: "disabled" },
-          /* EFFORT FIXO EM "medium" PARA TODA E QUALQUER CHAMADA AO SONNET 5.
-             Isto é intencional e definitivo: não deve variar por disciplina,
-             por tipo de chamada (rascunho, revisão de matemática, refazer
-             visual) nem por qualquer outra condição. Não tornar configurável
-             por env var, header, ou parâmetro de request — o pedido foi para
-             fixar em "medium" sempre, sem hipótese de subir nem descer. */
-          output_config: { effort: "medium" },
-          stream: true,
-          ...(() => {
-            const tools = [
-              ...(enableWebSearch ? [enableWebSearch] : []),
-              ...(ferramenta ? [ferramenta] : []),
-            ];
-            if (!tools.length) return {};
-            /* Sem busca na web, a entrega pela ferramenta é obrigatória — não há
-               por que deixar espaço para prosa. Com busca ligada, a escolha fica
-               automática: o modelo precisa poder pesquisar ANTES de entregar. */
-            const tool_choice = ferramenta && !enableWebSearch
-              ? { type: "tool", name: ferramenta.name }
-              : { type: "auto" };
-            return { tools, tool_choice };
-          })(),
-        }),
-        signal: controller.signal,
-      });
-
-      if (!resp.ok) {
-        const rawErr = await resp.text().catch(() => "");
-        if (RETRYABLE_STATUS.has(resp.status) && attempt < MAX_ATTEMPTS) {
-          lastErr = new Error(`HTTP ${resp.status}`);
-          clearTimeout(watchdog);
-          await sleep(backoffDelay(attempt));
-          continue;
-        }
-        let msg = "";
-        try { const j = rawErr ? JSON.parse(rawErr) : {}; msg = j?.error?.message || ""; } catch { /* corpo não é JSON */ }
-        if (!msg) msg = rawErr ? rawErr.slice(0, 300) : `Erro HTTP ${resp.status} ${resp.statusText || ""}`.trim();
-        if (resp.status === 401) {
-          msg = `Chave de API da Anthropic inválida ou expirada (401) nos secrets deste projeto Supabase. Detalhe: ${msg}`;
-        }
-        if (resp.status === 524) {
-          msg = `A Anthropic demorou demais para responder (524 - timeout de proxy) mesmo após ${attempt} tentativa(s). Detalhe: ${msg}`;
-        }
-        throw new Error(msg);
-      }
-
-      const reader = resp.body!.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let text = "";
-      let stopReason: string | null = null;
-      let streamErrorMsg: string | null = null;
-      let usage: any = null;
-      // Argumento da NOSSA ferramenta, montado pedaço a pedaço pelo streaming.
-      // A busca na web também é uma ferramenta, então filtramos pelo nome.
-      let ferramentaJSON = "";
-      let blocoEhNossaFerramenta = false;
-      /* v74.8 — RESULTADOS REAIS DA BUSCA. A regra 4 do professor diz "Não
-         declare que pesquisou ou verificou uma fonte sem ter feito isso", e a
-         regra 7, "Nunca crie links para aparentar que existe uma fonte".
-         Para poder CONFERIR isso (em vez de confiar na palavra do modelo), o
-         parser passa a guardar as URLs que a ferramenta web_search de fato
-         devolveu. O resultado de uma ferramenta de servidor chega inteiro no
-         content_block_start, não em deltas. */
-      const buscas: { url: string; title: string }[] = [];
-      /* v74.21 — páginas que a web_fetch abriu de fato (validador). É daqui, e
-         não da palavra do modelo, que sai "fonte aberta". */
-      const fetches: FetchRegistro[] = [];
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed.startsWith("data:")) continue;
-          const jsonStr = trimmed.slice(5).trim();
-          if (!jsonStr || jsonStr === "[DONE]") continue;
-          let evt: any;
-          try { evt = JSON.parse(jsonStr); } catch { continue; }
-          if (evt.type === "message_start") {
-            usage = { ...(evt.message?.usage || {}) };
-          } else if (evt.type === "content_block_start") {
-            const bloco = evt.content_block || {};
-            blocoEhNossaFerramenta = bloco.type === "tool_use" && !!ferramenta && bloco.name === ferramenta.name;
-            if (bloco.type === "web_search_tool_result" && Array.isArray(bloco.content)) {
-              for (const r of bloco.content) {
-                const url = String((r && r.url) || "").trim();
-                if (url) buscas.push({ url, title: String((r && r.title) || "").slice(0, 200) });
-              }
-            }
-            if (bloco.type === "web_fetch_tool_result") {
-              const c = bloco.content || {};
-              const okFetch = c && c.type === "web_fetch_result";
-              fetches.push({ url: String((c && c.url) || "").trim(), ok: !!okFetch, erro: !okFetch ? String((c && c.error_code) || "erro") : "" });
-            }
-          } else if (evt.type === "content_block_stop") {
-            blocoEhNossaFerramenta = false;
-          } else if (evt.type === "content_block_delta" && evt.delta?.type === "text_delta") {
-            text += evt.delta.text || "";
-          } else if (evt.type === "content_block_delta" && evt.delta?.type === "input_json_delta") {
-            if (blocoEhNossaFerramenta) ferramentaJSON += evt.delta.partial_json || "";
-          } else if (evt.type === "message_delta") {
-            if (evt.delta?.stop_reason) stopReason = evt.delta.stop_reason;
-            if (evt.usage) usage = { ...(usage || {}), ...evt.usage };
-          } else if (evt.type === "error") {
-            streamErrorMsg = evt.error?.message || "Erro reportado pelo streaming da Anthropic.";
+        } else {
+          const errBody = await gResp.text().catch(() => "");
+          if (gResp.status === 429 || gResp.status >= 500) {
+            lastErr = new Error(`Google Gemini (${modG}) HTTP ${gResp.status}: ${errBody.slice(0, 300)}`);
+            continue;
           }
+          throw new Error(`Google Gemini (${modG}) HTTP ${gResp.status}: ${errBody.slice(0, 300)}`);
+        }
+      } catch (err: any) {
+        lastErr = err;
+        if (err?.name === "AbortError") {
+          clearTimeout(watchdog);
+          throw new Error(`Google Gemini (${modG}) timeout de ${timeoutMs / 1000}s esgotado.`);
         }
       }
-      clearTimeout(watchdog);
-      if (streamErrorMsg) throw new Error(streamErrorMsg);
-      return { text, truncated: stopReason === "max_tokens", usage, ferramentaJSON, buscas, fetches };
-    } catch (err: any) {
-      clearTimeout(watchdog);
-      const isAbort = err?.name === "AbortError";
-      const isNetwork = err instanceof TypeError;
-      if ((isAbort || isNetwork) && attempt < MAX_ATTEMPTS) {
-        lastErr = err;
-        await sleep(backoffDelay(attempt));
-        continue;
-      }
-      throw err;
+    }
+    clearTimeout(watchdog);
+    if (attempt < MAX_ATTEMPTS) {
+      await sleep(backoffDelay(attempt));
     }
   }
-  throw lastErr || new Error("Falha ao contatar a Anthropic após múltiplas tentativas.");
+
+  throw lastErr || new Error("Falha ao gerar questão com Google Gemini após múltiplas tentativas.");
 }
+
 
 /* v74.13 — TETO DE BUSCAS POR ETAPA (18/09/2026).
    Medição da leva de 18/09 (20 questões, US$ 5,0108): o custo por questão é
@@ -4809,15 +4677,15 @@ Deno.serve(async (req: Request) => {
   }
   // v74.15 — marca-passo do cache (ver aquecerCacheResponse).
   if (req.method === "GET" && new URL(req.url).searchParams.get("aquecer") === "1") {
-    if (!ANTHROPIC_API_KEY) return jsonResponse({ error: "Backend não configurado." }, 500);
+    if (!GEMINI_API_KEY) return jsonResponse({ error: "Backend não configurado." }, 500);
     return await aquecerCacheResponse(new URL(req.url));
   }
   if (req.method !== "POST") {
     return jsonResponse({ error: "Método não suportado. Use POST." }, 405);
   }
-  if (!ANTHROPIC_API_KEY) {
+  if (!GEMINI_API_KEY) {
     return jsonResponse({
-      error: "Backend não configurado: falta a variável de ambiente ANTHROPIC_API_KEY nos secrets deste projeto Supabase.",
+      error: "Backend não configurado: falta a variável de ambiente GEMINI_API_KEY nos secrets deste projeto Supabase.",
     }, 500);
   }
 

@@ -11,11 +11,11 @@ const AREA_META = {
     disciplinas: ["Matemática"] },
 };
 
-// Backend próprio (Supabase Edge Function) que chama a API de imagens da OpenAI
-// (GPT Image 1 / "ChatGPT") com segurança, mantendo a chave fora do navegador do professor.
+// Backend próprio (Supabase Edge Function) que chama a API de imagens do Google
+// (Nano Banana / Google Imagen) com segurança, mantendo a chave fora do navegador do professor.
 const IMAGE_BACKEND_URL = "https://tcmwbokhdwfhihndgxll.supabase.co/functions/v1/generate-image";
 
-// Backend próprio (Supabase Edge Function) que chama a API da Anthropic (Claude) com
+// Backend próprio (Supabase Edge Function) que chama a API do Google Gemini (gemini-3.6-flash) com
 // segurança — a chave de API fica guardada só nos secrets do servidor, nunca no
 // navegador do professor, e nunca é pedida ao abrir o app.
 const QUESTION_BACKEND_URL = "https://tcmwbokhdwfhihndgxll.supabase.co/functions/v1/generate-question";
@@ -51,7 +51,7 @@ let state = {
   qty: 1,
   questions: [],
   apiKey: "",
-  model: "claude-sonnet-5",
+  model: "gemini-3.6-flash",
   viewMode: "professor",
 };
 

@@ -704,14 +704,14 @@ body.mode-professor .qcard{box-shadow:0 25px 60px -25px rgba(0,0,0,.6), 0 0 0 1.
 <!-- Settings modal -->
 <div class="modal-overlay no-print" id="settingsModal">
   <div class="modal-box">
-    <h2>⚙️ Configurações do agente</h2>
-    <p class="desc">Para gerar questões em tempo real, o aplicativo chama a API da Anthropic (o mesmo modelo Claude do agente). Ao salvar, sua chave fica guardada <strong>somente neste navegador</strong> (não é enviada a mim nem a terceiros) — assim você não precisa digitar de novo da próxima vez. Use "Esquecer chave" para removê-la deste navegador quando quiser.</p>
-    <label class="field-label">Chave de API da Anthropic</label>
-    <input type="password" id="apiKeyInput" placeholder="sk-ant-...">
+    <h2>⚙️ Configurações de IA</h2>
+    <p class="desc">O aplicativo utiliza os modelos do Google Gemini (Gemini 3.6 Flash para elaboração e auditoria pedagógica, e Nano Banana para ilustrações visuais). O backend já possui chave configurada nos secrets do Supabase.</p>
+    <label class="field-label">Chave de API do Google Gemini (Opcional)</label>
+    <input type="password" id="apiKeyInput" placeholder="AIzaSy...">
     <div style="height:14px;"></div>
-    <label class="field-label">Modelo</label>
-    <input type="text" id="modelInput" value="claude-sonnet-5" placeholder="claude-sonnet-5">
-    <p class="hint" style="margin-top:6px;">Se aparecer erro de "modelo não encontrado", troque para o identificador de modelo disponível na sua conta (ex.: claude-opus-5, claude-haiku-4-5).</p>
+    <label class="field-label">Modelo de Texto</label>
+    <input type="text" id="modelInput" value="gemini-3.6-flash" placeholder="gemini-3.6-flash">
+    <p class="hint" style="margin-top:6px;">Modelos suportados: gemini-3.6-flash, gemini-2.5-flash. Geração de imagens via Nano Banana / Google Imagen.</p>
     <div class="modal-close-row">
       <button class="btn ghost sm" id="btnForgetKey" title="Remove a chave salva deste navegador">🗑️ Esquecer chave</button>
       <button class="btn ghost sm" id="btnCloseSettings">Fechar</button>
@@ -805,11 +805,11 @@ const AREA_META = {
     disciplinas: ["Matemática"] },
 };
 
-// Backend próprio (Supabase Edge Function) que chama a API de imagens da OpenAI
-// (GPT Image 1 / "ChatGPT") com segurança, mantendo a chave fora do navegador do professor.
+// Backend próprio (Supabase Edge Function) que chama a API de imagens do Google
+// (Nano Banana / Google Imagen) com segurança, mantendo a chave fora do navegador do professor.
 const IMAGE_BACKEND_URL = "https://tcmwbokhdwfhihndgxll.supabase.co/functions/v1/generate-image";
 
-// Backend próprio (Supabase Edge Function) que chama a API da Anthropic (Claude) com
+// Backend próprio (Supabase Edge Function) que chama a API do Google Gemini (gemini-3.6-flash) com
 // segurança — a chave de API fica guardada só nos secrets do servidor, nunca no
 // navegador do professor, e nunca é pedida ao abrir o app.
 const QUESTION_BACKEND_URL = "https://tcmwbokhdwfhihndgxll.supabase.co/functions/v1/generate-question";
@@ -845,7 +845,7 @@ let state = {
   qty: 1,
   questions: [],
   apiKey: "",
-  model: "claude-sonnet-5",
+  model: "gemini-3.6-flash",
   viewMode: "professor",
 };
 
