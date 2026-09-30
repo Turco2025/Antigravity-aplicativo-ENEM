@@ -13,12 +13,12 @@ const AREA_META = {
 
 // Backend próprio (Supabase Edge Function) que chama a API de imagens da OpenAI
 // (GPT Image 1 / "ChatGPT") com segurança, mantendo a chave fora do navegador do professor.
-const IMAGE_BACKEND_URL = "https://gkceyrkdmnhgqimmrsre.supabase.co/functions/v1/generate-image";
+const IMAGE_BACKEND_URL = "https://tcmwbokhdwfhihndgxll.supabase.co/functions/v1/generate-image";
 
 // Backend próprio (Supabase Edge Function) que chama a API da Anthropic (Claude) com
 // segurança — a chave de API fica guardada só nos secrets do servidor, nunca no
 // navegador do professor, e nunca é pedida ao abrir o app.
-const QUESTION_BACKEND_URL = "https://gkceyrkdmnhgqimmrsre.supabase.co/functions/v1/generate-question";
+const QUESTION_BACKEND_URL = "https://tcmwbokhdwfhihndgxll.supabase.co/functions/v1/generate-question";
 // v15 — Número oficial do Gerador ENEM no WhatsApp (só dígitos, com DDI). É para onde o
 // professor envia "Vincular conta 123456" (caixa "Solicitar simulados pelo WhatsApp").
 // Trocar de número = trocar esta constante (e o secret WHATSAPP_PHONE_NUMBER_ID no Supabase).
@@ -69,8 +69,8 @@ let state = {
    DOMContentLoaded) — ver comentário junto à tag <script defer> do
    supabase-js no template — então nenhuma função abaixo pode ser chamada
    antes disso. */
-const SUPABASE_URL = "https://gkceyrkdmnhgqimmrsre.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_-s4dLevKftQzX-aOJyKfMw_u5c_JzLV";
+const SUPABASE_URL = "https://tcmwbokhdwfhihndgxll.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_xp6jVkoXU_yn_MCC6LLYpg_4s4_8goy";
 
 let supabaseClient = null;
 let currentUser = null;
